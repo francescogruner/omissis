@@ -230,6 +230,25 @@ def main():
         segna("servizio bloccato", blocco.url.startswith(f"chrome-extension://{ident}/bloccato.html") and "Pi" in blocco.inner_text("h1"),
               f"{regole} regole · {blocco.url[:60]}")
         pan.evaluate(CHIAMA_SERVIZI, {"id": "pi", "politica": "registra"})
+
+        # --- un servizio del radar: l'estensione non ha accesso al suo sito (non lo chiede), ma lo sa bloccare lo stesso
+        pan.evaluate(CHIAMA_SERVIZI, {"id": "replika", "politica": "blocca"})
+        fin.reload()
+        attendi(fin, "#titolo", "attiva")
+        fin.wait_for_timeout(500)
+        radar = sw.evaluate("chrome.declarativeNetRequest.getDynamicRules()")
+        accessi = sw.evaluate("chrome.runtime.getManifest().host_permissions")
+        fermato = ctx.new_page()
+        try:
+            fermato.goto("https://replika.com/", timeout=15000)
+            partita = True
+        except Exception as ex:   # noqa: BLE001  (il browser rifiuta la richiesta: e' il blocco)
+            partita = "ERR_BLOCKED_BY_CLIENT" not in str(ex)
+        fermato.close()
+        segna("servizio del radar bloccato, senza accesso al suo sito", len(radar) == 1 and radar[0]["action"]["type"] == "block"
+              and "main_frame" in radar[0]["condition"]["resourceTypes"] and "replika.com" in radar[0]["condition"]["requestDomains"]
+              and not any("replika" in h for h in accessi) and not partita, f"{len(radar)} regole · richiesta partita: {partita}")
+        pan.evaluate(CHIAMA_SERVIZI, {"id": "replika", "politica": "registra"})
         fin.reload()
         attendi(fin, "#titolo", "attiva")
         segna("blocco tolto", sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.length)") == 0)

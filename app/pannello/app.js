@@ -534,14 +534,17 @@ const collegaProxy = prova(async el => {
 let elencoServizi = [];
 DISEGNA.servizi = (el, quale) => (quale === "rilevati" ? serviziRilevati : serviziRegole)(el);
 const serviziRegole = prova(async el => {
-  el.innerHTML = `<div class="riga"><input type="search" id="filtro" placeholder="${esc(t("servizi.cerca"))}" aria-label="${esc(t("servizi.cerca"))}"><span class="sfumato piccolo" id="conta" aria-live="polite"></span></div>
+  el.innerHTML = `<div class="riga"><input type="search" id="filtro" placeholder="${esc(t("servizi.cerca"))}" aria-label="${esc(t("servizi.cerca"))}">
+      <select id="quali" aria-label="${esc(t("servizi.quali"))}">${["tutti", "catalogo", "radar"].map(q => `<option value="${q}">${esc(t(`servizi.quali.${q}`))}</option>`).join("")}</select>
+      <span class="sfumato piccolo" id="conta" aria-live="polite"></span></div>
+    <p class="aiuto">${esc(t("servizi.radar.nota"))}</p>
     <section class="scheda"><div class="tabella"><table><caption class="vh">${esc(t("servizi.scheda.regole"))}</caption><thead><tr>
       ${["servizio", "tipo", "lettura", "cosa_fare", "contatti"].map(c => `<th scope="col">${esc(t(`servizi.colonna.${c}`))}</th>`).join("")}</tr></thead><tbody id="tabServizi"></tbody></table></div></section>`;
   elencoServizi = await api("/api/servizi");
   const disegna = () => {
-    const f = $("#filtro").value.toLowerCase();
-    const visibili = elencoServizi.filter(s => `${s.nome} ${s.fornitore} ${tSe("servizi.tipo." + s.tipo, s.tipo)} ${s.domini.join(" ")}`.toLowerCase().includes(f));
-    $("#conta").textContent = t("servizi.conta", {visibili: visibili.length, tutti: elencoServizi.length, protetti: elencoServizi.filter(s => s.politica === "proteggi" && s.leggibile).length});
+    const f = $("#filtro").value.toLowerCase(), quali = $("#quali").value;
+    const visibili = elencoServizi.filter(s => quali === "tutti" || (quali === "radar") === !!s.radar).filter(s => `${s.nome} ${s.fornitore} ${tSe("servizi.tipo." + s.tipo, s.tipo)} ${s.domini.join(" ")}`.toLowerCase().includes(f));
+    $("#conta").textContent = t("servizi.conta", {visibili: visibili.length, tutti: elencoServizi.length, protetti: elencoServizi.filter(s => s.politica === "proteggi" && s.leggibile).length, bloccati: elencoServizi.filter(s => s.politica === "blocca").length});
     $("#tabServizi").innerHTML = visibili.map(s => {
       const opzioni = ["proteggi", "registra", "blocca", "ignora"].filter(p => p !== "proteggi" || s.leggibile)
         .map(p => `<option value="${p}"${p === s.politica ? " selected" : ""}>${esc(t(`servizi.politica.${p}`))}</option>`).join("");
@@ -553,6 +556,7 @@ const serviziRegole = prova(async el => {
     $$("#tabServizi select").forEach(x => x.onchange = prova(async () => { await api("/api/servizi", {id: x.dataset.id, politica: x.value}); elencoServizi = await api("/api/servizi"); disegna(); leggiStato(); }));
   };
   $("#filtro").oninput = disegna;
+  $("#quali").onchange = disegna;
   disegna();
 });
 const scelta = p => p ? etichetta(t(`rilevati.scelta.${p}`), p === "blocca" ? "errore" : p === "proteggi" ? "" : "attenzione") : etichetta(t("rilevati.locale"));

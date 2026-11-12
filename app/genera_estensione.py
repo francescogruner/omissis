@@ -27,8 +27,9 @@ def modelli(servizi):
 
 
 def manifesto(prova):
+    # i servizi del radar restano fuori: l'estensione non chiede l'accesso ai loro siti, li puo' solo bloccare
     leggibili = modelli(s for s in catalogo.SERVIZI if s["adattatore"])
-    altri = modelli(s for s in catalogo.SERVIZI if not s["adattatore"])
+    altri = modelli(s for s in catalogo.SERVIZI if not s["adattatore"] and not s["radar"])
     if prova:
         leggibili.append("http://localhost/*")
     comuni = {"run_at": "document_start", "all_frames": True, "match_origin_as_fallback": True}
@@ -40,7 +41,8 @@ def manifesto(prova):
         "description": "__MSG_est_descrizione__",
         "default_locale": "en",
         "minimum_chrome_version": "111",
-        "permissions": ["storage", "alarms", "declarativeNetRequestWithHostAccess"],
+        # declarativeNetRequest (e non ...WithHostAccess): serve a bloccare anche i servizi del radar, sui cui siti non si chiede l'accesso
+        "permissions": ["storage", "alarms", "declarativeNetRequest"],
         "host_permissions": ["http://127.0.0.1/*"] + leggibili + altri,
         "background": {"service_worker": "sfondo.js"},
         "action": {"default_popup": "finestra.html", "default_title": "Omissis",
@@ -59,7 +61,7 @@ def manifesto(prova):
 
 def predefiniti(prova):
     servizi = [{"id": s["id"], "nome": s["nome"], "domini": s["domini"], "politica": catalogo.politica_predefinita(s),
-                "leggibile": bool(s["adattatore"])} for s in catalogo.SERVIZI]
+                "leggibile": bool(s["adattatore"])} for s in catalogo.SERVIZI if not s["radar"]]
     if prova:
         servizi.append({"id": "prova", "nome": "Servizio finto", "domini": ["localhost"], "politica": "proteggi", "leggibile": True})
     return ("// generato da genera_estensione.py: politiche di partenza, finche' il programma non manda le sue\n"

@@ -29,6 +29,12 @@ async function regole(stato) {
   let id = 1;
   for (const s of stato.servizi) {
     if (s.politica !== 'blocca') continue;
+    if (s.radar) {   // servizio del radar: sui suoi siti non abbiamo accesso, quindi niente pagina di avviso, solo il blocco
+      nuove.push({id: id++, priority: 1, condition: {requestDomains: s.domini,
+        resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest', 'websocket', 'script', 'ping', 'media', 'image', 'font', 'stylesheet', 'other']},
+        action: {type: 'block'}});
+      continue;
+    }
     nuove.push({id: id++, priority: 2, condition: {requestDomains: s.domini, resourceTypes: ['main_frame']},
       action: {type: 'redirect', redirect: {extensionPath: '/bloccato.html?s=' + encodeURIComponent(s.nome) + '&h=' + encodeURIComponent(s.domini[0])}}});
     nuove.push({id: id++, priority: 1, condition: {requestDomains: s.domini,

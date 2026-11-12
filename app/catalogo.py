@@ -10,16 +10,27 @@ adattatore  come il proxy sa leggere il servizio:
               generico                                 riconosce i campi di testo dal nome: da verificare caso per caso
               None                                     il proxy non lo sa leggere: si puo' solo registrare o bloccare
 Politiche:  proteggi (apre e maschera) | registra (conta i contatti) | blocca | ignora
+
+Oltre ai servizi scritti qui sotto c'e' il RADAR: servizi che il programma non sa leggere e che servono solo a
+rilevare, registrare e bloccare. Sono file di dati, cosi' l'elenco si allunga senza toccare il codice:
+  radar.json accanto a questo file      il radar di base, con i servizi piu' noti (fa parte del programma)
+  radar.json nella cartella dei dati    un elenco esteso, se c'e' (stesso formato; si aggiunge a quello di base)
+Hanno radar=True: l'estensione del browser non chiede l'accesso ai loro siti (li puo' solo bloccare), e non
+compaiono tra quelli protetti.
 """
+import json
 import re
+from pathlib import Path
+
+import percorsi
 
 TIPI = {"chat": "Assistente in chat", "api": "API per sviluppatori", "codice": "Assistente per il codice",
         "media": "Immagini, audio e video", "testo": "Scrittura e traduzione", "riunioni": "Trascrizione di riunioni",
-        "ricerca": "Ricerca", "ufficio": "AI dentro le suite da ufficio"}
+        "ricerca": "Ricerca", "ufficio": "AI dentro le suite da ufficio", "agenti": "Agenti e automazione"}
 
 
 def _s(id, nome, fornitore, tipo, domini, adattatore=None, app=None):
-    return dict(id=id, nome=nome, fornitore=fornitore, tipo=tipo, domini=domini.split(), adattatore=adattatore, app=app)
+    return dict(id=id, nome=nome, fornitore=fornitore, tipo=tipo, domini=domini.split(), adattatore=adattatore, app=app, radar=False)
 
 
 SERVIZI = [
@@ -94,6 +105,30 @@ SERVIZI = [
     _s("consensus", "Consensus", "Consensus", "ricerca", "consensus.app"),
     _s("elicit", "Elicit", "Elicit", "ricerca", "elicit.com"),
 ]
+
+
+def _radar():
+    """Le voci del radar (di base, piu' quello esteso se c'e') che non ripetono un servizio o un dominio gia' presente."""
+    voci = []
+    for f in (Path(__file__).resolve().parent / "radar.json", percorsi.DATI / "radar.json"):
+        try:
+            voci += json.loads(f.read_text(encoding="utf-8"))["servizi"]
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    presi, nomi, out = {d for s in SERVIZI for d in s["domini"]}, {s["id"] for s in SERVIZI}, []
+    for voce in voci:
+        if len(voce) != 5 or voce[0] in nomi or voce[3] not in TIPI:
+            continue
+        ident, nome, fornitore, tipo, domini = voce
+        liberi = [d for d in domini.lower().split() if d not in presi and not any(d.endswith("." + p) for p in presi)]
+        if liberi:
+            out.append({**_s(ident, nome, fornitore, tipo, " ".join(liberi)), "radar": True})
+            nomi.add(ident)
+            presi.update(liberi)
+    return out
+
+
+SERVIZI += _radar()
 PER_ID = {s["id"]: s for s in SERVIZI}
 _PER_DOMINIO = {d: s for s in SERVIZI for d in s["domini"]}
 

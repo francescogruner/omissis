@@ -194,7 +194,7 @@ class Connettore:
             return {"servizi": r["servizi"], "ripristina": bool(r["ripristina"]), "blocca_file": bool(r["blocca_file"])}
         except Exception:   # noqa: BLE001
             servizi = [{"id": s["id"], "nome": s["nome"], "domini": s["domini"], "politica": catalogo.politica_predefinita(s),
-                        "leggibile": bool(s["adattatore"])} for s in catalogo.SERVIZI]
+                        "leggibile": bool(s["adattatore"])} for s in catalogo.SERVIZI if not s["radar"]]
             if self.prova:
                 servizi.append({"id": "prova", "nome": "Servizio finto", "domini": ["localhost"], "politica": "proteggi", "leggibile": True})
             return {"servizi": servizi, "ripristina": True, "blocca_file": False}

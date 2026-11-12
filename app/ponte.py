@@ -69,8 +69,10 @@ class Ponte:
     # ---------------------------------------------------------------- politiche
     def stato(self, dati):
         imp = impostazioni.leggi()
+        # del radar all'estensione interessano solo i servizi da bloccare: degli altri non puo' fare nulla
         servizi = [{"id": s["id"], "nome": s["nome"], "domini": s["domini"], "politica": impostazioni.politica(s, imp),
-                    "leggibile": bool(s["adattatore"])} for s in catalogo.SERVIZI]
+                    "leggibile": bool(s["adattatore"]), **({"radar": True} if s["radar"] else {})}
+                   for s in catalogo.SERVIZI if not s["radar"] or impostazioni.politica(s, imp) == "blocca"]
         if self.prova:
             servizi.append({"id": "prova", "nome": "Servizio finto", "domini": ["localhost"], "politica": "proteggi", "leggibile": True})
         return {"versione": VERSIONE, "ripristina": bool(imp["ripristina"]), "blocca_file": bool(imp["blocca_file"]),

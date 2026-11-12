@@ -300,7 +300,8 @@ def contatti(giorni=30):
 def servizi():
     imp, cont = impostazioni.leggi(), contatti()
     return [{"id": s["id"], "nome": s["nome"], "fornitore": s["fornitore"], "tipo": s["tipo"], "domini": s["domini"],
-             "lettura": STATO_LETTURA[s["adattatore"]], "leggibile": bool(s["adattatore"]), "politica": impostazioni.politica(s, imp),
+             "lettura": "radar" if s["radar"] else STATO_LETTURA[s["adattatore"]], "radar": s["radar"], "leggibile": bool(s["adattatore"]),
+             "politica": impostazioni.politica(s, imp),
              "predefinita": catalogo.politica_predefinita(s), "contatti": cont.get(s["id"], {}).get("n", 0),
              "ultimo": cont.get(s["id"], {}).get("ultimo", "")} for s in catalogo.SERVIZI]
 

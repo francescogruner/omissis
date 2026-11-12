@@ -84,6 +84,24 @@ con un nome, avvisi annunciati agli schermi parlanti, contrasto adeguato in chia
 nessuna animazione per chi le ha disattivate, uso completo dalla tastiera. Lo controlla
 `prova_pannello.py`; non è stato provato con uno schermo parlante vero.
 
+## Catalogo e radar
+
+I servizi di intelligenza artificiale stanno su due livelli.
+
+- **Catalogo** (`catalogo.py`, una settantina di servizi): quelli che il programma conosce uno per uno. Alcuni li sa
+  leggere e quindi proteggere; per tutti si sceglie tra proteggere, registrare, bloccare, ignorare. L'estensione
+  chiede l'accesso ai loro siti.
+- **Radar**: servizi che il programma non sa leggere e che servono solo a rilevare, registrare e bloccare.
+  `radar.json` accanto al codice è il radar di base, con i più noti. Un elenco esteso si aggiunge mettendo un
+  secondo `radar.json`, nello stesso formato, nella cartella dei dati: non fa parte del programma pubblico.
+  `controlla_radar.py [file] --rete` ne controlla forma, doppioni, domini troppo generici e, chiedendo al DNS,
+  che ogni dominio esista.
+
+L'estensione **non chiede l'accesso** ai siti del radar: quelli che si sceglie di bloccare li ferma con una regola
+del browser (la richiesta non parte; compare l'errore del browser, non la pagina di avviso). Chi passa dal proxy
+viene fermato allo stesso modo. Regola per chi compila l'elenco: solo domini dedicati a un servizio AI, mai quello
+di una piattaforma generale (bloccare `google.com` per fermare un suo servizio fermerebbe tutto il resto).
+
 ## Uso manuale, dentro qualsiasi app
 
 Funziona con ogni app e ogni abbonamento, perché non legge il traffico di nessuno. Richiede solo
