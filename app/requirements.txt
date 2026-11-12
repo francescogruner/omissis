@@ -1,0 +1,16 @@
+mitmproxy>=12.3
+pystray>=0.19
+pynput>=1.8
+pillow>=11
+lxml>=6
+pypdf>=7
+websocket-client>=1.9
+# lettura di scansioni e immagini con il riconoscimento dei caratteri di Windows
+winrt-runtime; sys_platform == "win32"
+winrt-Windows.Foundation; sys_platform == "win32"
+winrt-Windows.Foundation.Collections; sys_platform == "win32"
+winrt-Windows.Media.Ocr; sys_platform == "win32"
+winrt-Windows.Data.Pdf; sys_platform == "win32"
+winrt-Windows.Graphics.Imaging; sys_platform == "win32"
+winrt-Windows.Storage.Streams; sys_platform == "win32"
+winrt-Windows.Globalization; sys_platform == "win32"

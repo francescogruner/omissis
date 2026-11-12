@@ -1,0 +1,10 @@
+Omissis
+Copyright 2026 Francesco Gruner
+
+This product includes a model fine-tuned from mmBERT (jhu-clsp/mmBERT-base and
+jhu-clsp/mmBERT-small), released under the MIT License by the Center for Language
+and Speech Processing, Johns Hopkins University.
+
+Third-party libraries used at run time are listed, with their licences, in
+TERZE_PARTI.md. They are installed as dependencies and are not redistributed in
+this repository.

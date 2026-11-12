@@ -1,0 +1,6 @@
+# Installazione leggera: il modello gira sul processore in formato ONNX, senza PyTorch.
+# Serve il file model.onnx nella cartella del modello (scarica_modello.py lo scarica insieme al resto).
+onnxruntime>=1.20
+tokenizers>=0.20
+numpy>=1.26
+huggingface-hub>=1.0

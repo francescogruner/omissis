@@ -1,0 +1,21 @@
+# dati locali: archivio dei segnaposto, registro, codici, certificato del proxy (chiave privata!)
+dati/
+*.sqlite
+token*.txt
+*.pem
+*.p12
+*.key
+.env
+
+# ambienti e strumenti scaricati
+.venv/
+.playwright/
+__pycache__/
+*.pyc
+
+# pesi e dati di addestramento: stanno su Hugging Face o si rigenerano
+modello/modelli/
+modello/backbone/
+modello/dati/
+*.safetensors
+*.jsonl

@@ -1,0 +1,5 @@
+# Per la scheda grafica installare prima PyTorch con CUDA seguendo https://pytorch.org/get-started/locally/
+torch>=2.6
+transformers>=5.0
+safetensors>=0.5
+huggingface-hub>=1.0

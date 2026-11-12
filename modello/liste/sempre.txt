@@ -1,0 +1,3 @@
+# Termini da mascherare SEMPRE, uno per riga (maiuscole e minuscole non contano).
+# Esempi: il nome di un progetto riservato, un codice interno, il nome di un cliente particolare.
+# Le righe che iniziano con # sono ignorate.
