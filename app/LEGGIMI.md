@@ -62,9 +62,8 @@ messaggi d'errore) sta in `pannello\lingue\it.json` e `en.json`, con le stesse c
 contiene solo le chiavi. «Automatica» segue la lingua di Windows (inglese se non è tra quelle
 presenti). Per aggiungere una lingua: copiare `it.json` con il codice della lingua (`de.json`),
 tradurre i valori e cambiare `_lingua`: compare da sola nelle Impostazioni. `controlla_lingue.py`
-dice cosa manca, cosa avanza e dove le parole tra graffe non coincidono. Restano in italiano le
-descrizioni degli strumenti nella scheda «Rilevati su questo PC» e gli eventi scritti nel registro
-(la pagina traduce quelli noti).
+dice cosa manca, cosa avanza e dove le parole tra graffe non coincidono. Gli eventi vengono scritti
+nel registro in italiano: la pagina traduce quelli noti.
 
 L'**estensione del browser** ha le sue frasi in `estensione\_locales\<lingua>\messages.json`, nel
 formato che chiedono i browser e gli store (nome e descrizione compresi), e segue la lingua del
@@ -72,6 +71,12 @@ browser, non quella scelta nel programma: finestrella, pagina di blocco, avvisi 
 testo dell'icona. Nelle app desktop gli stessi avvisi li porta il connettore, nella lingua del
 programma. Lo stesso `controlla_lingue.py` controlla anche questi file. `prova_estensione.py
 --lingua=en` avvia il browser di prova in inglese.
+
+Browser provati con `prova_estensione.py --browser=<percorso dell'eseguibile>` (profilo vuoto e a
+parte, servizio finto): **Edge 157 e Brave 157, 26 controlli su 26**, oltre al Chromium di prova.
+**Chrome** di marca non accetta più estensioni dalla riga di comando: lì va caricata a mano da
+`chrome://extensions`, e la prova automatica non si può fare; il motore è lo stesso del Chromium di
+prova. Nessun browser è stato ancora provato con un account vero. Firefox non è coperto.
 
 **Accessibilità.** Struttura con punti di riferimento (menu, contenuto), collegamento «vai al
 contenuto», un solo titolo per pagina, linguette usabili con le frecce, ogni pulsante e ogni campo

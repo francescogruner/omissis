@@ -95,16 +95,17 @@ PER_ID = {s["id"]: s for s in SERVIZI}
 _PER_DOMINIO = {d: s for s in SERVIZI for d in s["domini"]}
 
 # Strumenti AI che girano sul PC (non hanno un dominio proprio): riconosciuti da nome, processo o porta locale
+# cosa: il codice della descrizione, tradotta nelle lingue (rilevati.cosa.<codice>)
 LOCALI = [
-    dict(id="ollama", nome="Ollama", cosa="modelli in locale", app=r"\bollama\b", porte=[11434]),
-    dict(id="lmstudio", nome="LM Studio", cosa="modelli in locale", app=r"lm ?studio", porte=[1234]),
-    dict(id="jan", nome="Jan", cosa="modelli in locale", app=r"^jan$|\bjan\.ai\b|^jan \d", porte=[1337]),
-    dict(id="gpt4all", nome="GPT4All", cosa="modelli in locale", app=r"gpt4all", porte=[4891]),
-    dict(id="anythingllm", nome="AnythingLLM", cosa="modelli in locale", app=r"anythingllm", porte=[3001]),
-    dict(id="msty", nome="Msty", cosa="modelli in locale", app=r"\bmsty\b", porte=[]),
-    dict(id="comfyui", nome="ComfyUI", cosa="generazione di immagini in locale", app=r"comfyui", porte=[8188]),
-    dict(id="codex", nome="Codex", cosa="agente per il codice", app=r"\bcodex\b", porte=[]),
-    dict(id="claude-code", nome="Claude Code", cosa="agente per il codice", app=r"claude[- ]code", porte=[]),
+    dict(id="ollama", nome="Ollama", cosa="modelli", app=r"\bollama\b", porte=[11434]),
+    dict(id="lmstudio", nome="LM Studio", cosa="modelli", app=r"lm ?studio", porte=[1234]),
+    dict(id="jan", nome="Jan", cosa="modelli", app=r"^jan$|\bjan\.ai\b|^jan \d", porte=[1337]),
+    dict(id="gpt4all", nome="GPT4All", cosa="modelli", app=r"gpt4all", porte=[4891]),
+    dict(id="anythingllm", nome="AnythingLLM", cosa="modelli", app=r"anythingllm", porte=[3001]),
+    dict(id="msty", nome="Msty", cosa="modelli", app=r"\bmsty\b", porte=[]),
+    dict(id="comfyui", nome="ComfyUI", cosa="immagini", app=r"comfyui", porte=[8188]),
+    dict(id="codex", nome="Codex", cosa="agente", app=r"\bcodex\b", porte=[]),
+    dict(id="claude-code", nome="Claude Code", cosa="agente", app=r"claude[- ]code", porte=[]),
 ]
 # Estensioni del browser e dell'editor: parole che indicano una funzione AI
 RX_ESTENSIONE = re.compile(r"(?i)chat ?gpt|\bgpt\b|claude|copilot|gemini|perplexity|deepseek|\bai\b|a\.i\.|assistant|grammarly|deepl|"

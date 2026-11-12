@@ -28,6 +28,7 @@ FINTO, PANNELLO = "http://localhost:9911", f"http://127.0.0.1:{percorsi.PORTA_PA
 CHIAMA_SERVIZI = "(d) => fetch('/api/servizi', {method: 'POST', headers: {'X-Pannello': document.querySelector('meta[name=omissis-codice]').content, 'Content-Type': 'application/json'}, body: JSON.stringify(d)}).then(r => r.json())"
 # --lingua=en avvia il browser in inglese: l'estensione segue la lingua del browser
 LINGUA = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--lingua=")), "it")
+BROWSER = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--browser=")), None)
 ALTRA_COPIA = percorsi.PORTA_PANNELLO != 8766   # seconda copia di prova: il pannello non e' sulla porta che l'estensione riconosce
 TESTO = ("Scrivi una mail a Giulia Ferraresi (giulia.ferraresi@nevatek.example, cell. 347 5551234) della Nevatek S.r.l. "
          "per confermare l'appuntamento con Aldo Bruschi.")
@@ -59,9 +60,18 @@ def main():
     righe_prima = len((percorsi.DATI / "registro.jsonl").read_text(encoding="utf-8").splitlines()) if (percorsi.DATI / "registro.jsonl").exists() else 0
     with sync_playwright() as pw, tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profilo:
         est = str(QUI / "estensione")
-        ctx = pw.chromium.launch_persistent_context(profilo, channel="chromium", headless="--visibile" not in sys.argv,
-                                                    args=[f"--disable-extensions-except={est}", f"--load-extension={est}", f"--lang={LINGUA}"])
-        sw = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker", timeout=20000)
+        # il browser: quello di prova, oppure uno vero installato (--browser=<percorso>), sempre con un profilo vuoto e a parte.
+        # Chrome di marca ignora --load-extension se non gli si toglie il blocco apposito.
+        quale = {"executable_path": BROWSER} if BROWSER else {"channel": "chromium"}
+        ctx = pw.chromium.launch_persistent_context(profilo, **quale, headless="--visibile" not in sys.argv,
+                                                    args=[f"--disable-extensions-except={est}", f"--load-extension={est}", f"--lang={LINGUA}",
+                                                          "--disable-features=DisableLoadExtensionCommandLineSwitch", "--no-first-run", "--no-default-browser-check"])
+        try:
+            sw = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker", timeout=20000)
+        except Exception:   # noqa: BLE001
+            ctx.close()
+            sys.exit("Il browser non ha caricato l'estensione. Chrome di marca non accetta più estensioni dalla riga di comando: lì va caricata "
+                     "a mano da chrome://extensions. Edge, Brave e il Chromium di prova la caricano.")
         ident = sw.url.split("/")[2]
 
         # --- prima del collegamento: su un servizio protetto il messaggio non deve partire

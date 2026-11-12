@@ -23,6 +23,7 @@ from pathlib import Path
 
 import catalogo
 import impostazioni
+import lingue
 
 CASA = Path.home()
 LOCALE, ROAMING = Path(os.environ.get("LOCALAPPDATA", "")), Path(os.environ.get("APPDATA", ""))
@@ -44,11 +45,11 @@ def _riconosci(nome):
     """Servizio o strumento del catalogo a cui corrisponde un nome di programma o processo."""
     for s in catalogo.SERVIZI:
         if s["app"] and re.search(s["app"], nome, re.I):
-            return {"id": s["id"], "nome": s["nome"], "cosa": catalogo.TIPI[s["tipo"]], "politica": impostazioni.politica(s),
+            return {"id": s["id"], "nome": s["nome"], "cosa": lingue.t(f"servizi.tipo.{s['tipo']}"), "politica": impostazioni.politica(s),
                     "leggibile": bool(s["adattatore"])}
     for s in catalogo.LOCALI:
         if re.search(s["app"], nome, re.I):
-            return {"id": s["id"], "nome": s["nome"], "cosa": s["cosa"], "politica": None, "leggibile": False}
+            return {"id": s["id"], "nome": s["nome"], "cosa": lingue.t(f"rilevati.cosa.{s['cosa']}"), "politica": None, "leggibile": False}
     return None
 
 
@@ -74,12 +75,12 @@ def programmi():
                 continue
             r = _riconosci(nome)
             if r:
-                trovati[nome] = {"nome": nome, "versione": versione, "origine": "programma", **{"servizio": r}}
+                trovati[nome] = {"nome": nome, "versione": versione, "origine": lingue.t("rilevati.origine.programma"), **{"servizio": r}}
     for a in _ps("Get-AppxPackage | Select-Object Name, Version"):
         nome = str(a.get("Name", ""))
         r = _riconosci(nome.replace(".", " "))
         if r and "Runtime" not in nome:
-            trovati[nome] = {"nome": nome, "versione": str(a.get("Version", "")), "origine": "app dello Store", "servizio": r}
+            trovati[nome] = {"nome": nome, "versione": str(a.get("Version", "")), "origine": lingue.t("rilevati.origine.store"), "servizio": r}
     return sorted(trovati.values(), key=lambda x: x["nome"].lower())
 
 
@@ -196,7 +197,7 @@ def modelli_locali():
     for s in catalogo.LOCALI:
         for porta in s["porte"]:
             if _porta_aperta(porta):
-                out.append({"nome": s["nome"], "cosa": f"servizio in ascolto sulla porta {porta}", "gb": None})
+                out.append({"nome": s["nome"], "cosa": lingue.t("rilevati.in_ascolto", porta=porta), "gb": None})
     for nome, cartella in {"Modelli di Ollama": CASA / ".ollama/models", "Modelli di LM Studio": CASA / ".lmstudio/models",
                            "Modelli scaricati da Hugging Face": CASA / ".cache/huggingface/hub"}.items():
         if cartella.exists():
@@ -222,7 +223,7 @@ def rete():
         s = catalogo.trova(host)
         if s is None:
             continue
-        dns.setdefault((s["id"], host), {"servizio": s["nome"], "id": s["id"], "host": host, "cosa": catalogo.TIPI[s["tipo"]],
+        dns.setdefault((s["id"], host), {"servizio": s["nome"], "id": s["id"], "host": host, "cosa": lingue.t(f"servizi.tipo.{s['tipo']}"),
                                          "politica": impostazioni.politica(s), "leggibile": bool(s["adattatore"])})
         if re.fullmatch(r"[0-9a-fA-F:.]+", str(v.get("Data") or "")):
             ip_servizio[str(v["Data"])] = (s, host)
