@@ -14,9 +14,26 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 VISTO = {"corpo": None, "file": 0}
+FILE = {"ultimo": ""}   # il corpo dell'ultimo caricamento: a parte, perche' /visto deve restare il solo ultimo messaggio
 PAGINA = r"""<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Servizio finto</title></head><body>
 <h1>Servizio finto</h1><div id="esito"></div><div id="incollato"></div><textarea id="casella"></textarea>
 <div id="chat"></div><div id="scrivi" contenteditable="true" style="border:1px solid #888;min-height:2em"></div><button id="manda" aria-label="Invia messaggio">&gt;</button>
+<input type="file" id="allega" multiple><div id="zona" style="border:1px dashed #888;padding:1em">trascina qui un file</div>
+<script>
+// gli allegati: la "app" legge ogni file che riceve (finisce in __file) e lo carica al servizio, come fanno le chat vere
+window.__file=[];window.__primi=[];
+const b64=async f=>{let s="";const u=new Uint8Array(await f.arrayBuffer());for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s)};
+async function ricevi(lista,come){for(const f of lista){const voce={come,nome:f.name,tipo:f.type,peso:f.size,testo:await f.text(),dati:f.size<3e6?await b64(f):""};
+  const fd=new FormData();fd.append("file",f,f.name);
+  try{voce.caricato=(await fetch("/generico/carica",{method:"POST",body:fd})).ok}catch(e){voce.caricato=false}
+  window.__file.push(voce)}}
+const allega=document.getElementById("allega"),zona=document.getElementById("zona");
+allega.addEventListener("input",e=>window.__primi.push(...[...e.target.files].map(f=>f.name)));   // cio' che la pagina vede al primo evento
+allega.addEventListener("change",e=>ricevi([...e.target.files],"scelta"));
+zona.addEventListener("dragover",e=>e.preventDefault());
+zona.addEventListener("drop",e=>{e.preventDefault();ricevi([...e.dataTransfer.files],"trascinamento")});
+document.getElementById("scrivi").addEventListener("paste",e=>{if(e.clipboardData&&e.clipboardData.files.length){e.preventDefault();ricevi([...e.clipboardData.files],"incolla")}});
+</script>
 <script>
 async function tutto(r){const l=r.body.getReader(),d=new TextDecoder();let t="";for(;;){const {done,value}=await l.read();if(done)break;t+=d.decode(value,{stream:true})}return t}
 const eventi=t=>t.split(/\r?\n\r?\n/).map(e=>(e.split("\n").find(r=>r.startsWith("data:"))||"").slice(5).trim()).filter(x=>x&&x!="[DONE]").map(x=>JSON.parse(x));
@@ -105,7 +122,9 @@ class Gestore(BaseHTTPRequestHandler):
         self._a_blocchi(tipo, [(r + "\n").encode("utf-8") for r in righe])
 
     def do_GET(self):
-        if self.path == "/visto":
+        if self.path == "/visto_file":
+            self._json(FILE)
+        elif self.path == "/visto":
             self._json(VISTO)
         elif self.path.split("?")[0] == "/pagina":
             corpo = PAGINA.encode("utf-8")
@@ -124,6 +143,7 @@ class Gestore(BaseHTTPRequestHandler):
         p = self.path
         if "multipart/" in self.headers.get("Content-Type", ""):   # caricamento di un file
             VISTO["file"] += 1
+            FILE["ultimo"] = binario.decode("utf-8", errors="replace")[:20000]
             self._json({"file": VISTO["file"]})
             return
         grezzo = binario.decode("utf-8")

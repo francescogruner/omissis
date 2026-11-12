@@ -417,7 +417,7 @@ const impostazioniRiconoscimento = prova(async el => {
   el.innerHTML = `<section class="scheda" aria-label="${esc(t("impostazioni.scheda.riconoscimento"))}">
       ${riga(t("riconoscimento.modello"), esc(t("riconoscimento.modello.sotto")), `<select id="modello" aria-label="${esc(t("riconoscimento.modello"))}"><option value="omissis-base">${esc(t("riconoscimento.modello.base"))}</option><option value="omissis-small">${esc(t("riconoscimento.modello.small"))}</option></select>`)}
       ${riga(t("riconoscimento.dove"), "", `<select id="device" aria-label="${esc(t("riconoscimento.dove"))}">${["auto", "cuda", "cpu"].map(v => `<option value="${v}">${esc(t(`riconoscimento.dove.${v}`))}</option>`).join("")}</select>`)}
-      ${["casella", "ripristina", "blocca_file"].map(k => riga(t(`riconoscimento.${k}`), esc(t(`riconoscimento.${k}.sotto`)), levetta(k, t(`riconoscimento.${k}`)))).join("")}
+      ${["casella", "allegati", "ripristina", "blocca_file"].map(k => riga(t(`riconoscimento.${k}`), esc(t(`riconoscimento.${k}.sotto`)), levetta(k, t(`riconoscimento.${k}`)))).join("")}
     </section>
     <div class="due">
       ${scheda(`<h2 id="lSempre">${esc(t("liste.sempre"))}</h2><p>${esc(t("liste.sempre.sotto"))}</p><textarea id="sempre" aria-labelledby="lSempre"></textarea>`)}
@@ -425,7 +425,7 @@ const impostazioniRiconoscimento = prova(async el => {
     </div>
     <div class="riga"><button class="bottone primario" id="salvaListe">${esc(t("liste.salva"))}</button><span class="sfumato piccolo">${esc(t("liste.nota"))}</span></div>`;
   for (const k of ["modello", "device"]) { $(`#${k}`).value = i[k]; $(`#${k}`).onchange = prova(e => salva({[k]: e.target.value})); }
-  for (const k of ["casella", "ripristina", "blocca_file"]) { $(`#${k}`).checked = i[k] !== false && !!i[k]; $(`#${k}`).onchange = prova(e => salva({[k]: e.target.checked})); }
+  for (const k of ["casella", "allegati", "ripristina", "blocca_file"]) { $(`#${k}`).checked = i[k] !== false && !!i[k]; $(`#${k}`).onchange = prova(e => salva({[k]: e.target.checked})); }
   $("#sempre").value = l.sempre.join("\n"); $("#mai").value = l.mai.join("\n");
   $("#salvaListe").onclick = prova(async () => {
     const r = await api("/api/liste", {sempre: $("#sempre").value.split("\n"), mai: $("#mai").value.split("\n")});

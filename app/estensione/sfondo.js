@@ -125,6 +125,16 @@ async function gestisci(m, mitt) {
       if (!c.token) return {azione: 'blocca', motivo: 'non collegata'};
       try { return await motore('testo', m); } catch (e) { return {azione: 'blocca', motivo: 'motore'}; }
     }
+    case 'allegato': {   // un file che sta per essere allegato: torna la copia anonimizzata
+      const c = await conf();
+      if (c.sospesa) return {azione: 'passa'};
+      if (!c.token) return {azione: 'blocca', motivo: 'non collegata'};
+      try {
+        const r = await motore('allegato', m, 300000);
+        if (r.azione === 'sostituisci') conta(mitt.tab, {azione: 'sostituisci', sostituzioni: r.sostituzioni});
+        return r;
+      } catch (e) { return {azione: 'blocca', motivo: 'motore'}; }
+    }
     case 'apri': case 'pezzo': case 'intera': case 'valori': case 'websocket':
       return motore(m.t, m, 30000);
     case 'visita':

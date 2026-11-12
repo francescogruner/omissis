@@ -363,6 +363,14 @@ class Gestore(BaseHTTPRequestHandler):
         if self.path.startswith("/api/") and not secrets.compare_digest(self.headers.get("X-Pannello", ""), CODICE):
             self._rispondi(403, {"errore": "codice mancante"})
             return False
+        if self.path.startswith("/interno/"):   # chiamate del motore (stesso PC), con il suo codice
+            try:
+                atteso = (DATI / "token.txt").read_text(encoding="utf-8").strip()
+            except OSError:
+                atteso = ""
+            if not atteso or not secrets.compare_digest(self.headers.get("X-Token", ""), atteso):
+                self._rispondi(403, {"errore": "codice mancante"})
+                return False
         return True
 
     def do_GET(self):
@@ -419,7 +427,14 @@ class Gestore(BaseHTTPRequestHandler):
         try:
             dati = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8") or "{}")
             p = self.path
-            if p == "/api/protezione":
+            if p == "/interno/allegato":   # il motore non ha le librerie per i documenti: li legge questo processo
+                try:
+                    nome, nuovo, conteggi = documenti.elabora(Path(str(dati.get("nome", "file"))).name, base64.b64decode(dati.get("dati", "")), "anonimizza")
+                except documenti.Errore as ex:
+                    self._rispondi(422, {"errore": str(ex), "codice": ex.codice})
+                    return
+                self._rispondi(200, {"nome": nome, "dati": base64.b64encode(nuovo).decode("ascii"), "conteggi": conteggi})
+            elif p == "/api/protezione":
                 if dati.get("azione") == "ferma":
                     SUP.ferma()
                 else:

@@ -208,6 +208,18 @@ def main():
             dentro.valuta("window.__inviati.length = 0")
             letto, _ = scrivi_e_invia("Quanto fa dodici per otto? Rispondi solo con il numero.")
             segna("casella di scrittura: un testo senza dati parte com'è", letto == "Quanto fa dodici per otto? Rispondi solo con il numero.", letto[:40])
+            # --- allegati: un file trascinato nella finestra dell'app arriva alla "app" gia' anonimizzato
+            dentro.valuta("window.__file.length = 0")
+            dentro.valuta("""(() => { const dt = new DataTransfer();
+                dt.items.add(new File([%s], 'appunti.txt', {type: 'text/plain'}));
+                document.getElementById('zona').dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt})); return true; })()""" % json.dumps(TESTO))
+            for _ in range(150):
+                if dentro.valuta("window.__file.length"):
+                    break
+                time.sleep(0.2)
+            arrivato = dentro.valuta("window.__file[0] || null") or {}
+            segna("allegato trascinato nell'app: arriva la copia anonimizzata", arrivato.get("nome") == "appunti.anon.txt" and "[PERSONA_" in arrivato.get("testo", "")
+                  and "Giulia Ferraresi" not in arrivato.get("testo", ""), arrivato.get("nome", "nulla"))
             con.porta_motore = con2.porta_motore = 1   # entrambi i connettori di questa prova rispondono alla stessa finestra
             dentro.valuta("window.__inviati.length = 0")
             scrivi_e_invia(TESTO)

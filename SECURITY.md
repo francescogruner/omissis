@@ -28,7 +28,8 @@ dei valori; la corrispondenza resta sul computer di chi scrive.
 - **Gli errori del modello.** Un dato non riconosciuto esce in chiaro. Il registro segnala i casi in
   cui un valore già mascherato ricompare in chiaro in un'altra richiesta, ma non può segnalare ciò
   che non ha mai riconosciuto.
-- **I canali non coperti**: file caricati, WebSocket, immagini, processi secondari delle pagine.
+- **I canali non coperti**: WebSocket, immagini senza testo leggibile, processi secondari delle pagine, file caricati
+  da chi passa dal solo proxy o dal gateway.
 
 ## Scelte di progetto
 

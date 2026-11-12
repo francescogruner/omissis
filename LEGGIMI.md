@@ -9,6 +9,14 @@ soltanto segnaposto.
 Tutto gira in locale: il modello che riconosce i dati, l'archivio dei segnaposto, il pannello. Nulla
 viene mandato a un server di Omissis, perché non esiste.
 
+![La pagina iniziale](docs/schermate/inizio-it.png)
+
+![Incolli un testo: viene mascherato e copiato da solo](docs/schermate/testo-it.png)
+
+![Trascini un documento: la copia anonimizzata si scarica da sola](docs/schermate/documenti-it.png)
+
+<img src="docs/schermate/estensione-finestrella-it.png" alt="L'estensione del browser" width="340">
+
 > **Stato: beta.** Il modello è addestrato e misurato. I connettori superano le prove automatiche
 > contro un servizio finto, ma **le verifiche dal vivo sono ancora poche**: il gateway per il terminale
 > è stato verificato dal vivo con Claude Code (un messaggio semplice e un'azione che scrive un file); l'estensione del browser non è ancora stata verificata
@@ -98,8 +106,11 @@ Tutto il resto è in [app/LEGGIMI.md](app/LEGGIMI.md).
 - **I valori ripristinati sono visibili alla pagina.** Quando la risposta viene ripristinata dentro la
   pagina o l'app del servizio, gli script di quella pagina possono leggerla. Chi non lo vuole spegne il
   ripristino e usa `Ctrl+Alt+R` sul testo copiato.
-- **Non ancora coperti:** i file caricati attraverso i connettori (si possono bloccare), le immagini
-  mandate in una chat, il traffico WebSocket, le richieste fatte dai processi secondari di una pagina.
+- **Allegati:** nell'estensione e nelle app desktop il file allegato viene sostituito con la copia anonimizzata
+  (Word, Excel, PowerPoint, testo; PDF e immagini con testo diventano testo). Provato con il servizio finto, non
+  ancora sui siti veri. Un'immagine senza testo leggibile parte così com'è.
+- **Non ancora coperti:** i file caricati da chi passa dal solo proxy o dal gateway (si possono bloccare), il
+  traffico WebSocket, le richieste fatte dai processi secondari di una pagina.
 - **Agli agenti per il codice viene mascherato molto contesto.** Attraverso il gateway il contenuto dei
   file e l'uscita dei comandi vengono mascherati per intero: protegge di più, ma nelle sessioni lunghe
   può confondere il modello.
@@ -116,7 +127,7 @@ Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 - Messa a punto di ciò che viene mascherato nel contesto degli agenti per il codice
 - Firma del codice dell'installer e pubblicazione sul Microsoft Store
 - Messaggistica nativa del browser per l'estensione e pubblicazione sugli store; Firefox
-- Mascheratura dei file caricati, scansioni restituite come immagine oscurata
+- Scansioni restituite come immagine oscurata; ripristino automatico dei file scaricati dalle chat
 - Console centrale per le organizzazioni (politiche, distribuzione, registro di conformità)
 
 ## Licenza

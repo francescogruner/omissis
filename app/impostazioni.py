@@ -12,6 +12,7 @@ PREDEFINITE = {
     "device": "auto",            # auto | cpu | cuda
     "porta": 8080,
     "ripristina": True,          # False: le risposte restano con i segnaposto (per vedere cosa riceve il servizio)
+    "allegati": True,            # anonimizza i file allegati ai messaggi (Word, Excel, PowerPoint, testo, PDF, immagini con testo)
     "blocca_file": False,        # True: blocca il caricamento di file, che il proxy non sa mascherare
     "politiche": {},             # id del servizio -> proteggi | registra | blocca | ignora (assente = predefinita)
     "casella": True,             # sostituisce i dati gia' nella casella di scrittura, prima dell'invio (la difesa piu' stabile)

@@ -57,7 +57,11 @@ COPERTI = TESTO | set(OFFICE) | {".pdf"} | IMMAGINI
 
 
 class Errore(Exception):
-    pass
+    """codice: il perche' in una parola (protezione | senza_testo | formato), per chi deve decidere cosa fare del file."""
+
+    def __init__(self, messaggio, codice=""):
+        super().__init__(messaggio)
+        self.codice = codice
 
 
 def motore(percorso, dati):
@@ -68,7 +72,7 @@ def motore(percorso, dati):
         with urllib.request.urlopen(rich, timeout=300) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.URLError as ex:
-        raise Errore(lingue.t("programma.protezione_non_attiva")) from ex
+        raise Errore(lingue.t("programma.protezione_non_attiva"), "protezione") from ex
 
 
 def applica(segmenti, posizioni):
@@ -233,7 +237,7 @@ class Lavoro:
         except Exception as ex:   # noqa: BLE001
             raise Errore(lingue.t("documenti.errore.lettura", cosa=cosa, motivo=type(ex).__name__)) from ex
         if sum(len(p.strip()) for p in pagine) < 10:
-            raise Errore(lingue.t("documenti.errore.senza_testo", cosa=cosa))
+            raise Errore(lingue.t("documenti.errore.senza_testo", cosa=cosa), "senza_testo")
         self.conteggi["pagine_lette"] = self.conteggi.get("pagine_lette", 0) + len(pagine)   # lette dall'immagine: da rileggere
         return pagine
 
@@ -270,7 +274,7 @@ def elabora(nome, dati, azione):
             testo, cod = dati.decode("cp1252", errors="replace"), "cp1252"
         nuovo = lavoro.testo(testo).encode(cod, errors="replace")
     else:
-        raise Errore(lingue.t("documenti.errore.formato", formato=est or lingue.t("documenti.errore.senza_estensione")))
+        raise Errore(lingue.t("documenti.errore.formato", formato=est or lingue.t("documenti.errore.senza_estensione")), "formato")
     return nome_uscita(nome, azione), nuovo, lavoro.conteggi
 
 

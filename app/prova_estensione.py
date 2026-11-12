@@ -158,6 +158,61 @@ def main():
         segna("casella di scrittura: la pagina legge solo segnaposto, a schermo i valori veri", not any(s in letto for s in SENSIBILI) and "[PERSONA_" in letto
               and all(s in schermo for s in SENSIBILI) and "[PERSONA_" not in schermo, f"letti in chiaro: {sum(s in letto for s in SENSIBILI)} · a schermo {sum(s in schermo for s in SENSIBILI)}/4")
 
+        # --- allegati: il file scelto, trascinato o incollato arriva alla pagina gia' anonimizzato
+        cartella = Path(tempfile.mkdtemp(prefix="omissis_allegati_"))
+        (cartella / "lettera.txt").write_text(TESTO, encoding="utf-8")
+        import docx
+        d = docx.Document()
+        d.add_paragraph(TESTO)
+        d.save(str(cartella / "verbale.docx"))
+        (cartella / "archivio.bin").write_bytes(b"\x00\x01" + TESTO.encode("utf-8"))
+
+        def ricevuti(quanti, secondi=40):
+            for _ in range(secondi * 5):
+                if pagina.evaluate("window.__file.length") >= quanti:
+                    return pagina.evaluate("window.__file")
+                pagina.wait_for_timeout(200)
+            return pagina.evaluate("window.__file")
+
+        pagina.evaluate("window.__file.length = 0; window.__primi.length = 0")
+        pagina.set_input_files("#allega", str(cartella / "lettera.txt"))
+        r = ricevuti(1)
+        with urllib.request.urlopen("http://127.0.0.1:9911/visto_file", timeout=10) as risposta:
+            caricato = json.loads(risposta.read().decode("utf-8"))["ultimo"]
+        segna("allegato di testo: la pagina riceve la copia anonimizzata, e carica quella",
+              len(r) == 1 and r[0]["nome"] == "lettera.anon.txt" and "[PERSONA_" in r[0]["testo"] and not any(s in r[0]["testo"] for s in SENSIBILI)
+              and r[0]["caricato"] and "[PERSONA_" in caricato and not any(s in caricato for s in SENSIBILI)
+              and "lettera.txt" not in pagina.evaluate("window.__primi"), f"{r[0]['nome'] if r else 'nulla'} · al primo evento la pagina ha visto: {pagina.evaluate('window.__primi')}")
+
+        pagina.evaluate("window.__file.length = 0")
+        pagina.set_input_files("#allega", str(cartella / "verbale.docx"))
+        r = ricevuti(1)
+        testo_docx = ""
+        if r and r[0]["dati"]:
+            import base64
+            import io
+            testo_docx = "\n".join(p.text for p in docx.Document(io.BytesIO(base64.b64decode(r[0]["dati"]))).paragraphs)
+        segna("allegato Word: resta un Word, con i dati sostituiti", len(r) == 1 and r[0]["nome"] == "verbale.anon.docx" and "[PERSONA_" in testo_docx
+              and not any(s in testo_docx for s in SENSIBILI), r[0]["nome"] if r else "nulla")
+
+        pagina.evaluate("window.__file.length = 0")
+        pagina.set_input_files("#allega", str(cartella / "archivio.bin"))
+        r = ricevuti(1)
+        segna("formato non coperto: passa com'è (finché non si sceglie di bloccare i file)", len(r) == 1 and r[0]["nome"] == "archivio.bin")
+
+        for come, evento, dove in (("trascinamento", "drop", "#zona"), ("incolla", "paste", "#scrivi")):
+            pagina.evaluate("window.__file.length = 0")
+            pagina.evaluate("""([evento, dove, testo]) => {
+                const dt = new DataTransfer();
+                dt.items.add(new File([testo], 'appunti.txt', {type: 'text/plain'}));
+                const e = evento === 'drop' ? new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt})
+                                            : new ClipboardEvent('paste', {bubbles: true, cancelable: true, clipboardData: dt});
+                document.querySelector(dove).dispatchEvent(e);
+            }""", [evento, dove, TESTO])
+            r = ricevuti(1)
+            segna(f"allegato per {come}: arriva la copia anonimizzata", len(r) == 1 and r[0]["come"] == come and r[0]["nome"] == "appunti.anon.txt"
+                  and "[PERSONA_" in r[0]["testo"] and not any(s in r[0]["testo"] for s in SENSIBILI), r[0]["nome"] if r else "nulla")
+
         # --- XMLHttpRequest (come Gemini): richiesta mascherata, risposta sistemata nel testo della pagina
         grezza = pagina.evaluate("t => prova('gemini', t)", TESTO)
         arrivato = json.dumps(visto()["corpo"], ensure_ascii=False)

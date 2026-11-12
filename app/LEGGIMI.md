@@ -84,6 +84,30 @@ con un nome, avvisi annunciati agli schermi parlanti, contrasto adeguato in chia
 nessuna animazione per chi le ha disattivate, uso completo dalla tastiera. Lo controlla
 `prova_pannello.py`; non è stato provato con uno schermo parlante vero.
 
+## Allegati
+
+Il file che l'utente allega a un messaggio (scelto dal pulsante, trascinato o incollato) viene fermato **prima che
+la pagina lo riceva**, mandato al programma sul PC e sostituito con la copia anonimizzata: la pagina, e quindi il
+servizio, vede solo quella. Come per la casella di scrittura, non dipende da come il sito carica poi il file.
+
+| Cosa si allega | Cosa arriva al servizio |
+|---|---|
+| Word, Excel, PowerPoint | lo stesso formato, con i dati sostituiti (`nome.anon.docx`) |
+| testo, CSV, JSON e simili | lo stesso formato, con i dati sostituiti |
+| PDF | un file di testo con il contenuto anonimizzato (`nome.anon.txt`) |
+| immagine con del testo (scansione, schermata) | un file di testo con ciò che è stato letto, anonimizzato: la lettura può contenere errori |
+| immagine o PDF senza testo leggibile | il file così com'è: non c'è testo da sostituire (un volto resta un volto) |
+| altri formati, o file oltre 20 MB (8 MB nelle app desktop) | secondo «Blocca il caricamento di file»: non allegato, oppure allegato com'è con una riga in Attività |
+
+Se la protezione non risponde il file non viene allegato. Nel registro finiscono il tipo di file e i conteggi, mai il
+nome. La lettura di Word, PDF e immagini la fa il programma di gestione: il motore, che non ne ha le librerie, gliela
+chiede sullo stesso PC. L'impostazione è «Anonimizza gli allegati» (Impostazioni → Riconoscimento), accesa.
+
+Provato con il servizio finto nell'estensione (scelta, trascinamento, incolla; testo e Word) e nell'app di prova
+(trascinamento). **Non ancora provato sui siti e sulle app veri**: lì può darsi che un sito legga il file per una
+strada diversa dalle tre coperte, e va visto servizio per servizio. I file che l'AI restituisce si riportano ai valori
+veri dalla sezione Documenti.
+
 ## Catalogo e radar
 
 I servizi di intelligenza artificiale stanno su due livelli.
@@ -186,7 +210,8 @@ Limiti dell'estensione:
   riscritte in rete: i valori veri compaiono nel testo della pagina, ma il tasto «copia» del sito
   copia i segnaposto. I messaggi **inviati** via WebSocket non sono coperti: il registro lo segnala;
 - le richieste fatte da un processo secondario della pagina (web worker) non sono intercettate;
-- i file caricati non vengono mascherati (si possono bloccare, come nel proxy);
+- i file allegati vengono anonimizzati al momento della scelta (vedi «Allegati»); ciò che non si riesce ad anonimizzare
+  si può bloccare;
 - solo Chrome ed Edge; Firefox non è stato fatto;
 - il collegamento con il programma passa da `127.0.0.1` con un codice: per la versione definitiva
   va sostituito con la messaggistica nativa del browser, e l'installazione va fatta dai criteri
@@ -260,7 +285,8 @@ Da sapere:
   ChatGPT ha risposto citando i segnaposto, quindi ha ricevuto solo quelli. Limiti di questa strada:
   nell'app (cronologia, titolo della conversazione, altri dispositivi) restano i segnaposto, e i
   valori veri si vedono solo sul PC con Omissis; il tasto «copia» dell'app copia i segnaposto (si
-  ripristinano con `Ctrl+Alt+R`); allegati, dettatura e modifica di vecchi messaggi non sono coperti.
+  ripristinano con `Ctrl+Alt+R`); dettatura e modifica di vecchi messaggi non sono coperti. Gli allegati seguono la
+  stessa strada dell'estensione, provata sull'app di prova e non ancora su quella vera.
   Lo stato nel pannello ha tre livelli: non protetta, collegata ma non verificata, verificata dopo
   il primo messaggio passato dalla protezione. Su Claude Desktop non è mai stato provato. Sull'app
   di prova: `prova_connettore.py`, 29 controlli;
@@ -331,7 +357,8 @@ Nella sezione Attività (o in `dati\registro.jsonl`):
 
 ## Limiti noti
 
-- I file caricati (PDF, immagini, documenti) non vengono mascherati; si possono bloccare.
+- Gli allegati vengono anonimizzati solo dove lavora l'estensione o il connettore delle app (vedi «Allegati»); chi passa
+  dal solo proxy o dal gateway carica i file così come sono, e lì si possono soltanto bloccare.
 - I messaggi su WebSocket (Copilot) sono gestiti ma mai provati.
 - Shadow AI in rete: su questo PC la memoria DNS di Windows è vuota, quindi si vedono solo il
   traffico che passa dal proxy e i programmi AI con connessioni aperte. Lo storico completo della

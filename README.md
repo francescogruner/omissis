@@ -21,6 +21,10 @@ is sent to any Omissis server, because there is none.
 
 ![Paste a text: it is masked and copied for you](docs/schermate/testo-en.png)
 
+![Drop a document: the anonymised copy downloads by itself](docs/schermate/documenti-en.png)
+
+<img src="docs/schermate/estensione-finestrella-en.png" alt="The browser extension" width="340">
+
 ## What is in the box
 
 | Part | What it does |
@@ -121,8 +125,11 @@ Be clear about the limits before relying on it:
 - **Restored values are visible to the page.** When the answer is restored inside the service's own
   page or app, that page's scripts can read it. Turn restoring off and use `Ctrl+Alt+R` on copied
   text if that matters to you.
-- **Not covered yet:** files uploaded through the connectors (they can be blocked), images sent in a
-  chat, WebSocket traffic, requests made from web workers.
+- **Attachments:** in the extension and in desktop apps the attached file is replaced with its anonymised copy
+  (Word, Excel, PowerPoint, text; PDFs and images containing text become text). Tested against the mock service,
+  not yet on real sites. An image with no readable text goes as it is.
+- **Not covered yet:** files uploaded by tools that only go through the proxy or the gateway (they can be
+  blocked), WebSocket traffic, requests made from web workers.
 - **Coding agents get a lot of context masked.** Through the gateway, file contents and command
   output are masked in full; this protects more but can confuse the model on long working sessions.
 - **The vault is encrypted with Windows DPAPI**, tied to your Windows user: a copied file cannot be
@@ -139,7 +146,7 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 - Code signing for the installer and Microsoft Store publication
 - Native messaging instead of the local HTTP bridge for the extension; store publication
 - Firefox
-- Masking of uploaded files, redacted image output for scans
+- Redacted image output for scans; automatic restore of files downloaded from chats
 - Central console for organisations (policies, deployment, compliance log)
 
 ## Licence

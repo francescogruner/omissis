@@ -389,6 +389,16 @@ class Connettore:
             elif t == "testo":
                 self.conteggi["controllati"] += 1
             return r
+        if t == "allegato":
+            try:
+                r = self._ponte(t, m, 300)
+            except Exception:   # noqa: BLE001  (mai lasciar partire il file in chiaro)
+                r = {"azione": "blocca", "motivo": "motore"}
+            if r.get("azione") == "sostituisci":
+                self.conteggi["sostituzioni"] += int(r.get("sostituzioni") or 0)
+            elif r.get("azione") == "blocca":
+                self.conteggi["bloccate"] += 1
+            return r
         if t in ("apri", "pezzo", "intera", "valori", "websocket"):
             try:
                 return self._ponte(t, m, 30)

@@ -78,8 +78,84 @@
   };
   const MOTIVI = {motore: T('avviso_motore'), 'non collegata': T('avviso_non_collegata'), file: T('avviso_file'),
     ricarica: T('avviso_ricarica'), estensione: T('avviso_estensione')};
-  const FRASI = {uno: T('avviso_uno'), molti: T('avviso_molti', '\u0001'), premi: T('avviso_premi_invio'), casella: T('avviso_casella')};
+  const FRASI = {uno: T('avviso_uno'), molti: T('avviso_molti', '\u0001'), premi: T('avviso_premi_invio'), casella: T('avviso_casella'),
+    allegato_lavoro: T('allegato_lavoro'), allegato_fatto: T('allegato_fatto', '\u0001', '\u0002'), allegato_testo: T('allegato_testo'),
+    allegato_bloccato: T('allegato_bloccato', '\u0001')};
   const sostituiti = n => (n === 1 ? FRASI.uno : FRASI.molti.replace('\u0001', n));
+
+  // ---------------------------------------------------------------- allegati
+  // Il file che l'utente sceglie, trascina o incolla viene fermato prima che la pagina lo riceva, mandato al programma
+  // sul PC e sostituito con la copia anonimizzata (un PDF o un'immagine diventano un file di testo). Come per la casella
+  // di scrittura, non dipende da come il sito carica poi il file.
+  const ALLEGATO_MAX = globalThis.MSP_OSPITE ? 8e6 : 20e6;   // dentro un'app il passaggio e' piu' stretto
+  const nostri = new WeakSet();   // gli eventi che rimettiamo in circolo noi
+  // Nella stessa pagina possono esserci due copie di questo codice (una rimasta da prima di un aggiornamento, o estensione e
+  // connettore insieme): mentre una consegna le copie dei file lo segna sulla pagina, cosi' l'altra non le ferma di nuovo.
+  const SEGNO = 'data-omissis-allegato';
+  const nostro = ev => nostri.has(ev) || document.documentElement.hasAttribute(SEGNO);
+  const consegna = (bersaglio, e) => { nostri.add(e); document.documentElement.setAttribute(SEGNO, ''); try { bersaglio.dispatchEvent(e); } finally { document.documentElement.removeAttribute(SEGNO); } };
+  const allegatiAttivi = () => cima !== null && !sospesa && politica(OSPITE) === 'proteggi' && (!stato || stato.allegati !== false);
+  const inB64 = async file => { let s = ''; const u = new Uint8Array(await file.arrayBuffer()); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+  const daB64 = testo => Uint8Array.from(atob(testo), c => c.charCodeAt(0));
+
+  /** I file da consegnare alla pagina al posto di quelli scelti. null = nessuno deve passare (e l'avviso e' gia' a schermo). */
+  async function anonimizzati(file) {
+    const pronti = [];
+    let sostituiti = 0, dati = 0, convertiti = 0;
+    avviso(FRASI.allegato_lavoro, false);
+    for (const f of file) {
+      let r;
+      try { r = await invia(f.size > ALLEGATO_MAX ? {t: 'allegato', host: OSPITE, nome: f.name, byte: f.size} : {t: 'allegato', host: OSPITE, nome: f.name, byte: f.size, dati: await inB64(f)}); }
+      catch (e) { r = {azione: 'blocca', motivo: viva() ? 'estensione' : 'ricarica'}; }
+      if (r && r.azione === 'sostituisci') {
+        pronti.push(new File([daB64(r.dati)], r.nome, {type: r.tipo, lastModified: f.lastModified}));
+        sostituiti++; dati += r.sostituzioni || 0; convertiti += r.convertito ? 1 : 0;
+      } else if (r && r.azione === 'passa') pronti.push(f);
+      else { avviso(r && r.motivo === 'file' ? FRASI.allegato_bloccato.replace('\u0001', f.name) : (MOTIVI[r && r.motivo] || MOTIVI.estensione), true); return null; }
+    }
+    if (sostituiti && avvisi) avviso(FRASI.allegato_fatto.replace('\u0001', sostituiti).replace('\u0002', dati) + (convertiti ? ' ' + FRASI.allegato_testo : ''), false);
+    return pronti;
+  }
+  const carico = file => { const dt = new DataTransfer(); for (const f of file) dt.items.add(f); return dt; };
+
+  // scelta dal pulsante: «input» e «change» arrivano uno dopo l'altro con i file veri, e vanno fermati tutti e due
+  const inLavoro = new WeakSet();
+  for (const tipo of ['input', 'change']) {
+    window.addEventListener(tipo, ev => {
+      const el = ev.target;
+      if (nostro(ev) || !(el instanceof HTMLInputElement) || el.type !== 'file') return;
+      if (inLavoro.has(el)) { ev.stopImmediatePropagation(); return; }   // il secondo dei due eventi, o una scelta mentre lavoriamo
+      if (!el.files || !el.files.length || !allegatiAttivi()) return;
+      ev.stopImmediatePropagation();
+      inLavoro.add(el);
+      const scelti = [...el.files];
+      el.value = '';   // finche' la copia non e' pronta la pagina non deve trovare i file veri
+      anonimizzati(scelti).then(pronti => {
+        if (!pronti || !pronti.length) return;
+        el.files = carico(pronti).files;
+        for (const t of ['input', 'change']) consegna(el, new Event(t, {bubbles: true}));
+      }).finally(() => setTimeout(() => inLavoro.delete(el), 0));
+    }, true);
+  }
+
+  // trascinamento e incolla: l'evento vero viene fermato e rifatto uguale, con le copie al posto dei file
+  function rifai(ev, costruisci) {
+    const dt = ev.dataTransfer || ev.clipboardData;
+    if (nostro(ev) || !dt || !dt.files || !dt.files.length || !allegatiAttivi()) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    const bersaglio = ev.target, testi = {};
+    for (const t of ['text/plain', 'text/html']) { const v = dt.getData(t); if (v) testi[t] = v; }
+    anonimizzati([...dt.files]).then(pronti => {
+      if (!pronti || !pronti.length) return;
+      const nuovo = carico(pronti);
+      for (const [t, v] of Object.entries(testi)) nuovo.setData(t, v);
+      consegna(bersaglio && bersaglio.isConnected ? bersaglio : document.body, costruisci(nuovo));
+    });
+  }
+  window.addEventListener('drop', ev => rifai(ev, dt => new DragEvent('drop', {bubbles: true, cancelable: true, composed: true, dataTransfer: dt,
+    clientX: ev.clientX, clientY: ev.clientY, screenX: ev.screenX, screenY: ev.screenY})), true);
+  window.addEventListener('paste', ev => rifai(ev, dt => new ClipboardEvent('paste', {bubbles: true, cancelable: true, composed: true, clipboardData: dt})), true);
 
   // ---------------------------------------------------------------- tramite per pagina.js
   if (canale) {

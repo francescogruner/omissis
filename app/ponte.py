@@ -18,19 +18,39 @@ Stesse regole del proxy: se il modello non risponde la richiesta viene bloccata;
 conteggi e struttura.
 """
 import base64
+import collections
+import json
 import os
 import re
 import secrets
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
+from pathlib import Path
 
 import catalogo
 import impostazioni
+import percorsi
 import registro
 import ripristino as R
 
 MAX_CORPO = 8_000_000
+MAX_ALLEGATO = 20_000_000
+TIPI_FILE = {".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+             ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+             ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+             ".txt": "text/plain", ".md": "text/markdown", ".csv": "text/csv", ".json": "application/json", ".html": "text/html",
+             ".htm": "text/html", ".xml": "application/xml"}
+
+
+class NonFatto(Exception):
+    """Un allegato che non si e' potuto anonimizzare; codice dice perche' (vedi documenti.Errore)."""
+
+    def __init__(self, codice=""):
+        super().__init__(codice)
+        self.codice = codice
 VERSIONE = 1
 
 
@@ -38,6 +58,12 @@ class Ponte:
     def __init__(self, motore):
         self.m = motore
         self.reg = registro.Registro()
+        self.allegati_recenti = collections.deque(maxlen=40)   # (quando, servizio, peso) delle copie anonimizzate consegnate
+        try:   # le librerie per leggere i documenti ci sono solo dove il programma e' un pacchetto unico: si guarda una volta
+            import documenti
+            self.documenti = documenti
+        except ImportError:
+            self.documenti = None
         self.prova = os.environ.get("MSP_PROVA") == "1"
         self.flussi = {}        # id -> [flusso, servizio, percorso, ultimo uso]
         self.originali = {}     # valore -> segnaposto, per accorgersi di un valore che esce in chiaro altrove
@@ -63,7 +89,7 @@ class Ponte:
 
     def gestisci(self, azione, dati):
         f = {"stato": self.stato, "richiesta": self.richiesta, "testo": self.testo, "apri": self.apri, "pezzo": self.pezzo, "intera": self.intera,
-             "valori": self.valori, "visita": self.visita, "websocket": self.websocket}.get(azione)
+             "valori": self.valori, "visita": self.visita, "websocket": self.websocket, "allegato": self.allegato}.get(azione)
         return None if f is None else f(dati)
 
     # ---------------------------------------------------------------- politiche
@@ -76,7 +102,7 @@ class Ponte:
         if self.prova:
             servizi.append({"id": "prova", "nome": "Servizio finto", "domini": ["localhost"], "politica": "proteggi", "leggibile": True})
         return {"versione": VERSIONE, "ripristina": bool(imp["ripristina"]), "blocca_file": bool(imp["blocca_file"]),
-                "casella": bool(imp.get("casella", True)), "servizi": servizi}
+                "casella": bool(imp.get("casella", True)), "allegati": bool(imp.get("allegati", True)), "servizi": servizi}
 
     def visita(self, dati):
         host = str(dati.get("host", "")).lower()
@@ -110,6 +136,8 @@ class Ponte:
                 "percorso": registro.percorso_pulito(percorso),
                 "byte": len(corpo.encode("utf-8")) if isinstance(corpo, str) else int(dati.get("byte") or 0)}
         if dati.get("file") or "multipart/" in tipo or "octet-stream" in tipo or re.search(r"(?i)upload|/files?(/|$)", percorso):
+            if self._gia_anonimizzato(servizio, voce["byte"]):   # e' la copia che abbiamo appena preparato noi: puo' partire
+                return {"azione": "passa"}
             if not rete or imp["blocca_file"]:
                 self.reg.scrivi(**voce, evento="file bloccato" if imp["blocca_file"] else "file NON mascherato")
             return {"azione": "blocca", "motivo": "file"} if imp["blocca_file"] else {"azione": "passa"}
@@ -177,6 +205,93 @@ class Ponte:
         if esito["testi"][0] == t:
             return {"azione": "passa"}
         return {"azione": "sostituisci", "testo": esito["testi"][0], "sostituzioni": sum(esito["conteggi"].values())}
+
+    # ---------------------------------------------------------------- allegati
+    def _gia_anonimizzato(self, servizio, peso):
+        """Il caricamento che sta partendo e' fatto di copie appena anonimizzate? Si riconoscono dal peso: quello di una
+        copia, o la somma delle ultime (piu' file nello stesso invio)."""
+        ora, somma = time.time(), 0
+        for quando, di, byte in reversed(self.allegati_recenti):
+            if ora - quando > 180:
+                break
+            if di == servizio:
+                somma += byte
+                if peso in (byte, somma):
+                    return True
+        return False
+
+    def _anonimizza_file(self, nome, grezzo):
+        """(nome nuovo, contenuto, conteggi). Leggere Word, Excel, PDF e immagini e' un lavoro del programma di gestione:
+        se questo processo ne ha le librerie lo fa da se', altrimenti lo chiede al pannello sullo stesso PC."""
+        documenti = self.documenti
+        if documenti is not None:
+            try:
+                return documenti.elabora(nome, grezzo, "anonimizza")
+            except documenti.Errore as ex:
+                raise NonFatto(ex.codice) from None
+        token = (percorsi.DATI / "token.txt").read_text(encoding="utf-8").strip()
+        rich = urllib.request.Request(f"http://127.0.0.1:{percorsi.PORTA_PANNELLO}/interno/allegato",
+                                      data=json.dumps({"nome": nome, "dati": base64.b64encode(grezzo).decode("ascii")}).encode("utf-8"),
+                                      headers={"Content-Type": "application/json", "X-Token": token})
+        try:
+            with urllib.request.urlopen(rich, timeout=300) as r:
+                d = json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as ex:
+            try:
+                codice = json.loads(ex.read().decode("utf-8")).get("codice", "")
+            except ValueError:
+                codice = ""
+            raise NonFatto(codice) from None
+        except (urllib.error.URLError, OSError, ValueError):
+            raise NonFatto("pannello") from None
+        return d["nome"], base64.b64decode(d["dati"]), d["conteggi"]
+
+    def allegato(self, dati):
+        """Un file che l'utente sta per allegare a un messaggio (scelto, trascinato o incollato): la pagina ricevera' la copia
+        anonimizzata. Cio' che non si riesce ad anonimizzare segue la scelta «blocca i file»; un'immagine o un PDF senza
+        testo non ha nulla da sostituire e passa; se la protezione non risponde non parte nulla."""
+        ad, servizio, _, _ = self._servizio(f"https://{str(dati.get('host', '')).lower()}/generico/casella")
+        if ad is None:
+            return {"azione": "passa"}
+        imp = impostazioni.leggi()
+        nome = Path(str(dati.get("nome") or "file")).name[:200]
+        est = Path(nome).suffix.lower()
+        voce = {"servizio": servizio, "via": self._via(dati), "metodo": "allegato", "percorso": f"(allegato {est or 'senza estensione'})",
+                "byte": int(dati.get("byte") or 0)}
+
+        def non_anonimizzato():
+            self.reg.scrivi(**voce, evento="file bloccato" if imp["blocca_file"] else "file NON mascherato")
+            return {"azione": "blocca", "motivo": "file"} if imp["blocca_file"] else {"azione": "passa"}
+
+        if not imp.get("allegati", True):
+            return non_anonimizzato()
+        try:
+            grezzo = base64.b64decode(dati.get("dati") or "")
+        except ValueError:
+            grezzo = b""
+        if not grezzo or len(grezzo) > MAX_ALLEGATO:
+            return non_anonimizzato()
+        voce["byte"] = len(grezzo)
+        inizio = time.time()
+        try:
+            nuovo_nome, nuovo, conteggi = self._anonimizza_file(nome, grezzo)
+        except NonFatto as ex:
+            if ex.codice == "senza_testo":
+                self.reg.scrivi(**voce, evento="allegato senza testo: passato")
+                return {"azione": "passa"}
+            if ex.codice == "protezione":
+                self.reg.scrivi(**voce, evento="BLOCCATA: motore non raggiungibile")
+                return {"azione": "blocca", "motivo": "motore"}
+            return non_anonimizzato()
+        except Exception as ex:   # noqa: BLE001  (un file che manda in errore la lettura non deve partire in chiaro per sbaglio)
+            voce["errore"] = type(ex).__name__
+            return non_anonimizzato()
+        self.allegati_recenti.append((time.time(), servizio, len(nuovo)))
+        sostituzioni = {k: n for k, n in conteggi.items() if k != "pagine_lette" and n}
+        self.reg.scrivi(**voce, evento="allegato mascherato", sostituzioni=sostituzioni, ms=round((time.time() - inizio) * 1000))
+        nuova_est = Path(nuovo_nome).suffix.lower()
+        return {"azione": "sostituisci", "nome": nuovo_nome, "tipo": TIPI_FILE.get(nuova_est, "application/octet-stream"),
+                "dati": base64.b64encode(nuovo).decode("ascii"), "sostituzioni": sum(sostituzioni.values()), "convertito": nuova_est != est}
 
     # ---------------------------------------------------------------- risposta
     def apri(self, dati):
