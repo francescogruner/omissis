@@ -37,6 +37,7 @@ is sent to any Omissis server, because there is none.
 | **Proxy** (`app/addon.py`) | A [mitmproxy](https://mitmproxy.org) addon for clients that speak the provider APIs or honour a proxy with a locally trusted certificate |
 | **Manual tools** | Mask / restore pasted text, clipboard shortcuts (`Ctrl+Alt+M`, `Ctrl+Alt+R`), anonymise and restore Word, Excel, PowerPoint, text files and whole folders; scanned PDFs and images are read with the OCR built into Windows |
 | **Panel** (`app/panel.py`) | Local web page + tray icon. A *simple* mode for everyday use (status, text, documents, guide) and an *advanced* mode for whoever manages it: activity log (counts only, never text), per-service policy (protect / log / block / ignore), Shadow AI inventory of the PC |
+| **Compatibility register** (`app/compatibility.json` + panel) | Sites and apps change without notice. The panel records, on your PC only, which program and version each replacement last worked with (browser, desktop app, CLI tool) and flags the ones to re-check after an update; names, versions and counts, never text. `compatibility.json` lists what the author verified by hand |
 
 ## How it works
 

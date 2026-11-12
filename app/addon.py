@@ -131,7 +131,8 @@ class MspPii:
         if rq.method not in ("POST", "PUT", "PATCH") or not rq.raw_content:
             return
         tipo = rq.headers.get("content-type", "")
-        voce = {"servizio": servizio, "metodo": rq.method, "percorso": self.percorso(flow), "byte": len(rq.raw_content)}
+        voce = {"servizio": servizio, "metodo": rq.method, "percorso": self.percorso(flow), "byte": len(rq.raw_content),
+                "cliente": activity.cliente_da_ua(rq.headers.get("User-Agent", ""))}
         if "multipart/" in tipo or "octet-stream" in tipo or re.search(r"(?i)upload|/files?(/|$)", rq.path):
             if imp["blocca_file"]:
                 flow.response = http.Response.make(403, b'{"error":"Omissis: caricamento di file bloccato"}',

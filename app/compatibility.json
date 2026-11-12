@@ -1,0 +1,51 @@
+{
+ "_cosa": "Cio' che l'autore ha verificato di persona, con quale programma e quale versione. livello: dal_vivo (servizio vero, dati inventati) | servizio_finto (prove automatiche contro un servizio simulato).",
+ "aggiornato": "2026-11-13",
+ "voci": [
+  {
+   "servizio": "chatgpt",
+   "via": "app desktop",
+   "cliente": "ChatGPT per Windows",
+   "versione": "26.1106",
+   "metodo": "casella",
+   "livello": "dal_vivo",
+   "data": "2026-11-12"
+  },
+  {
+   "servizio": "anthropic-api",
+   "via": "gateway",
+   "cliente": "Claude Code",
+   "versione": "",
+   "metodo": "api",
+   "livello": "dal_vivo",
+   "data": "2026-11-12"
+  },
+  {
+   "servizio": "",
+   "via": "estensione",
+   "cliente": "Microsoft Edge",
+   "versione": "157",
+   "metodo": "rete",
+   "livello": "servizio_finto",
+   "data": "2026-11-13"
+  },
+  {
+   "servizio": "",
+   "via": "estensione",
+   "cliente": "Brave",
+   "versione": "157",
+   "metodo": "rete",
+   "livello": "servizio_finto",
+   "data": "2026-11-13"
+  },
+  {
+   "servizio": "",
+   "via": "estensione",
+   "cliente": "Chromium",
+   "versione": "",
+   "metodo": "rete",
+   "livello": "servizio_finto",
+   "data": "2026-11-13"
+  }
+ ]
+}

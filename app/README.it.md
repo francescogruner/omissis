@@ -338,11 +338,48 @@ non va copiata né condivisa.
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 19 controlli) e **Claude Code dal vivo** con un messaggio di dati inventati |
-| Connettore per le app desktop | app di prova (`e2e_connector.py`, 29 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
-| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 25 controlli); pagine vere solo aperte, senza accedere |
+| Connettore per le app desktop | app di prova (`e2e_connector.py`, 31 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
+| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
 da Servizi AI dopo averli provati con dati inventati.
+
+## Registro di compatibilità
+
+I siti e le app cambiano senza avvisare: sapere che la protezione «funziona con ChatGPT» non basta,
+serve sapere **con quale programma e quale versione** ha funzionato l'ultima volta. Il pannello lo
+mostra in Collegamenti → Compatibilità, in due elenchi.
+
+**Visto su questo PC.** Si compila da solo mentre si lavora. Ogni riga del registro delle attività
+che dice qualcosa sulla protezione aggiorna una tabella (`compatibilita`, in `data\contacts.sqlite`)
+con: servizio, strada (estensione, app desktop, gateway, proxy), programma e versione, metodo
+(casella di scrittura, rete, allegato, API) ed esito:
+
+- `ok`: dei dati sono stati sostituiti prima dell'invio;
+- `ripristino`: dei valori sono stati rimessi nella risposta;
+- `non_letto`: il servizio ha usato un formato che Omissis non ha riconosciuto.
+
+Per ogni combinazione restano solo i conteggi e le date della prima e dell'ultima volta: **nessun
+testo, nessun valore**. Il pannello riassume così: *funziona* se l'ultima cosa successa è una
+sostituzione riuscita, *da ricontrollare* se dopo l'ultima riuscita un formato non è stato
+riconosciuto (di solito vuol dire che il servizio o l'app si sono aggiornati) oppure se una
+sostituzione non è mai riuscita. Il pulsante «Copia il riepilogo» mette l'elenco negli appunti,
+per allegarlo a una segnalazione.
+
+Da dove viene il nome del programma: l'estensione dichiara il browser e la sua versione
+(`navigator.userAgentData`), il connettore legge la versione dell'app dalla sua porta di
+collegamento, gateway e proxy la prendono dall'intestazione `User-Agent` della richiesta (per
+esempio `claude-cli 2.1.0`). Tutto resta sul PC: la tabella non viene spedita da nessuna parte.
+
+**Verificato dall'autore.** È il file `compatibility.json`, distribuito con il programma: le
+combinazioni provate di persona, con la data e il livello della prova (`dal_vivo` = servizio vero
+con dati inventati, `servizio_finto` = prove automatiche contro il servizio simulato). Va
+aggiornato a mano dopo ogni prova vera; una riga senza versione vuol dire che la versione non è
+stata annotata.
+
+Quando una riga passa a *da ricontrollare*: rilanciare le prove automatiche, guardare in Attività la
+struttura della richiesta non riconosciuta e, finché non è sistemato, tenere accesa la casella di
+scrittura (che non dipende dal formato interno del sito).
 
 ## Cosa guardare durante una prova
 

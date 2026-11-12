@@ -103,7 +103,7 @@ const levetta = (id, nome) => `<span class="levetta"><input type="checkbox" role
 const VISTE = [
   {id: "inizio"}, {id: "testo"}, {id: "documenti"}, {id: "guida"},
   {id: "impostazioni", schede: ["generali", "riconoscimento"], schedeAvanzate: ["riconoscimento"]},
-  {id: "collegamenti", avanzata: true, schede: ["browser", "app", "terminale", "proxy"]},
+  {id: "collegamenti", avanzata: true, schede: ["browser", "app", "terminale", "proxy", "compatibilita"]},
   {id: "servizi", avanzata: true, schede: ["regole", "rilevati"]},
   {id: "attivita", avanzata: true}, {id: "archivio", avanzata: true},
 ];
@@ -434,7 +434,7 @@ const impostazioniRiconoscimento = prova(async el => {
 });
 
 // ---- Collegamenti
-DISEGNA.collegamenti = (el, quale) => ({browser: collegaBrowser, app: collegaApp, terminale: collegaTerminale, proxy: collegaProxy}[quale])(el);
+DISEGNA.collegamenti = (el, quale) => ({browser: collegaBrowser, app: collegaApp, terminale: collegaTerminale, proxy: collegaProxy, compatibilita: collegaCompatibilita}[quale])(el);
 AGGIORNA.collegamenti = () => { if (aperta.scheda === "app" && !$("button[data-app]:disabled")) elencoApp(); if (aperta.scheda === "terminale") statoGateway(); };
 
 function disegnaEstensione() {
@@ -528,6 +528,24 @@ const collegaProxy = prova(async el => {
   $("#certInstalla").onclick = prova(async () => certificato(await api("/api/certificato", {azione: "installa"})));
   $("#certRimuovi").onclick = prova(async () => certificato(await api("/api/certificato", {azione: "rimuovi"})));
   $$("button[data-indirizzo]").forEach(b => b.onclick = prova(async () => avvisa((await api("/api/browser", {indirizzo: b.dataset.indirizzo})).esito)));
+});
+
+const collegaCompatibilita = prova(async el => {
+  const c = await api("/api/compatibilita");
+  const quando = s => esc((s || "").slice(0, 16));
+  const riga = g => `<tr><td><b>${esc(g.nome)}</b></td><td>${esc(tSe("via." + g.via, g.via))}</td><td>${esc(g.cliente || t("compatibilita.sconosciuto"))}</td>
+    <td>${etichetta(t(`compatibilita.stato.${g.stato}`), g.stato === "funziona" ? "ok" : "attenzione")}<div class="sotto">${g.metodi.map(m => esc(t(`compatibilita.metodo.${m}`))).join(", ")}</div></td>
+    <td>${quando(g.ultimo_ok) || "–"}<div class="sotto">${esc(t("compatibilita.conteggi", {ok: g.ok, ripristino: g.ripristino, non_letto: g.non_letto}))}</div></td></tr>`;
+  const verificato = v => `<tr><td><b>${esc(v.nome || t("compatibilita.ogni_servizio"))}</b></td><td>${esc(tSe("via." + v.via, v.via))}</td><td>${esc([v.cliente, v.versione].filter(Boolean).join(" "))}</td>
+    <td>${etichetta(t(`compatibilita.livello.${v.livello}`), v.livello === "dal_vivo" ? "ok" : "")}<div class="sotto">${esc(t(`compatibilita.metodo.${v.metodo}`))}</div></td><td>${esc(v.data || "")}</td></tr>`;
+  const testa = colonne => `<thead><tr>${colonne.map(k => `<th scope="col">${esc(t(`compatibilita.colonna.${k}`))}</th>`).join("")}</tr></thead>`;
+  el.innerHTML = `<section class="scheda"><div class="dentro"><div class="riga"><h2>${esc(t("compatibilita.visti"))}</h2><span class="spazio"></span><button class="bottone" id="copiaCompatibilita">${esc(t("compatibilita.copia"))}</button></div>
+      <p>${esc(t("compatibilita.visti.sotto"))}</p></div>
+      <div class="tabella"><table><caption class="vh">${esc(t("compatibilita.visti"))}</caption>${testa(["servizio", "strada", "programma", "stato", "ultimo"])}<tbody>${
+        c.visti.map(riga).join("") || `<tr><td colspan="5" class="vuoto">${esc(t("compatibilita.vuoto"))}</td></tr>`}</tbody></table></div></section>
+    <section class="scheda"><div class="dentro"><h2>${esc(t("compatibilita.verificati"))}</h2><p>${esc(t("compatibilita.verificati.sotto", {data: c.aggiornato}))}</p></div>
+      <div class="tabella"><table><caption class="vh">${esc(t("compatibilita.verificati"))}</caption>${testa(["servizio", "strada", "programma", "livello", "data"])}<tbody>${c.verificati.map(verificato).join("")}</tbody></table></div></section>`;
+  $("#copiaCompatibilita").onclick = () => copia(c.visti.map(g => `${g.nome} | ${g.via} | ${g.cliente || "?"} | ${g.stato} | ok ${g.ok}, ripristini ${g.ripristino}, non letti ${g.non_letto} | ultimo ${g.ultimo_ok || "-"}`).join("\n") || t("compatibilita.vuoto"));
 });
 
 // ---- Servizi AI

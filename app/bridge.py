@@ -45,6 +45,20 @@ TIPI_FILE = {".docx": "application/vnd.openxmlformats-officedocument.wordprocess
              ".htm": "text/html", ".xml": "application/xml"}
 
 
+class _ConCliente:
+    """Il registro, con in piu' su ogni riga il programma che ha fatto la richiesta (se lo ha dichiarato)."""
+
+    def __init__(self, registro, locale):
+        self._registro, self._locale = registro, locale
+
+    def scrivi(self, **voce):
+        cliente = getattr(self._locale, "cliente", "")
+        return self._registro.scrivi(**({**voce, "cliente": cliente} if cliente else voce))
+
+    def __getattr__(self, nome):
+        return getattr(self._registro, nome)
+
+
 class NonFatto(Exception):
     """Un allegato che non si e' potuto anonimizzare; codice dice perche' (vedi documenti.Errore)."""
 
@@ -57,7 +71,8 @@ VERSIONE = 1
 class Ponte:
     def __init__(self, motore):
         self.m = motore
-        self.reg = activity.Registro()
+        self.locale = threading.local()   # il programma (nome e versione) della richiesta in corso, per le righe del registro
+        self.reg = _ConCliente(activity.Registro(), self.locale)
         self.allegati_recenti = collections.deque(maxlen=40)   # (quando, servizio, peso) delle copie anonimizzate consegnate
         try:   # le librerie per leggere i documenti ci sono solo dove il programma e' un pacchetto unico: si guarda una volta
             import documents as documenti
@@ -90,7 +105,11 @@ class Ponte:
     def gestisci(self, azione, dati):
         f = {"stato": self.stato, "richiesta": self.richiesta, "testo": self.testo, "apri": self.apri, "pezzo": self.pezzo, "intera": self.intera,
              "valori": self.valori, "visita": self.visita, "websocket": self.websocket, "allegato": self.allegato}.get(azione)
-        return None if f is None else f(dati)
+        if f is None:
+            return None
+        cliente = dati.get("cliente")
+        self.locale.cliente = re.sub(r"[^\w .()\[\]/-]", "", str(cliente))[:60] if isinstance(cliente, str) else ""
+        return f(dati)
 
     # ---------------------------------------------------------------- politiche
     def stato(self, dati):

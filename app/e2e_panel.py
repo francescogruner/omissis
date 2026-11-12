@@ -31,7 +31,7 @@ TESTO = ("Buongiorno, sono Giulia Ferraresi della Nevatek S.r.l. Il mio collega 
          "cell. 347 5551234) non riesce ad accedere al gestionale: potete richiamarlo oggi?")
 SENSIBILI = ["Giulia Ferraresi", "Aldo Bruschi", "aldo.bruschi@nevatek.example", "347 5551234"]
 VISTE = ["inizio", "testo", "documenti", "guida", "impostazioni/generali", "impostazioni/riconoscimento", "collegamenti/browser",
-         "collegamenti/app", "collegamenti/terminale", "collegamenti/proxy", "servizi/regole", "servizi/rilevati", "attivita", "archivio"]
+         "collegamenti/app", "collegamenti/terminale", "collegamenti/proxy", "collegamenti/compatibilita", "servizi/regole", "servizi/rilevati", "attivita", "archivio"]
 # una chiave rimasta a schermo al posto della frase ("menu.inizio", "testo.sotto"...): si cercano quelle vere, dal file di riferimento
 CHIAVI = set(json.loads((QUI / "panel" / "locales" / "it.json").read_text(encoding="utf-8")))
 RX_CHIAVE = re.compile(r"[a-z_]+(?:\.[a-z_0-9]+)+")

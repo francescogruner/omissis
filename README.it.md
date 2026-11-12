@@ -35,6 +35,7 @@ viene mandato a un server di Omissis, perché non esiste.
 | **Proxy** (`app/addon.py`) | Addon di [mitmproxy](https://mitmproxy.org) per i programmi che parlano con le API o accettano un proxy con un certificato locale |
 | **Uso manuale** | Mascherare e ripristinare un testo incollato, scorciatoie sugli appunti (`Ctrl+Alt+M`, `Ctrl+Alt+R`), anonimizzare e ripristinare Word, Excel, PowerPoint, file di testo e cartelle intere; PDF scansionati e immagini si leggono con il riconoscimento dei caratteri di Windows |
 | **Pannello** (`app/panel.py`) | Pagina locale e icona vicino all'orologio. Una modalità *semplice* per l'uso di tutti i giorni (stato, testo, documenti, guida) e una *avanzata* per chi lo gestisce: registro delle attività (solo conteggi, mai i testi), scelta per servizio (proteggi / registra / blocca / ignora), inventario degli strumenti AI sul PC |
+| **Registro di compatibilità** (`app/compatibility.json` e pannello) | Siti e app cambiano senza avvisare. Il pannello annota, solo sul PC, con quale programma e quale versione ogni sostituzione ha funzionato l'ultima volta (browser, app desktop, strumento da terminale) e segnala quelle da ricontrollare dopo un aggiornamento; nomi, versioni e conteggi, mai i testi. `compatibility.json` elenca ciò che l'autore ha verificato di persona |
 
 Se il motore non risponde, le richieste verso i servizi protetti vengono **bloccate**, mai inoltrate
 in chiaro.

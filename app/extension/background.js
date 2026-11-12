@@ -8,6 +8,17 @@ let ultimoControllo = 0;
 
 const conf = () => chrome.storage.local.get({token: '', porta: PORTA, sospesa: false, avvisi: true});
 
+// Il browser e la sua versione: il programma li annota accanto a ogni messaggio protetto, per sapere con quali versioni funziona.
+let CLIENTE = '';
+(async () => {
+  try {
+    const d = navigator.userAgentData;
+    const marche = (d && (await d.getHighEntropyValues(['fullVersionList'])).fullVersionList) || (d && d.brands) || [];
+    const m = marche.find(x => !/chromium|not.?a.?brand/i.test(x.brand)) || marche.find(x => /chromium/i.test(x.brand));
+    CLIENTE = m ? `${m.brand} ${m.version}` : '';
+  } catch (e) { /* resta vuoto: il programma lo segna come sconosciuto */ }
+})();
+
 async function motore(azione, dati, attesa) {
   const c = await conf();
   if (!c.token) throw new Error('non collegata');
@@ -16,7 +27,7 @@ async function motore(azione, dati, attesa) {
   try {
     const r = await fetch(`http://127.0.0.1:${c.porta}/ponte/${azione}`, {
       method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': c.token},
-      body: JSON.stringify(dati || {}), signal: ctl.signal, cache: 'no-store'});
+      body: JSON.stringify({...(dati || {}), cliente: CLIENTE}), signal: ctl.signal, cache: 'no-store'});
     if (!r.ok) throw new Error(r.status === 403 ? 'codice non valido' : 'errore ' + r.status);
     return await r.json();
   } finally { clearTimeout(t); }

@@ -37,6 +37,7 @@ from pathlib import Path
 import websocket
 
 import catalog
+import activity
 import i18n
 import paths
 
@@ -151,6 +152,12 @@ class Connettore:
         self.porta, self.nome, self.sito, self.interni = porta, nome, sito, list(interni)
         self.prova = os.environ.get("OMISSIS_TEST") == "1" if prova is None else prova
         self.porta_motore = PORTA_MOTORE
+        self.cliente = nome   # nome dell'app e versione, per il registro delle versioni compatibili
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{porta}/json/version", timeout=5) as r:
+                self.cliente = f"{nome} [{activity.cliente_da_ua(json.loads(r.read().decode('utf-8')).get('User-Agent', ''))}]"
+        except Exception:   # noqa: BLE001
+            pass
         self.pool = ThreadPoolExecutor(8)
         self.sessioni = {}      # sessione -> {"script": [...], "contesti": set(), "indirizzo": str}
         self.conteggi = {"messaggi": 0, "sostituzioni": 0, "bloccate": 0, "pagine": 0, "in_rete": 0, "controllati": 0}
@@ -182,7 +189,7 @@ class Connettore:
     def _ponte(self, azione, dati, attesa=90):
         token = (DATI / "token_extension.txt").read_text(encoding="utf-8").strip()
         rich = urllib.request.Request(f"http://127.0.0.1:{self.porta_motore}/ponte/{azione}",
-                                      data=json.dumps({**dati, "via": "app"}).encode("utf-8"),
+                                      data=json.dumps({**dati, "via": "app", "cliente": self.cliente}).encode("utf-8"),
                                       headers={"Content-Type": "application/json", "X-Token": token})
         with urllib.request.urlopen(rich, timeout=attesa) as r:
             return json.loads(r.read().decode("utf-8"))

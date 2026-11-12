@@ -321,6 +321,11 @@ def main():
     testo = json.dumps(mie, ensure_ascii=False)
     segna("registro: righe dell'estensione senza testi", len([v for v in mie if v.get("evento") == "mascherata"]) >= 9
           and not any(s in testo for s in SENSIBILI), f"{len(mie)} righe: " + ", ".join(sorted({v.get('evento', '') for v in mie})))
+    # --- il registro delle versioni: il browser di questa prova deve risultare, con il suo nome e la sua versione
+    import activity
+    visti = [g for g in activity.compatibilita() if g["via"] == "estensione" and g["cliente"]]
+    segna("registro delle versioni: browser e versione annotati accanto alle sostituzioni riuscite", any(g["ok"] >= 1 and g["stato"] == "funziona"
+          and any(c.isdigit() for c in g["cliente"]) for g in visti), "; ".join(sorted({g["cliente"] for g in visti}))[:120] or "nessun programma annotato")
     print("\nTUTTO OK" if all(esiti) else f"\n{esiti.count(False)} ERRORI")
     sys.exit(0 if all(esiti) else 1)
 

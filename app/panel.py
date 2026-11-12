@@ -30,6 +30,7 @@ from pathlib import Path
 
 import updates
 import clipboard
+import activity
 import catalog
 import connector
 import documents
@@ -384,6 +385,15 @@ class Gestore(BaseHTTPRequestHandler):
                 self._rispondi(200, pagina.encode("utf-8"), "text/html; charset=utf-8")
             elif u.path in STATICI or RX_LINGUA.fullmatch(u.path):
                 self._rispondi(200, (PAGINA / u.path.lstrip("/")).read_bytes(), STATICI.get(u.path, "application/json; charset=utf-8"))
+            elif u.path == "/api/compatibilita":
+                try:
+                    verificati = json.loads((QUI / "compatibility.json").read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    verificati = {"voci": []}
+                nomi = {s["id"]: s["nome"] for s in catalog.SERVIZI}
+                self._rispondi(200, {"visti": [{**g, "nome": nomi.get(g["servizio"], g["servizio"])} for g in activity.compatibilita()],
+                                     "verificati": [{**v, "nome": nomi.get(v.get("servizio"), v.get("servizio"))} for v in verificati.get("voci", [])],
+                                     "aggiornato": verificati.get("aggiornato", "")})
             elif u.path == "/api/lingue":
                 self._rispondi(200, {"scelta": i18n.scelta(), "attiva": i18n.attiva(), "disponibili": i18n.disponibili()})
             elif u.path == "/api/stato":

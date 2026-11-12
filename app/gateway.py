@@ -170,7 +170,8 @@ class Gateway:
             return h._errore(413, "richiesta troppo grande per essere controllata")
         corpo = h.rfile.read(lunghezza) if lunghezza else b""
         tipo = h.headers.get("Content-Type", "")
-        ad, voce = None, {"servizio": chi, "via": "gateway", "metodo": h.command, "percorso": activity.percorso_pulito(percorso), "byte": len(corpo)}
+        ad, voce = None, {"servizio": chi, "via": "gateway", "metodo": h.command, "percorso": activity.percorso_pulito(percorso), "byte": len(corpo),
+                          "cliente": activity.cliente_da_ua(h.headers.get("User-Agent", ""))}
 
         if politica == "proteggi" and h.command in ("POST", "PUT", "PATCH") and corpo:
             ad = agents.CLASSI[adattatore]()
@@ -263,7 +264,7 @@ class Gateway:
                 pezzo(x)
             h.wfile.write(b"0\r\n\r\n")
             if flusso.ripristinati:
-                self.reg.scrivi(servizio=voce["servizio"], via="gateway", percorso=voce["percorso"], evento="risposta in streaming",
+                self.reg.scrivi(servizio=voce["servizio"], via="gateway", cliente=voce.get("cliente", ""), percorso=voce["percorso"], evento="risposta in streaming",
                                 ripristinati=flusso.ripristinati)
             return
         if ripristina and any(x in tipo for x in ("json", "text/plain")):
@@ -273,7 +274,7 @@ class Gateway:
             if trovati:
                 self.precarica(trovati)
                 intero = ad.intera(tipo, testo, self.cerca).encode("utf-8")
-                self.reg.scrivi(servizio=voce["servizio"], via="gateway", percorso=voce["percorso"], evento="risposta", ripristinati=len(trovati))
+                self.reg.scrivi(servizio=voce["servizio"], via="gateway", cliente=voce.get("cliente", ""), percorso=voce["percorso"], evento="risposta", ripristinati=len(trovati))
             h.send_header("Content-Length", str(len(intero)))
             h.end_headers()
             h.wfile.write(intero)

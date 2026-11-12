@@ -118,6 +118,10 @@ def main():
                   and guida.valuta("typeof window.__msp_risposta") == "undefined")
             segna("conteggi del connettore", con.conteggi["messaggi"] >= 9 and con.conteggi["sostituzioni"] >= 36, json.dumps(con.conteggi))
             segna("nessun errore del connettore", not con.errori, "; ".join(con.errori)[:150])
+            import activity
+            visti = [g for g in activity.compatibilita() if g["via"] == "app desktop" and g["cliente"]]
+            segna("registro delle versioni: l'app e la sua versione annotate accanto alle sostituzioni riuscite", any(g["ok"] >= 1 and "[" in g["cliente"] for g in visti),
+                  "; ".join(sorted({g["cliente"] for g in visti}))[:120] or "nessun programma annotato")
 
             # --- come nelle app vere (1): una finestra che il browser tiene FERMA finche' il connettore non da' il via
             t0 = time.perf_counter()
