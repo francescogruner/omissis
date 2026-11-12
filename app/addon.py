@@ -6,12 +6,12 @@ scelte nel pannello: proteggi | registra | blocca | ignora.
 
 Regole di sicurezza:
   - se il motore non risponde la richiesta viene BLOCCATA (503), mai inoltrata in chiaro;
-  - nel registro (dati\\registro.jsonl) finiscono solo conteggi e nomi dei campi, mai i testi;
+  - nel registro (data\\activity.jsonl) finiscono solo conteggi e nomi dei campi, mai i testi;
   - i file caricati (PDF, immagini) NON vengono mascherati: sono segnalati nel registro e,
     se impostato, bloccati.
 
-Le impostazioni si leggono da dati\\impostazioni.json a ogni richiesta (vedi impostazioni.py).
-MSP_PROVA=1 accetta anche il servizio finto in locale.
+Le impostazioni si leggono da data\\settings.json a ogni richiesta (vedi settings.py).
+OMISSIS_TEST=1 accetta anche il servizio finto in locale.
 """
 import asyncio
 import json
@@ -22,21 +22,21 @@ from pathlib import Path
 
 from mitmproxy import http
 
-import catalogo
-import impostazioni
-import percorsi
-import registro
-import ripristino as R
-from registro import forma
+import catalog
+import settings
+import paths
+import activity
+import restore as R
+from activity import forma
 
 QUI = Path(__file__).resolve().parent
-MOTORE = os.environ.get("MSP_MOTORE", "http://127.0.0.1:8765")
-PROVA = os.environ.get("MSP_PROVA") == "1"
+MOTORE = os.environ.get("OMISSIS_ENGINE_URL", "http://127.0.0.1:8765")
+PROVA = os.environ.get("OMISSIS_TEST") == "1"
 MAX_CORPO = 8_000_000
 
 
 def motore(percorso, dati):
-    token = (percorsi.DATI / "token.txt").read_text(encoding="utf-8").strip()
+    token = (paths.DATI / "token.txt").read_text(encoding="utf-8").strip()
     rich = urllib.request.Request(MOTORE + percorso, data=json.dumps(dati).encode("utf-8"),
                                   headers={"Content-Type": "application/json", "X-Token": token})
     with urllib.request.urlopen(rich, timeout=60) as r:
@@ -48,7 +48,7 @@ class MspPii:
         self.valori = {}        # segnaposto -> valore (cache; i valori restano in memoria e nell'archivio del motore)
         self.assenti = set()
         self.originali = {}     # valore -> segnaposto, per accorgersi di un valore che esce in chiaro altrove
-        self.reg = registro.Registro()
+        self.reg = activity.Registro()
 
     # ---------------------------------------------------------------- utilita'
     def scrivi(self, **voce):
@@ -80,14 +80,14 @@ class MspPii:
 
     @staticmethod
     def percorso(flow):
-        return registro.percorso_pulito(flow.request.path)
+        return activity.percorso_pulito(flow.request.path)
 
     def adattatore(self, flow):
         """(adattatore, nome del servizio) per una richiesta da proteggere, altrimenti (None, None)."""
         host = flow.request.pretty_host
-        s = catalogo.trova(host)
+        s = catalog.trova(host)
         if s is not None:
-            if s["adattatore"] and impostazioni.politica(s) == "proteggi":
+            if s["adattatore"] and settings.politica(s) == "proteggi":
                 return R.CLASSI[s["adattatore"]](), s["id"]
             return None, None
         if PROVA and host in ("127.0.0.1", "localhost"):
@@ -107,10 +107,10 @@ class MspPii:
 
     # ---------------------------------------------------------------- contatti verso i servizi AI
     def http_connect(self, flow: http.HTTPFlow):
-        s = catalogo.trova(flow.request.host)
+        s = catalog.trova(flow.request.host)
         if s is None:
             return
-        pol = impostazioni.politica(s)
+        pol = settings.politica(s)
         if pol == "ignora":
             return
         if pol == "blocca":
@@ -126,7 +126,7 @@ class MspPii:
         if ad is None:
             return
         flow.metadata["msp"], flow.metadata["msp_servizio"] = ad, servizio
-        imp = impostazioni.leggi()
+        imp = settings.leggi()
         rq = flow.request
         if rq.method not in ("POST", "PUT", "PATCH") or not rq.raw_content:
             return
@@ -174,7 +174,7 @@ class MspPii:
     # ---------------------------------------------------------------- risposta
     def responseheaders(self, flow: http.HTTPFlow):
         ad = flow.metadata.get("msp")
-        if ad is None or not impostazioni.leggi()["ripristina"]:
+        if ad is None or not settings.leggi()["ripristina"]:
             return
         rs = flow.response
         if ad.in_streaming(rs.headers.get("content-type", ""), flow.request.path) and \
@@ -185,7 +185,7 @@ class MspPii:
 
     def response(self, flow: http.HTTPFlow):
         ad = flow.metadata.get("msp")
-        if ad is None or not impostazioni.leggi()["ripristina"]:
+        if ad is None or not settings.leggi()["ripristina"]:
             return
         rs, servizio = flow.response, flow.metadata.get("msp_servizio")
         flusso = flow.metadata.get("msp_flusso")
@@ -235,7 +235,7 @@ class MspPii:
             msg.content = json.dumps(oggetto, ensure_ascii=False).encode("utf-8")
             self.scrivi(servizio=servizio, percorso=self.percorso(flow), evento="mascherata", campi=len(rif), via="websocket",
                         sostituzioni=esito["conteggi"], ms=esito["ms"])
-        elif impostazioni.leggi()["ripristina"] and (b"[" in msg.content or flow.metadata.get("msp_ws_pendenti")):
+        elif settings.leggi()["ripristina"] and (b"[" in msg.content or flow.metadata.get("msp_ws_pendenti")):
             foglie = flow.metadata.setdefault("msp_ws", R.Foglie(self.cerca))
             self.precarica([m.group() for m in R.RX_SEGNAPOSTO.finditer(msg.content.decode("utf-8", errors="replace"))])
             if oggetto is None:

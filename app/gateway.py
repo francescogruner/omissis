@@ -13,7 +13,7 @@ basta una variabile d'ambiente.
 Le credenziali (chiave o accesso con abbonamento) passano cosi' come sono e non vengono mai scritte.
 Se il motore non risponde la richiesta viene fermata (503), mai inoltrata in chiaro.
 
-  .venv\\Scripts\\python.exe gateway.py [--porta 8767]         (richiede la protezione attiva)
+  .venv\\Scripts\\python.exe gateway.py [--port 8767]         (richiede la protezione attiva)
 """
 import argparse
 import http.client
@@ -26,12 +26,12 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import agenti
-import catalogo
-import impostazioni
-import percorsi
-import registro
-import ripristino as R
+import agents
+import catalog
+import settings
+import paths
+import activity
+import restore as R
 
 QUI = Path(__file__).resolve().parent
 MAX_CORPO = 32_000_000
@@ -45,8 +45,8 @@ LOCALI = {"ollama": ("http://127.0.0.1:11434", "openai", "Ollama"), "lmstudio": 
 def rotte():
     """nome usato nell'indirizzo -> (indirizzo del servizio vero, adattatore, servizio del catalogo o None, nome)."""
     out = {}
-    for s in catalogo.SERVIZI:
-        if s["adattatore"] in agenti.CLASSI and s["tipo"] == "api":
+    for s in catalog.SERVIZI:
+        if s["adattatore"] in agents.CLASSI and s["tipo"] == "api":
             nome = s["id"][:-4] if s["id"].endswith("-api") else s["id"]
             out[nome] = ("https://" + s["domini"][0], s["adattatore"], s, s["nome"])
     for nome, (indirizzo, adattatore, etichetta) in LOCALI.items():
@@ -57,18 +57,18 @@ def rotte():
 class Gateway:
     def __init__(self, porta=None, a_monte=None):
         """a_monte: per le prove, manda tutto a questo indirizzo invece che ai servizi veri."""
-        self.porta = porta or percorsi.PORTA_GATEWAY
-        self.porta_motore = percorsi.PORTA_MOTORE
+        self.porta = porta or paths.PORTA_GATEWAY
+        self.porta_motore = paths.PORTA_MOTORE
         self.a_monte = a_monte
         self.rotte = rotte()
-        self.reg = registro.Registro()
+        self.reg = activity.Registro()
         self.valori, self.assenti, self.lucchetto = {}, set(), threading.Lock()
         self.conteggi = {"richieste": 0, "messaggi": 0, "sostituzioni": 0, "bloccate": 0}
         self.server = None
 
     # ---------------------------------------------------------------- motore
     def motore(self, percorso, dati, attesa=180):
-        token = (percorsi.DATI / "token.txt").read_text(encoding="utf-8").strip()
+        token = (paths.DATI / "token.txt").read_text(encoding="utf-8").strip()
         rich = urllib.request.Request(f"http://127.0.0.1:{self.porta_motore}{percorso}", data=json.dumps(dati).encode("utf-8"),
                                       headers={"Content-Type": "application/json", "X-Token": token})
         with urllib.request.urlopen(rich, timeout=attesa) as r:
@@ -153,7 +153,7 @@ class Gateway:
                              % (self.porta, ", ".join(sorted(self.rotte))))
         indirizzo, adattatore, servizio, etichetta = rotta
         percorso = "/" + resto
-        politica = impostazioni.politica(servizio) if servizio else "proteggi"
+        politica = settings.politica(servizio) if servizio else "proteggi"
         chi = servizio["id"] if servizio else nome
         if politica == "blocca":
             if servizio:
@@ -170,12 +170,12 @@ class Gateway:
             return h._errore(413, "richiesta troppo grande per essere controllata")
         corpo = h.rfile.read(lunghezza) if lunghezza else b""
         tipo = h.headers.get("Content-Type", "")
-        ad, voce = None, {"servizio": chi, "via": "gateway", "metodo": h.command, "percorso": registro.percorso_pulito(percorso), "byte": len(corpo)}
+        ad, voce = None, {"servizio": chi, "via": "gateway", "metodo": h.command, "percorso": activity.percorso_pulito(percorso), "byte": len(corpo)}
 
         if politica == "proteggi" and h.command in ("POST", "PUT", "PATCH") and corpo:
-            ad = agenti.CLASSI[adattatore]()
+            ad = agents.CLASSI[adattatore]()
             if "multipart/" in tipo or "octet-stream" in tipo:
-                if impostazioni.leggi()["blocca_file"]:
+                if settings.leggi()["blocca_file"]:
                     self.reg.scrivi(**voce, evento="file bloccato")
                     self.conteggi["bloccate"] += 1
                     return h._errore(403, "caricamento di file bloccato dalle impostazioni")
@@ -191,11 +191,11 @@ class Gateway:
                         gruppi = [[i for i, (c, k) in enumerate(rif) if ((id(c), k) in tecnici) == t] for t in (False, True)]
                         esito = {"testi": list(originali), "mappa": {}, "conteggi": {}, "ms": 0}
                         try:
-                            for indici, escludi in zip(gruppi, ([], agenti.TECNICHE)):
+                            for indici, escludi in zip(gruppi, ([], agents.TECNICHE)):
                                 if not indici:
                                     continue
                                 parte = self.motore("/maschera", {"testi": [originali[i] for i in indici], "escludi": escludi,
-                                                                 "mai": agenti.vocabolario(interpretato)})
+                                                                 "mai": agents.vocabolario(interpretato)})
                                 for i, nuovo in zip(indici, parte["testi"]):
                                     esito["testi"][i] = nuovo
                                 esito["mappa"].update(parte["mappa"])
@@ -217,7 +217,7 @@ class Gateway:
                         self.reg.scrivi(**voce, evento="mascherata", campi=len(rif), caratteri=sum(len(t) for t in esito["testi"]),
                                         sostituzioni=esito["conteggi"], ms=esito["ms"])
                     elif len(corpo) > 200:
-                        self.reg.scrivi(**voce, evento="nessun campo di testo riconosciuto", struttura=registro.forma(interpretato))
+                        self.reg.scrivi(**voce, evento="nessun campo di testo riconosciuto", struttura=activity.forma(interpretato))
 
         # ---- inoltro al servizio vero
         u = urllib.parse.urlsplit(self.a_monte or indirizzo)
@@ -238,7 +238,7 @@ class Gateway:
 
     def _rispondi(self, h, risposta, ad, percorso, voce):
         tipo = risposta.getheader("Content-Type", "")
-        ripristina = ad is not None and impostazioni.leggi()["ripristina"] and h.command != "HEAD"
+        ripristina = ad is not None and settings.leggi()["ripristina"] and h.command != "HEAD"
         h.send_response(risposta.status, risposta.reason)
         for k, v in risposta.getheaders():
             if k.lower() not in SALTO_RISPOSTA:
@@ -292,7 +292,7 @@ class Gateway:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--porta", type=int, default=None)
+    ap.add_argument("--port", dest="porta", type=int, default=None)
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
     g = Gateway(a.porta).avvia()

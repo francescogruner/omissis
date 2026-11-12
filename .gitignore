@@ -1,5 +1,5 @@
 # dati locali: archivio dei segnaposto, registro, codici, certificato del proxy (chiave privata!)
-dati/
+data/
 *.sqlite
 token*.txt
 *.pem
@@ -14,8 +14,8 @@ __pycache__/
 *.pyc
 
 # pesi e dati di addestramento: stanno su Hugging Face o si rigenerano
-modello/modelli/
-modello/backbone/
-modello/dati/
+model/models/
+model/backbone/
+model/data/
 *.safetensors
 *.jsonl

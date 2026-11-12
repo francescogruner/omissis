@@ -46,5 +46,5 @@ dei valori; la corrispondenza resta sul computer di chi scrive.
   Chi controllasse la pagina delle versioni o la rete, senza la chiave privata, non potrebbe far
   installare nulla. La chiave privata non sta in nessun repository.
 - Installare il certificato del proxy è una scelta dell'utente e vale per il solo utente corrente:
-  finché è installato, chi possiede la chiave privata nella cartella `dati\ca` può leggere il suo
+  finché è installato, chi possiede la chiave privata nella cartella `data\ca` può leggere il suo
   traffico HTTPS. Quella cartella non va mai copiata né condivisa.

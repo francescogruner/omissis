@@ -51,9 +51,9 @@ ner = pipeline("token-classification", model="francescogruner/omissis-base", agg
 ner("Scrivi a Giulia Ferraresi, giulia.ferraresi@example.com, per il ticket del PC-AMM-07.")
 ```
 
-Il risultato migliore si ha con `inferenza.py` del repository, che aggiunge al modello:
+Il risultato migliore si ha con `inference.py` del repository, che aggiunge al modello:
 
-- una **soglia di decisione** (0,85, nel file `msp_pii.json`): una parola resta "non sensibile" solo se
+- una **soglia di decisione** (0,85, nel file `omissis.json`): una parola resta "non sensibile" solo se
   il modello ne è sicuro almeno a quel livello. È la manopola tra protezione e testo mascherato;
 - le **regole** con controllo delle cifre per codice fiscale, partita IVA, IBAN, carte, indirizzi IP;
 - gli **elenchi**: nomi noti da lasciare in chiaro (produttori e prodotti) e termini scelti dall'utente.
@@ -61,7 +61,7 @@ Il risultato migliore si ha con `inferenza.py` del repository, che aggiunge al m
 ## Dati di addestramento
 
 180.000 documenti **sintetici** in italiano, prodotti da un generatore scritto per questo progetto
-(`genera_dati.py`): ambito legale, fiscale, assicurativo, sanitario, risorse umane, bancario,
+(`generate_data.py`): ambito legale, fiscale, assicurativo, sanitario, risorse umane, bancario,
 assistenza informatica e sicurezza. Valori come codici fiscali e IBAN hanno cifre di controllo valide.
 **Nessun dato personale reale è stato usato per l'addestramento.**
 

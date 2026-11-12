@@ -15,28 +15,28 @@ is sent to any Omissis server, because there is none.
 > the desktop-app connector, after failing its first live tests, now masks messages in the real ChatGPT
 > desktop app (verified with one made-up message); Claude Desktop is untested.
 > Test with made-up data first.
-> The interface is in English and Italian. The detailed documentation is in Italian: see [LEGGIMI.md](LEGGIMI.md).
+> The interface is in English and Italian. The detailed documentation is in Italian: see [README.it.md](README.it.md).
 
-![Home page](docs/schermate/inizio-en.png)
+![Home page](docs/screenshots/inizio-en.png)
 
-![Paste a text: it is masked and copied for you](docs/schermate/testo-en.png)
+![Paste a text: it is masked and copied for you](docs/screenshots/testo-en.png)
 
-![Drop a document: the anonymised copy downloads by itself](docs/schermate/documenti-en.png)
+![Drop a document: the anonymised copy downloads by itself](docs/screenshots/documenti-en.png)
 
-<img src="docs/schermate/estensione-finestrella-en.png" alt="The browser extension" width="340">
+<img src="docs/screenshots/estensione-finestrella-en.png" alt="The browser extension" width="340">
 
 ## What is in the box
 
 | Part | What it does |
 |---|---|
-| **Model** (`modello/`) | Italian-first PII detector: a token classifier on [mmBERT](https://huggingface.co/jhu-clsp/mmBERT-base) with 28 labels, plus checksum rules (tax code, VAT number, IBAN, cards) and allow/deny lists |
-| **Engine** (`app/motore.py`) | Local service on `127.0.0.1`: masks text and keeps a stable vault *placeholder ↔ value* in SQLite, so a conversation reopened days later can still be restored |
-| **Browser extension** (`app/estensione/`) | Chrome / Edge, Manifest V3. Works inside the page, before the request is encrypted: no proxy, no certificate. Also logs visits to AI services and can block them |
+| **Model** (`model/`) | Italian-first PII detector: a token classifier on [mmBERT](https://huggingface.co/jhu-clsp/mmBERT-base) with 28 labels, plus checksum rules (tax code, VAT number, IBAN, cards) and allow/deny lists |
+| **Engine** (`app/engine.py`) | Local service on `127.0.0.1`: masks text and keeps a stable vault *placeholder ↔ value* in SQLite, so a conversation reopened days later can still be restored |
+| **Browser extension** (`app/extension/`) | Chrome / Edge, Manifest V3. Works inside the page, before the request is encrypted: no proxy, no certificate. Also logs visits to AI services and can block them |
 | **Terminal gateway** (`app/gateway.py`) | For Claude Code, Codex, opencode, aider and any tool with a configurable base URL: point it at `http://127.0.0.1:8767/<service>`. Masks prompts, tool results and past tool calls, restores text and new tool arguments. No certificate |
-| **Desktop-app connector** (`app/connettore.py`) | Experimental. Brings the same extension code into Chromium-based desktop apps (Claude, ChatGPT) through the debugging port |
+| **Desktop-app connector** (`app/connector.py`) | Experimental. Brings the same extension code into Chromium-based desktop apps (Claude, ChatGPT) through the debugging port |
 | **Proxy** (`app/addon.py`) | A [mitmproxy](https://mitmproxy.org) addon for clients that speak the provider APIs or honour a proxy with a locally trusted certificate |
 | **Manual tools** | Mask / restore pasted text, clipboard shortcuts (`Ctrl+Alt+M`, `Ctrl+Alt+R`), anonymise and restore Word, Excel, PowerPoint, text files and whole folders; scanned PDFs and images are read with the OCR built into Windows |
-| **Panel** (`app/pannello.py`) | Local web page + tray icon. A *simple* mode for everyday use (status, text, documents, guide) and an *advanced* mode for whoever manages it: activity log (counts only, never text), per-service policy (protect / log / block / ignore), Shadow AI inventory of the PC |
+| **Panel** (`app/panel.py`) | Local web page + tray icon. A *simple* mode for everyday use (status, text, documents, guide) and an *advanced* mode for whoever manages it: activity log (counts only, never text), per-service policy (protect / log / block / ignore), Shadow AI inventory of the PC |
 
 ## How it works
 
@@ -82,7 +82,7 @@ every sensitive value in the text. Details and limits are in the model cards und
 [`huggingface/`](huggingface/).
 
 Weights are published on Hugging Face (`francescogruner/omissis-base`, `francescogruner/omissis-small`)
-and downloaded with `modello/scarica_modello.py`; they are not stored in this repository.
+and downloaded with `model/download_model.py`; they are not stored in this repository.
 
 ## Quick start (Windows)
 
@@ -102,19 +102,19 @@ git clone https://github.com/francescogruner/omissis
 cd omissis
 py -3.12 -m venv app\.venv
 app\.venv\Scripts\pip install -r app\requirements.txt
-py -3.12 -m venv modello\.venv
-modello\.venv\Scripts\pip install -r modello\requirements-leggero.txt
-modello\.venv\Scripts\python modello\scarica_modello.py omissis-small
-app\.venv\Scripts\python app\pannello.py
+py -3.12 -m venv model\.venv
+model\.venv\Scripts\pip install -r model\requirements-light.txt
+model\.venv\Scripts\python model\download_model.py omissis-small
+app\.venv\Scripts\python app\panel.py
 ```
 
 This is the **light install**: the model runs on the CPU in ONNX format, without PyTorch (about
 150 MB of libraries instead of several GB), and finds exactly the same data as the PyTorch engine
-(`modello/confronta_motori.py` checks it). To use a GPU, install `modello\requirements.txt` instead.
+(`model/compare_engines.py` checks it). To use a GPU, install `model\requirements.txt` instead.
 
 The panel opens at `http://127.0.0.1:8766`. From there: mask a text by hand (section *Testo*),
 anonymise documents (*Documenti*), load and pair the browser extension (*Browser*).
-Everything else is in [app/LEGGIMI.md](app/LEGGIMI.md).
+Everything else is in [app/README.it.md](app/README.it.md).
 
 ## What Omissis does not protect you from
 
@@ -152,7 +152,7 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 ## Licence
 
 Code and model weights: [Apache License 2.0](LICENSE). Third-party components and their licences:
-[TERZE_PARTI.md](TERZE_PARTI.md). "Omissis" as a product name is not covered by the licence grant
+[THIRD_PARTY.md](THIRD_PARTY.md). "Omissis" as a product name is not covered by the licence grant
 (section 6 of the licence).
 
 Made by [Francesco Gruner](https://github.com/francescogruner).
