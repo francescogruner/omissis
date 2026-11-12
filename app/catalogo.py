@@ -44,6 +44,8 @@ SERVIZI = [
     _s("poe", "Poe", "Quora", "chat", "poe.com", "generico", r"\bpoe\b"),
     _s("you", "You.com", "You.com", "chat", "you.com", "generico"),
     _s("qwen", "Qwen", "Alibaba", "chat", "chat.qwen.ai tongyi.aliyun.com qianwen.aliyun.com", "generico"),
+    # formato OpenAI su /compatible-mode/v1; il primo indirizzo (Singapore) e' quello usato fuori dalla Cina
+    _s("qwen-api", "API Qwen (Alibaba Cloud)", "Alibaba", "api", "dashscope-intl.aliyuncs.com dashscope.aliyuncs.com dashscope-us.aliyuncs.com", "openai"),
     _s("doubao", "Doubao", "ByteDance", "chat", "doubao.com", "generico"),
     _s("zai", "Z.ai / ChatGLM", "Zhipu AI", "chat", "chat.z.ai chatglm.cn", "generico"),
     _s("manus", "Manus", "Manus", "chat", "manus.im", "generico", r"\bmanus\b"),
@@ -62,6 +64,7 @@ SERVIZI = [
     _s("github-copilot", "GitHub Copilot", "GitHub", "codice", "githubcopilot.com copilot-proxy.githubusercontent.com", None, r"github ?copilot"),
     _s("cursor", "Cursor", "Anysphere", "codice", "cursor.sh cursor.com", None, r"\bcursor\b"),
     _s("windsurf", "Windsurf / Codeium", "Codeium", "codice", "codeium.com windsurf.com", None, r"windsurf|codeium"),
+    _s("antigravity", "Antigravity", "Google", "codice", "antigravity.google", None, r"antigravity"),
     _s("tabnine", "Tabnine", "Tabnine", "codice", "tabnine.com", None, r"tabnine"),
     _s("replit", "Replit", "Replit", "codice", "replit.com"),
     _s("lovable", "Lovable", "Lovable", "codice", "lovable.dev"),
@@ -106,12 +109,14 @@ LOCALI = [
     dict(id="comfyui", nome="ComfyUI", cosa="immagini", app=r"comfyui", porte=[8188]),
     dict(id="codex", nome="Codex", cosa="agente", app=r"\bcodex\b", porte=[]),
     dict(id="claude-code", nome="Claude Code", cosa="agente", app=r"claude[- ]code", porte=[]),
+    dict(id="hermes", nome="Hermes Agent", cosa="agente_personale", app=r"hermes[- ]agent|^hermes$", porte=[]),
+    dict(id="openclaw", nome="OpenClaw", cosa="agente_personale", app=r"openclaw|clawdbot|moltbot", porte=[]),
 ]
 # Estensioni del browser e dell'editor: parole che indicano una funzione AI
 RX_ESTENSIONE = re.compile(r"(?i)chat ?gpt|\bgpt\b|claude|copilot|gemini|perplexity|deepseek|\bai\b|a\.i\.|assistant|grammarly|deepl|"
                            r"monica|sider|merlin|maxai|harpa|wiseone|jasper|quillbot|otter|fireflies|tl;?dv|read ai|compose|"
                            r"codeium|tabnine|cline|continue|cody|roo|kilo|windsurf|amazon q|llm|ollama|whisper|transcri|summar|riassun")
-RX_CLI = ["claude", "codex", "gemini", "ollama", "aider", "llm", "opencode", "qwen", "cursor-agent", "copilot", "goose", "lms"]
+RX_CLI = ["claude", "codex", "gemini", "ollama", "aider", "llm", "opencode", "qwen", "cursor-agent", "copilot", "goose", "lms", "hermes", "openclaw", "antigravity"]
 
 POLITICHE = ("proteggi", "registra", "blocca", "ignora")
 

@@ -1,6 +1,6 @@
 {
  "est_nome": {"message": "Omissis"},
- "est_descrizione": {"message": "Replaces sensitive data with placeholders before a message leaves for AI services and puts it back in the answer. Works with the Omissis program on this computer."},
+ "est_descrizione": {"message": "Replaces personal data with labels before messages go to AI services and restores it in answers. Works with Omissis on your PC."},
 
  "icona_attiva": {"message": "Omissis: protection on"},
  "icona_sospesa": {"message": "Omissis: protection paused in this browser"},

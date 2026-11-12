@@ -1,6 +1,6 @@
 {
  "est_nome": {"message": "Omissis"},
- "est_descrizione": {"message": "Sostituisce i dati sensibili con segnaposto prima che un messaggio parta verso i servizi di intelligenza artificiale e li rimette nella risposta. Lavora con il programma Omissis su questo computer."},
+ "est_descrizione": {"message": "Sostituisce i dati personali con etichette prima dell'invio ai servizi AI e li rimette nella risposta. Lavora con Omissis sul PC."},
 
  "icona_attiva": {"message": "Omissis: protezione attiva"},
  "icona_sospesa": {"message": "Omissis: protezione sospesa in questo browser"},

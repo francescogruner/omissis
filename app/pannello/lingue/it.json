@@ -335,6 +335,7 @@
  "rilevati.cosa.modelli": "modelli in locale",
  "rilevati.cosa.immagini": "generazione di immagini in locale",
  "rilevati.cosa.agente": "agente per il codice",
+ "rilevati.cosa.agente_personale": "agente personale",
  "rilevati.origine.programma": "programma",
  "rilevati.origine.store": "app dello Store",
  "rilevati.in_ascolto": "servizio in ascolto sulla porta {porta}",

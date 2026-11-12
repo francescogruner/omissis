@@ -335,6 +335,7 @@
  "rilevati.cosa.modelli": "local models",
  "rilevati.cosa.immagini": "local image generation",
  "rilevati.cosa.agente": "coding agent",
+ "rilevati.cosa.agente_personale": "personal agent",
  "rilevati.origine.programma": "program",
  "rilevati.origine.store": "Store app",
  "rilevati.in_ascolto": "service listening on port {porta}",
