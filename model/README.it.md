@@ -34,6 +34,20 @@ testi: sui 405 testi di controllo trovano gli stessi 3.942 dati. Sul processore,
 media lunghezza: circa 37 ms con PyTorch e 52 ms con ONNX per il modello piccolo, 91 e 118 ms per
 quello grande. La versione con i pesi a 8 bit è stata scartata: cambiava l'esito sull'1% delle parole.
 
+## Misure su benchmark pubblici
+
+`python benchmark.py models\omissis-base` scarica (una volta sola, solo i file dei dati) due
+benchmark pubblici e misura il modello: [PIIMB](https://huggingface.co/datasets/piimb/pii-masking-benchmark),
+circa 150.000 frasi in sei gruppi tra cui testi legali veri di EUR-Lex e una parte in italiano, e
+[CV-PII-Bench](https://huggingface.co/datasets/abamerdeen/cv-pii-bench), 200 curriculum inventati.
+Le misure sono quelle di PIIMB: a livello di carattere e senza guardare l'etichetta (quanti
+caratteri di dati personali risultano coperti, quanti caratteri coperti lo erano davvero).
+`--mode model` misura la sola rete, come fa PIIMB con gli altri modelli; senza, misura ciò che fa
+Omissis (soglia, regole, nomi noti). `--by-label all` mostra la copertura per ogni etichetta del
+benchmark: serve a distinguere ciò che il modello sbaglia da ciò che per scelta non maschera
+(date generiche, età, genere, titoli, professioni). Questi dati non sono mai stati usati per
+addestrare o mettere a punto i modelli.
+
 ## Rifare l'addestramento
 
 I dati sono sintetici e si rigenerano: nessun dato personale reale.

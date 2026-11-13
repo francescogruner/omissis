@@ -17,13 +17,107 @@ tags:
 
 # omissis-base
 
+**English** · [Italiano](#italiano)
+
+Detects personal and confidential data in Italian text, so it can be replaced with placeholders
+before the text is sent to an AI service. It is the model behind
+[Omissis](https://github.com/francescogruner/omissis), which also contains the desktop program, the
+browser extension and the code to redo the training.
+
+- **Base:** [mmBERT-base](https://huggingface.co/jhu-clsp/mmBERT-base) (307.8 M parameters), trained by us starting from the language model
+- **Lighter version:** [omissis-small](https://huggingface.co/francescogruner/omissis-small) (140.9 M)
+- **Licence:** Apache 2.0
+
+## Labels
+
+28 labels, BIO format. The label names are Italian because they are also what the AI service sees
+in a placeholder (`[PERSONA_1]`, `[IBAN_2]`).
+
+| Area | Labels |
+|---|---|
+| People and contacts | `PERSONA` (person) `EMAIL` `TELEFONO` (phone) `INDIRIZZO` (street address) `CAP` (postcode) `CITTA` (city) `DATA_NASCITA` (date of birth) |
+| Identifiers | `CF` (tax code) `PIVA` (VAT number) `DOC_ID` (identity document) `TARGA` (licence plate) `ID_VEICOLO` (vehicle identification number) `ID_PRATICA` (case or ticket number) `CATASTO` (land-registry data) `ID_UTENZA` (utility account) |
+| Payments | `IBAN` `CARTA` (card number) `CARTA_SEC` (card security code) |
+| Organisations | `ORG` |
+| IT | `IP` `MAC` `HOSTNAME` `DOMINIO` (domain) `URL` `ACCOUNT` `SEGRETO` (password, key, token) `ID_CLOUD` (cloud identifier) `ID_DISPOSITIVO` (serial number) |
+
+## Usage
+
+With the model alone:
+
+```python
+from transformers import pipeline
+ner = pipeline("token-classification", model="francescogruner/omissis-base", aggregation_strategy="simple")
+ner("Scrivi a Giulia Ferraresi, giulia.ferraresi@example.com, per il ticket del PC-AMM-07.")
+```
+
+The best result comes from `inference.py` in the repository, which adds to the model:
+
+- a **decision threshold** (0.85, in the file `omissis.json`): a word stays "not sensitive" only if
+  the model is at least that sure. It is the knob between protection and amount of masked text;
+- **rules** with checksum validation for tax code, VAT number, IBAN, cards, IP addresses;
+- **lists**: well-known names to leave in clear (vendors and products) and terms chosen by the user.
+
+## Training data
+
+180,000 **synthetic** documents in Italian, produced by a generator written for this project
+(`generate_data.py`): legal, tax, insurance, healthcare, human resources, banking, IT support and
+security. Values such as tax codes and IBANs carry valid check digits.
+**No real personal data was used for training.**
+
+Recipe: one epoch, batch 32, learning rate 5e-5 with layer-wise decay 0.95, weight moving average
+0.999, 8% of input words masked, label smoothing 0.05.
+
+## Measurements
+
+On a **private** set of 2,000 real IT-support texts, never used to tune the model and not
+publishable, with threshold 0.85, rules and lists active:
+
+| Measure | Value |
+|---|---|
+| Known sensitive values that end up masked | 98.4% |
+| Masked text over the total | 17.2% |
+| Company names in free text that end up masked | 89% |
+| Time for a short text on CPU | about 63 ms |
+
+How to read them:
+
+- the "known values" are those that can be derived from the data attached to each text (requester,
+  company, contacts): the measure says how many of **those** are covered, not how many of all the
+  sensitive data in the text;
+- **precision** on real text is not measured: that needs a hand-labelled set. The 17.2% of masked
+  text gives the order of magnitude of how much the model intervenes;
+- on synthetic held-out data the model scores above 99%, but those texts come from the same
+  generator as the training set: it is not an independent measure and should not be quoted as one.
+
+## Without PyTorch
+
+The folder also contains `model.onnx` (1.2 GB): the same model in ONNX format, to run it on CPU with
+`onnxruntime` alone. On the check texts it gives the same results as the PyTorch version.
+
+## Limits
+
+- Built for Italian; in other languages it recognises formats (email, IBAN, IP addresses) but has
+  not been measured.
+- A date without context may be labelled as a date of birth.
+- Company names made of common words are the hardest case.
+- It is a filter, not a guarantee: for terms the model cannot know, use a list.
+
+## Citation
+
+```
+Francesco Gruner, Omissis: local pseudonymisation of personal data for the use of AI assistants, 2026.
+https://github.com/francescogruner/omissis
+```
+
+---
+
+# Italiano
+
 Riconosce dati personali e riservati in testi italiani, per sostituirli con segnaposto prima di
 mandare un testo a un servizio di intelligenza artificiale. È il modello di
 [Omissis](https://github.com/francescogruner/omissis), che contiene anche il programma, l'estensione
 del browser e il codice per rifare l'addestramento.
-
-*Italian-first PII detector (token classification, 28 labels) built to pseudonymise prompts before
-they reach an AI service. Model card in Italian; code and tooling at the link above.*
 
 - **Base:** [mmBERT-base](https://huggingface.co/jhu-clsp/mmBERT-base) (307,8 M di parametri), addestrato da noi a partire dal modello linguistico
 - **Versione più leggera:** [omissis-small](https://huggingface.co/francescogruner/omissis-small) (140,9 M)
@@ -43,15 +137,8 @@ they reach an AI service. Model card in Italian; code and tooling at the link ab
 
 ## Uso
 
-Con il solo modello:
-
-```python
-from transformers import pipeline
-ner = pipeline("token-classification", model="francescogruner/omissis-base", aggregation_strategy="simple")
-ner("Scrivi a Giulia Ferraresi, giulia.ferraresi@example.com, per il ticket del PC-AMM-07.")
-```
-
-Il risultato migliore si ha con `inference.py` del repository, che aggiunge al modello:
+Con il solo modello: vedi l'esempio in inglese qui sopra. Il risultato migliore si ha con
+`inference.py` del repository, che aggiunge al modello:
 
 - una **soglia di decisione** (0,85, nel file `omissis.json`): una parola resta "non sensibile" solo se
   il modello ne è sicuro almeno a quel livello. È la manopola tra protezione e testo mascherato;
@@ -102,10 +189,3 @@ processore con il solo `onnxruntime`. Sui testi di controllo dà gli stessi risu
 - Una data senza contesto può essere etichettata come data di nascita.
 - I nomi di azienda composti da parole comuni sono il caso più difficile.
 - È un filtro, non una garanzia: per i termini che il modello non può conoscere va usato un elenco.
-
-## Citazione
-
-```
-Francesco Gruner, Omissis: pseudonimizzazione locale dei dati personali per l'uso degli assistenti AI, 2026.
-https://github.com/francescogruner/omissis
-```
