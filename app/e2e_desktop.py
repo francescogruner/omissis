@@ -71,6 +71,17 @@ else:
     salta("scorciatoie: premuta la combinazione, parte la sua azione", "Windows non ha consegnato i tasti: schermo bloccato o sessione senza desktop")
 stato = uno.imposta({"sostituisci": "", "maschera": "ctrl+alt+shift+f22", "ripristina": ""})
 segna("scorciatoie: cambiate senza riavviare", stato["maschera"]["attiva"] and not stato["sostituisci"]["attiva"])
+# una lettera già presa da un altro programma (qui: da un'altra copia delle scorciatoie) viene sostituita con una libera
+libera = next((x for x in "qwpoly" if uno.imposta({"sostituisci": f"ctrl+alt+{x}", "maschera": "", "ripristina": ""})["sostituisci"]["attiva"]), None)
+if libera is None:
+    salta("scorciatoie: lettera occupata sostituita da una libera", "nessuna lettera di prova libera su questo PC")
+else:
+    tre = clipboard.Scorciatoie({"sostituisci": lambda: None, "maschera": lambda: None, "ripristina": lambda: None})
+    in_uso, cambiate = clipboard.sistema(tre, {"sostituisci": "", "maschera": f"ctrl+alt+{libera}", "ripristina": "ctrl+alt+shift+f20"})
+    segna("scorciatoie: lettera occupata sostituita da una libera, le altre restano", list(cambiate) == ["maschera"] and cambiate["maschera"][0] == f"ctrl+alt+{libera}"
+          and in_uso["maschera"] != f"ctrl+alt+{libera}" and tre.stato["maschera"]["attiva"] and in_uso["ripristina"] == "ctrl+alt+shift+f20" and in_uso["sostituisci"] == "",
+          f"{clipboard.scritta(cambiate.get('maschera', ('', ''))[0])} → {clipboard.scritta(in_uso['maschera'])}")
+    tre.ferma()
 uno.ferma()
 
 # ---------------------------------------------------------------- testo selezionato, sul posto

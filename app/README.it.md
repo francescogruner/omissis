@@ -165,8 +165,11 @@ spengono in Impostazioni → Generali; nel file delle impostazioni (`scorciatoie
 qualunque combinazione, anche con `shift` o un tasto funzione. Sono registrate con la funzione di
 Windows per le scorciatoie globali: Windows consegna al programma **solo quelle combinazioni**,
 gli altri tasti premuti non li vede (prima si usava una libreria che ascoltava tutta la tastiera:
-è stata tolta). Se un altro programma ha già preso la stessa combinazione, il pannello lo dice e
-se ne sceglie un'altra. Cose da sapere:
+è stata tolta). Se all'avvio una combinazione è già di un altro programma (succede spesso: la
+sovrapposizione delle schede NVIDIA, per esempio, usa `Ctrl+Alt+M` e `Ctrl+Alt+R`), Omissis ne
+registra una libera con una lettera vicina, la salva e lo dice con una notifica; guida e pagine
+mostrano sempre le combinazioni in uso davvero. Se invece si sceglie a mano una lettera occupata,
+il pannello lo segnala e se ne sceglie un'altra. Cose da sapere:
 
 - una scorciatoia registrata vince sul programma in primo piano: se `Ctrl+Alt+S` serve già in un
   programma che usate, cambiate lettera;
@@ -547,7 +550,7 @@ dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'est
 `e2e_vault.py` (20 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
 inventate. Nessuno dei due ha bisogno di qualcosa acceso.
-`e2e_desktop.py` (16 controlli, serve la protezione attiva) prova ciò che tocca il desktop:
+`e2e_desktop.py` (17 controlli, serve la protezione attiva) prova ciò che tocca il desktop:
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.

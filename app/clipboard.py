@@ -304,10 +304,32 @@ class Scorciatoie:
         self.filo = None
 
 
-def scorciatoie(motore, avvisa, volute):
-    """Attiva le scorciatoie sugli appunti e sul testo selezionato. avvisa(messaggio) mostra l'esito."""
-    s = Scorciatoie({"sostituisci": lambda: avvisa(sostituisci(motore)),
-                     "maschera": lambda: avvisa(trasforma("maschera", motore)),
-                     "ripristina": lambda: avvisa(trasforma("ripristina", motore))})
-    s.imposta(volute)
-    return s
+def sistema(s, volute):
+    """Se una combinazione Ctrl+Alt+lettera e' gia' presa da un altro programma (succede: le sovrapposizioni delle schede
+    grafiche ne usano diverse) ne registra un'altra libera. Restituisce (combinazioni in uso, {nome: (vecchia, nuova)})."""
+    volute, cambiate = dict(volute), {}
+    for _ in range(len(volute) + 1):
+        stato = s.imposta(volute)
+        prese = [n for n, v in stato.items() if v["errore"] == "occupata" and re.fullmatch(r"ctrl\+alt\+[a-z]", v["combinazione"])]
+        if not prese:
+            break
+        nome = prese[0]
+        for lettera in ALTERNATIVE.get(nome, "") + "kjhxzdtyugbvqwopilfacn":   # mai la E: con AltGr scrive il simbolo dell'euro
+            nuova = f"ctrl+alt+{lettera}"
+            if nuova not in volute.values() and s.imposta({**volute, nome: nuova})[nome]["attiva"]:
+                cambiate[nome] = (cambiate.get(nome, (volute[nome],))[0], nuova)
+                volute[nome] = nuova
+                break
+        else:
+            break
+    return volute, cambiate
+
+
+ALTERNATIVE = {"sostituisci": "xzd", "maschera": "kjh", "ripristina": "tyu"}   # le lettere vicine, provate per prime
+
+
+def scorciatoie(motore, avvisa):
+    """Le scorciatoie sugli appunti e sul testo selezionato, ancora da registrare. avvisa(messaggio) mostra l'esito."""
+    return Scorciatoie({"sostituisci": lambda: avvisa(sostituisci(motore)),
+                        "maschera": lambda: avvisa(trasforma("maschera", motore)),
+                        "ripristina": lambda: avvisa(trasforma("ripristina", motore))})

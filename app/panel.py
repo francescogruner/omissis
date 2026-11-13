@@ -718,7 +718,12 @@ def icona(server):
 
     global SCORCIATOIE, AVVISA
     AVVISA = avvisa
-    SCORCIATOIE = clipboard.scorciatoie(motore, avvisa, clipboard.scelte(settings.leggi()))
+    SCORCIATOIE = clipboard.scorciatoie(motore, avvisa)
+    in_uso, cambiate = clipboard.sistema(SCORCIATOIE, clipboard.scelte(settings.leggi()))
+    if cambiate:   # una combinazione era gia' di un altro programma: si tiene quella libera e lo si dice, a icona comparsa
+        settings.scrivi({**settings.leggi(), "scorciatoie": in_uso})
+        elenco = ", ".join(f"{clipboard.scritta(vecchia)} → {clipboard.scritta(nuova)}" for vecchia, nuova in cambiate.values())
+        threading.Timer(8, lambda: avvisa(i18n.t("scorciatoie.cambiate", elenco=elenco))).start()
     return ic
 
 

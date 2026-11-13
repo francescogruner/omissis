@@ -11,6 +11,12 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "
 // ------------------------------------------------------------------ 1. strumenti
 
 let TESTI = {}, RISERVA = {}, LINGUA = "it";
+// Le scorciatoie in uso, già scritte come tasti: le frasi le nominano con {sostituisci}, {maschera}, {ripristina}.
+let TASTI = {};
+const leggiTasti = async () => {
+  const s = await api("/api/scorciatoie");
+  TASTI = Object.fromEntries(s.voci.map(v => [v.nome, v.combinazione ? v.scritta.split("+").map(k => `<kbd>${esc(k)}</kbd>`).join("+") : `<i>${esc(t("scorciatoie.spenta"))}</i>`]));
+};
 /** La frase per una chiave, con i valori tra graffe sostituiti. Se manca nella lingua scelta vale l'italiano. */
 function t(chiave, valori) {
   const s = TESTI[chiave] ?? RISERVA[chiave] ?? chiave;
@@ -78,7 +84,7 @@ const icona = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 
 const etichetta = (testo, tipo = "") => `<span class="etichetta ${tipo}">${esc(testo)}</span>`;
 const scheda = (dentro, piede = "", classi = "") => `<section class="scheda ${classi}"><div class="dentro">${dentro}</div>${piede ? `<div class="piede">${piede}</div>` : ""}</section>`;
-const testa = id => `<header class="testa"><h1>${esc(t(`${id}.titolo`))}</h1><p>${t(`${id}.sotto`)}</p></header>`;
+const testa = id => `<header class="testa"><h1>${esc(t(`${id}.titolo`))}</h1><p>${t(`${id}.sotto`, TASTI)}</p></header>`;
 const conteggi = c => Object.entries(c || {}).filter(([, n]) => n).map(([k, n]) => etichetta(`${tipoDato(k)} ${n}`, "ok")).join("");
 /** Larghezze e altezze dei grafici: scritte dal codice e non nell'HTML, così la pagina non ha bisogno di stili "in linea". */
 function misure(radice) {
@@ -448,7 +454,7 @@ DISEGNA.documenti = el => {
 
 // ---- Guida
 DISEGNA.guida = el => {
-  const passi = (chiave, n) => `<ol class="elenco">${Array.from({length: n}, (_, i) => `<li>${t(`${chiave}.${i + 1}`)}</li>`).join("")}</ol>`;
+  const passi = (chiave, n) => `<ol class="elenco">${Array.from({length: n}, (_, i) => `<li>${t(`${chiave}.${i + 1}`, TASTI)}</li>`).join("")}</ol>`;
   el.innerHTML = scheda(`<h2>${esc(t("guida.testo"))}</h2>${passi("guida.testo", 4)}`)
     + scheda(`<h2>${esc(t("guida.tastiera"))}</h2>${passi("guida.tastiera", 4)}<p class="aiuto">${t("guida.tastiera.nota")}</p>`)
     + scheda(`<h2>${esc(t("guida.documenti"))}</h2>${passi("guida.documenti", 3)}`)
@@ -514,6 +520,7 @@ const disegnaScorciatoie = prova(async () => {
     const dopo = (await api("/api/scorciatoie")).voci.find(v => v.nome === x.dataset.sc);
     if (dopo.combinazione && !dopo.attiva && dopo.errore) avvisa(t(`scorciatoie.errore.${dopo.errore === "non_valida" ? "non_valida" : "occupata"}.lungo`, {tasti: dopo.scritta}), true);
     else avvisa(t("impostazioni.salvata"));
+    await leggiTasti();
     disegnaScorciatoie();
   }));
 });
@@ -898,6 +905,7 @@ async function avvia() {
   const leggi = async codice => (await fetch(`/locales/${codice}.json`)).json();
   [TESTI, RISERVA] = await Promise.all([leggi(LINGUA), LINGUA === "it" ? Promise.resolve({}) : leggi("it")]);
   const i = await api("/api/impostazioni");
+  await leggiTasti();
   vista = i.vista === "avanzata" ? "avanzata" : "semplice";
   applicaTema(i.tema || "auto");
   disegnaMenu(); applicaVista();
