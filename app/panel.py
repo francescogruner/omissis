@@ -131,7 +131,7 @@ class Supervisore:
                     if not self._vivo(self.motore):
                         raise RuntimeError(i18n.t("programma.motore_chiuso"))
                     try:
-                        motore("/stato", attesa=2)
+                        motore("/status", attesa=2)
                         break
                     except Exception:   # noqa: BLE001
                         time.sleep(1)
@@ -196,7 +196,7 @@ class Supervisore:
         info = {}
         if self._vivo(self.motore) and self.fase == "attiva":
             try:
-                info = motore("/stato", attesa=3)
+                info = motore("/status", attesa=3)
             except Exception:   # noqa: BLE001
                 info = {}
         return {"fase": self.fase, "errore": self.errore, "da_riavviare": self.da_riavviare(), "versione": VERSIONE,
@@ -349,7 +349,7 @@ def sorveglia():
                     AVVISA(i18n.t("inventario.avviso_nuovi", n=len(novita["nuovi"]), nomi=nomi))
             giorni, oggi = int(imp.get("archivio_giorni") or 0), time.strftime("%Y-%m-%d")
             if giorni > 0 and pulito != oggi and SUP.fase == "attiva":
-                motore("/archivio/elimina", {"fermi_da_giorni": giorni})
+                motore("/vault/delete", {"fermi_da_giorni": giorni})
                 pulito = oggi
         except Exception:   # noqa: BLE001  (un giro andato male non deve fermare i successivi)
             pass
@@ -380,7 +380,7 @@ def scrivi_liste(dati):
         voci = [str(x).strip()[:200] for x in dati.get(chiave, []) if str(x).strip() and not str(x).lstrip().startswith("#")][:5000]
         (LISTE / nome).write_text(testate[nome] + "\n".join(voci) + ("\n" if voci else ""), encoding="utf-8")
     try:
-        motore("/liste", {})
+        motore("/lists", {})
     except Exception:   # noqa: BLE001  (motore spento: le leggera' al prossimo avvio)
         pass
     return leggi_liste()
@@ -397,6 +397,27 @@ def certificato(azione=None):
 
 
 # ------------------------------------------------------------------ servizio web locale
+
+# Gli indirizzi in italiano di prima della rinomina restano validi: una scheda del pannello rimasta aperta, o uno
+# script che li usa, continuano a funzionare. (Scritti a pezzi perche' lo script della rinomina non li tocchi.)
+OLD_PATHS = {"/api/" + old: "/api/" + new for old, new in (
+    ("arch" + "ivio", "vault"), ("arch" + "ivio/elimina", "vault/delete"), ("arch" + "ivio/svuota", "vault/clear"),
+    ("invent" + "ario", "inventory"), ("invent" + "ario/analizza", "inventory/scan"), ("invent" + "ario/dimentica", "inventory/forget"),
+    ("invent" + "ario/giudizio", "inventory/verdict"), ("invent" + "ario/svuota", "inventory/clear"), ("invent" + "ario/csv", "inventory/csv"),
+    ("cart" + "ella/apri", "folder/open"), ("cart" + "ella/scegli", "folder/choose"), ("docum" + "enti/percorso", "documents/path"),
+    ("docum" + "enti/file", "documents/file"), ("li" + "ste", "lists"), ("li" + "ste/aggiungi", "lists/add"), ("aggiorn" + "amenti", "updates"),
+    ("app" + "unti", "clipboard"), ("categ" + "orie", "categories"), ("certif" + "icato", "certificate"), ("compat" + "ibilita", "compatibility"),
+    ("estens" + "ione", "extension"), ("impost" + "azioni", "settings"), ("lin" + "gue", "languages"), ("protez" + "ione", "protection"),
+    ("pro" + "va", "try"), ("regi" + "stro", "activity"), ("riprist" + "ina", "restore"), ("scorc" + "iatoie", "shortcuts"),
+    ("serv" + "izi", "services"), ("shadow/re" + "te", "shadow/network"), ("st" + "ato", "status"), ("vi" + "sta", "view"))}
+
+
+def nuovo_indirizzo(percorso):
+    indirizzo, punto, domanda = percorso.partition("?")
+    if indirizzo.startswith("/inter" + "no/"):
+        indirizzo = "/internal/" + {"alleg" + "ato": "attachment"}.get(indirizzo[9:], indirizzo[9:])
+    return OLD_PATHS.get(indirizzo, indirizzo) + punto + domanda
+
 
 class Gestore(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -422,7 +443,7 @@ class Gestore(BaseHTTPRequestHandler):
         if self.path.startswith("/api/") and not secrets.compare_digest(self.headers.get("X-Pannello", ""), CODICE):
             self._rispondi(403, {"errore": "codice mancante"})
             return False
-        if self.path.startswith("/interno/"):   # chiamate del motore (stesso PC), con il suo codice
+        if self.path.startswith("/internal/"):   # chiamate del motore (stesso PC), con il suo codice
             try:
                 atteso = (DATI / "token.txt").read_text(encoding="utf-8").strip()
             except OSError:
@@ -433,6 +454,7 @@ class Gestore(BaseHTTPRequestHandler):
         return True
 
     def do_GET(self):
+        self.path = nuovo_indirizzo(self.path)
         if not self._lecito():
             return
         u = urllib.parse.urlparse(self.path)
@@ -443,7 +465,7 @@ class Gestore(BaseHTTPRequestHandler):
                 self._rispondi(200, pagina.encode("utf-8"), "text/html; charset=utf-8")
             elif u.path in STATICI or RX_LINGUA.fullmatch(u.path):
                 self._rispondi(200, (PAGINA / u.path.lstrip("/")).read_bytes(), STATICI.get(u.path, "application/json; charset=utf-8"))
-            elif u.path == "/api/compatibilita":
+            elif u.path == "/api/compatibility":
                 try:
                     verificati = json.loads((QUI / "compatibility.json").read_text(encoding="utf-8"))
                 except (OSError, ValueError):
@@ -452,46 +474,46 @@ class Gestore(BaseHTTPRequestHandler):
                 self._rispondi(200, {"visti": [{**g, "nome": nomi.get(g["servizio"], g["servizio"])} for g in activity.compatibilita()],
                                      "verificati": [{**v, "nome": nomi.get(v.get("servizio"), v.get("servizio"))} for v in verificati.get("voci", [])],
                                      "aggiornato": verificati.get("aggiornato", "")})
-            elif u.path == "/api/lingue":
+            elif u.path == "/api/languages":
                 self._rispondi(200, {"scelta": i18n.scelta(), "attiva": i18n.attiva(), "disponibili": i18n.disponibili()})
-            elif u.path == "/api/stato":
+            elif u.path == "/api/status":
                 self._rispondi(200, {**SUP.stato(), "statistiche": statistiche()})
-            elif u.path == "/api/registro":
+            elif u.path == "/api/activity":
                 self._rispondi(200, leggi_registro(int(q.get("n", 300)))[::-1])
-            elif u.path == "/api/servizi":
+            elif u.path == "/api/services":
                 self._rispondi(200, servizi())
-            elif u.path == "/api/impostazioni":
+            elif u.path == "/api/settings":
                 self._rispondi(200, {**settings.leggi(), "certificato": certificato()})
-            elif u.path == "/api/liste":
+            elif u.path == "/api/lists":
                 self._rispondi(200, leggi_liste())
             elif u.path == "/api/app":
                 self._rispondi(200, app_desktop())
-            elif u.path == "/api/vista":
+            elif u.path == "/api/view":
                 self._rispondi(200, {"vista": settings.leggi().get("vista", "semplice")})
             elif u.path == "/api/gateway":
                 g = SUP.gateway
                 self._rispondi(200, {"attivo": g is not None, "porta": paths.PORTA_GATEWAY, "errore": SUP.errore_gateway,
                                      "conteggi": dict(g.conteggi) if g else None, "rotte": sorted(gateway.rotte())})
-            elif u.path == "/api/estensione":
+            elif u.path == "/api/extension":
                 f = DATI / "token_extension.txt"
                 self._rispondi(200, {"cartella": str(QUI / "extension"), "porta": PORTA_MOTORE,
                                      "token": f.read_text(encoding="utf-8").strip() if f.exists() else ""})
-            elif u.path == "/api/categorie":   # le categorie in piu' che il modello in uso conosce, e quelle accese
+            elif u.path == "/api/categories":   # le categorie in piu' che il modello in uso conosce, e quelle accese
                 try:
-                    self._rispondi(200, motore("/profilo", {}))
+                    self._rispondi(200, motore("/profile", {}))
                 except Exception:   # noqa: BLE001
                     self._rispondi(200, {"conosciute": [], "accese": settings.leggi().get("categorie", [])})
-            elif u.path == "/api/scorciatoie":
+            elif u.path == "/api/shortcuts":
                 self._rispondi(200, scorciatoie())
-            elif u.path == "/api/inventario":
+            elif u.path == "/api/inventory":
                 self._rispondi(200, inventario())
-            elif u.path == "/api/inventario/csv":
+            elif u.path == "/api/inventory/csv":
                 testo = inventory.csv([i18n.t(f"inventario.colonna.{c}") for c in ("categoria", "nome", "dettaglio", "versione", "primo", "ultimo", "presente", "giudizio", "nota")],
                                       lambda c: i18n.t(f"inventario.categoria.{c}"), lambda g: i18n.t(f"inventario.giudizio.{g or 'da_valutare'}"))
                 self._rispondi(200, testo.encode("utf-8"), "text/csv; charset=utf-8")
             elif u.path == "/api/shadow/pc":
                 self._rispondi(200, scan.pc())
-            elif u.path == "/api/shadow/rete":
+            elif u.path == "/api/shadow/network":
                 nomi = {s["id"]: s["nome"] for s in catalog.SERVIZI}
                 self._rispondi(200, {**scan.rete(), "proxy": [{"servizio": nomi.get(k, k), **v} for k, v in
                                                                    sorted(contatti().items(), key=lambda kv: -kv[1]["n"])]})
@@ -503,19 +525,20 @@ class Gestore(BaseHTTPRequestHandler):
             self._rispondi(500, {"errore": f"{type(ex).__name__}: {ex}"})
 
     def do_POST(self):
+        self.path = nuovo_indirizzo(self.path)
         if not self._lecito():
             return
         try:
             dati = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8") or "{}")
             p = self.path
-            if p == "/interno/allegato":   # il motore non ha le librerie per i documenti: li legge questo processo
+            if p == "/internal/attachment":   # il motore non ha le librerie per i documenti: li legge questo processo
                 try:
                     nome, nuovo, conteggi = documents.elabora(Path(str(dati.get("nome", "file"))).name, base64.b64decode(dati.get("dati", "")), "anonimizza")
                 except documents.Errore as ex:
                     self._rispondi(422, {"errore": str(ex), "codice": ex.codice})
                     return
                 self._rispondi(200, {"nome": nome, "dati": base64.b64encode(nuovo).decode("ascii"), "conteggi": conteggi})
-            elif p == "/api/protezione":
+            elif p == "/api/protection":
                 if dati.get("azione") == "ferma":
                     SUP.ferma()
                 else:
@@ -523,23 +546,23 @@ class Gestore(BaseHTTPRequestHandler):
                         SUP.ferma()
                     SUP.avvia()
                 self._rispondi(200, SUP.stato())
-            elif p == "/api/impostazioni":
+            elif p == "/api/settings":
                 nuove = settings.scrivi({**settings.leggi(), **{k: v for k, v in dati.items() if k in settings.PREDEFINITE}})
                 if "scorciatoie" in dati and SCORCIATOIE is not None:
                     SCORCIATOIE.imposta(clipboard.scelte(nuove))
                 if "categorie" in dati:   # il motore rilegge quali categorie in piu' sostituire
                     try:
-                        motore("/profilo", {})
+                        motore("/profile", {})
                     except Exception:   # noqa: BLE001  (motore spento: le leggera' all'avvio)
                         pass
                 self._rispondi(200, {**nuove, "da_riavviare": SUP.da_riavviare()})
-            elif p == "/api/servizi":
+            elif p == "/api/services":
                 imp = settings.leggi()
                 politiche = dict(imp["politiche"])
                 politiche[str(dati["id"])] = str(dati["politica"])
                 settings.scrivi({**imp, "politiche": politiche})
                 self._rispondi(200, {"da_riavviare": SUP.da_riavviare()})
-            elif p == "/api/liste":
+            elif p == "/api/lists":
                 self._rispondi(200, scrivi_liste(dati))
             elif p == "/api/app":
                 chiave = str(dati.get("id", ""))
@@ -553,7 +576,7 @@ class Gestore(BaseHTTPRequestHandler):
                         raise Rifiuto(i18n.t("programma.app_serve_protezione"))
                     CONNETTORI[chiave] = connector.avvia_app(chiave)
                 self._rispondi(200, app_desktop())
-            elif p == "/api/aggiornamenti":
+            elif p == "/api/updates":
                 azione = dati.get("azione")
                 if azione == "controlla":
                     updates.controlla()
@@ -568,15 +591,15 @@ class Gestore(BaseHTTPRequestHandler):
                         raise Rifiuto(i18n.t("programma.aggiornamento_niente_pronto"))
                     spegni()
                 self._rispondi(200, updates.stato())
-            elif p == "/api/prova":
+            elif p == "/api/try":
                 testo = str(dati.get("testo", ""))
                 if len(testo) > clipboard.MAX_TESTO:   # mai tagliare in silenzio: il pezzo tagliato sembrerebbe controllato
                     raise Rifiuto(i18n.t("programma.testo_troppo_lungo", n=clipboard.MAX_TESTO))
                 # le correzioni fatte a mano su questo testo: cosa lasciare in chiaro e cosa mascherare comunque
                 mai = [str(x)[:200] for x in dati.get("mai") or []][:200]
                 anche = {str(k)[:200]: str(v) for k, v in list((dati.get("anche") or {}).items())[:200]}
-                self._rispondi(200, motore("/maschera", {"testi": [testo], "mai": mai, "anche": anche}))
-            elif p == "/api/liste/aggiungi":   # da Testo: «non mascherare mai» e «maschera sempre», senza passare dalle Impostazioni
+                self._rispondi(200, motore("/mask", {"testi": [testo], "mai": mai, "anche": anche}))
+            elif p == "/api/lists/add":   # da Testo: «non mascherare mai» e «maschera sempre», senza passare dalle Impostazioni
                 lista, termine = ("mai" if dati.get("lista") == "mai" else "sempre"), str(dati.get("termine", "")).strip()[:200]
                 if len(termine) < 2 or "\n" in termine or termine.startswith("#"):
                     raise Rifiuto(i18n.t("programma.termine_non_valido"))
@@ -585,60 +608,60 @@ class Gestore(BaseHTTPRequestHandler):
                     liste[lista].append(termine)
                     liste = scrivi_liste(liste)
                 self._rispondi(200, liste)
-            elif p == "/api/ripristina":
+            elif p == "/api/restore":
                 testo = str(dati.get("testo", ""))
                 if len(testo) > clipboard.MAX_TESTO:
                     raise Rifiuto(i18n.t("programma.testo_troppo_lungo", n=clipboard.MAX_TESTO))
                 trovati = sorted({m.group() for m in restore.RX_SEGNAPOSTO.finditer(testo)})
-                mappa = motore("/valori", {"segnaposto": trovati})["mappa"] if trovati else {}
+                mappa = motore("/values", {"segnaposto": trovati})["mappa"] if trovati else {}
                 self._rispondi(200, {"testo": restore.ripristina(testo, mappa.get), "ripristinati": len(mappa),
                                      "sconosciuti": len(trovati) - len(mappa)})
-            elif p == "/api/appunti":
+            elif p == "/api/clipboard":
                 self._rispondi(200, {"esito": clipboard.trasforma("ripristina" if dati.get("azione") == "ripristina" else "maschera", motore)})
-            elif p == "/api/documenti/percorso":
+            elif p == "/api/documents/path":
                 azione = "ripristina" if dati.get("azione") == "ripristina" else "anonimizza"
                 esito = documents.percorso(str(dati.get("percorso", "")), azione)
                 CARTELLE.add(os.path.normcase(os.path.abspath(str(esito.get("destinazione", "")))))
                 self._rispondi(200, esito)
-            elif p == "/api/documenti/file":
+            elif p == "/api/documents/file":
                 azione = dati.get("azione") if dati.get("azione") in ("anonimizza", "ripristina") else "auto"
                 azione, nome, nuovo, conteggi = documents.elabora_auto(Path(str(dati.get("nome", "file"))).name, base64.b64decode(dati.get("contenuto", "")), azione)
                 self._rispondi(200, {"azione": azione, "nome": nome, "contenuto": base64.b64encode(nuovo).decode("ascii"), "conteggi": conteggi})
-            elif p == "/api/archivio":
-                self._rispondi(200, motore("/archivio", {"limite": 500, "in_chiaro": bool(dati.get("in_chiaro")), "cerca": str(dati.get("cerca") or "")[:200],
+            elif p == "/api/vault":
+                self._rispondi(200, motore("/vault", {"limite": 500, "in_chiaro": bool(dati.get("in_chiaro")), "cerca": str(dati.get("cerca") or "")[:200],
                                                          "etichetta": str(dati.get("etichetta") or "")[:40], "ordine": str(dati.get("ordine") or "recenti")}))
-            elif p == "/api/archivio/elimina":   # voci scelte una per una, oppure per tipo e/o non usate da N giorni
+            elif p == "/api/vault/delete":   # voci scelte una per una, oppure per tipo e/o non usate da N giorni
                 giorni = dati.get("fermi_da_giorni")
-                self._rispondi(200, motore("/archivio/elimina", {"segnaposto": [str(s) for s in dati.get("segnaposto") or []][:500],
+                self._rispondi(200, motore("/vault/delete", {"segnaposto": [str(s) for s in dati.get("segnaposto") or []][:500],
                                                                  "etichetta": str(dati.get("etichetta") or "")[:40],
                                                                  "fermi_da_giorni": None if giorni in (None, "") else max(0.0, float(giorni)),
                                                                  "solo_conta": bool(dati.get("solo_conta"))}))
-            elif p == "/api/inventario/analizza":
+            elif p == "/api/inventory/scan":
                 novita = analizza("manuale")
                 self._rispondi(200, {"novita": novita, **inventario()})
-            elif p == "/api/inventario/giudizio":
+            elif p == "/api/inventory/verdict":
                 inventory.giudica(str(dati.get("chiave", "")), dati.get("giudizio"), dati.get("nota"))
                 self._rispondi(200, {})
-            elif p == "/api/inventario/dimentica":
+            elif p == "/api/inventory/forget":
                 self._rispondi(200, {"tolte": inventory.dimentica(), **inventario()})
-            elif p == "/api/inventario/svuota":
+            elif p == "/api/inventory/clear":
                 inventory.svuota()
                 self._rispondi(200, inventario())
-            elif p == "/api/cartella/scegli":   # la finestra di Windows per scegliere una cartella, al posto del percorso scritto a mano
+            elif p == "/api/folder/choose":   # la finestra di Windows per scegliere una cartella, al posto del percorso scritto a mano
                 scelta = folders.scegli(i18n.t("documenti.cartella.finestra"), str(dati.get("iniziale") or ""))
                 if scelta is None:
                     raise Rifiuto(i18n.t("programma.finestra_gia_aperta"))
                 if scelta:
                     CARTELLE.add(os.path.normcase(os.path.abspath(scelta)))
                 self._rispondi(200, {"percorso": scelta})
-            elif p == "/api/cartella/apri":
+            elif p == "/api/folder/open":
                 percorso = os.path.normcase(os.path.abspath(str(dati.get("percorso", ""))))
                 if percorso not in CARTELLE or not folders.apri(percorso):
                     raise Rifiuto(i18n.t("programma.cartella_non_apribile"))
                 self._rispondi(200, {})
-            elif p == "/api/archivio/svuota":
-                self._rispondi(200, motore("/archivio/svuota", {}))
-            elif p == "/api/certificato":
+            elif p == "/api/vault/clear":
+                self._rispondi(200, motore("/vault/clear", {}))
+            elif p == "/api/certificate":
                 self._rispondi(200, certificato(dati.get("azione")))
             elif p == "/api/browser":
                 indirizzo = str(dati.get("indirizzo", "https://claude.ai"))

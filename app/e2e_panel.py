@@ -101,8 +101,8 @@ def main():
     foto.mkdir(parents=True, exist_ok=True)
     pagina_grezza = urllib.request.urlopen(PANNELLO + "/", timeout=20).read().decode("utf-8")
     codice = re.search(r'name="omissis-codice" content="([^"]+)"', pagina_grezza).group(1)
-    prima = chiama(codice, "/api/impostazioni")
-    if chiama(codice, "/api/stato")["fase"] != "attiva":
+    prima = chiama(codice, "/api/settings")
+    if chiama(codice, "/api/status")["fase"] != "attiva":
         sys.exit("la protezione non è attiva: avviarla prima")
     lavoro = Path(tempfile.mkdtemp(prefix="omissis_pannello_"))
     inventario_finto()
@@ -117,7 +117,7 @@ def main():
         pag.on("pageerror", lambda e: errori.append(str(e)))
         try:
             for lingua in ("it", "en"):
-                chiama(codice, "/api/impostazioni", {"lingua": lingua, "tema": "chiaro", "vista": "avanzata"})
+                chiama(codice, "/api/settings", {"lingua": lingua, "tema": "chiaro", "vista": "avanzata"})
                 pag.goto(PANNELLO + "/#/inizio")
                 pag.reload()
                 pag.wait_for_selector("#menu a")
@@ -226,14 +226,14 @@ def main():
                 segna(f"{lingua}: archivio -> ricerca per valore vero, che resta nascosto", 1 <= len(righe) <= 30 and all("•" in r and "erraresi" not in r for r in righe), f"{len(righe)} voci")
                 pag.wait_for_timeout(300)
                 pag.screenshot(path=str(foto / f"archivio-{lingua}.png"))
-                prima_n = chiama(codice, "/api/archivio", {"cerca": "gestionale", "etichetta": "ELENCO"})["trovate"]
+                prima_n = chiama(codice, "/api/vault", {"cerca": "gestionale", "etichetta": "ELENCO"})["trovate"]
                 pag.fill("#archCerca", "gestionale")
                 aspetta(pag, "() => [...document.querySelectorAll('#tabArchivio .segnaposto')].some(e => e.textContent.startsWith('[ELENCO_'))", attesa=15)
                 pag.check("#tabArchivio tr:has(.segnaposto:text-matches('ELENCO_')) input[type=checkbox]")
                 pag.click("#archElimina")
                 pag.click("#confermaSi")
                 pag.wait_for_timeout(1200)
-                dopo_n = chiama(codice, "/api/archivio", {"cerca": "gestionale", "etichetta": "ELENCO"})["trovate"]
+                dopo_n = chiama(codice, "/api/vault", {"cerca": "gestionale", "etichetta": "ELENCO"})["trovate"]
                 segna(f"{lingua}: archivio -> eliminata la voce scelta, dopo la conferma", prima_n >= 1 and dopo_n == prima_n - 1, f"{prima_n} -> {dopo_n}")
 
                 # --- inventario Shadow AI: analisi salvate, novità, giudizio, esportazione
@@ -247,7 +247,7 @@ def main():
                 pag.fill("#invTabella tr:has-text('Ollama') input", "prova in laboratorio")
                 pag.keyboard.press("Tab")
                 pag.wait_for_timeout(600)
-                ollama = next(e for e in chiama(codice, "/api/inventario")["elementi"] if e["nome"] == "Ollama")
+                ollama = next(e for e in chiama(codice, "/api/inventory")["elementi"] if e["nome"] == "Ollama")
                 segna(f"{lingua}: inventario -> giudizio e nota salvati", ollama["giudizio"] == "approvato" and ollama["nota"] == "prova in laboratorio")
                 pag.evaluate("document.activeElement.blur(); scrollTo(0, 0)")
                 pag.wait_for_timeout(5500)   # gli avvisi delle prove precedenti spariscono dalla schermata
@@ -261,7 +261,7 @@ def main():
                 inventory.giudica(ollama["chiave"], "", "")
 
                 # --- le schermate: ciò che vede l'utente normale, poi le sezioni del tecnico
-                chiama(codice, "/api/impostazioni", {"vista": "semplice"})
+                chiama(codice, "/api/settings", {"vista": "semplice"})
                 pag.goto(f"{PANNELLO}/#/inizio")
                 pag.reload()
                 pag.wait_for_selector("#statoTitolo")
@@ -270,7 +270,7 @@ def main():
                 pag.goto(f"{PANNELLO}/#/guida")
                 pag.wait_for_timeout(600)
                 pag.screenshot(path=str(foto / f"guida-{lingua}.png"))
-                chiama(codice, "/api/impostazioni", {"vista": "avanzata"})
+                chiama(codice, "/api/settings", {"vista": "avanzata"})
                 pag.reload()
                 for vista in ("collegamenti/terminale", "servizi/regole", "impostazioni/generali"):
                     pag.goto(f"{PANNELLO}/#/{vista}")
@@ -287,24 +287,24 @@ def main():
             pag.wait_for_timeout(800)
             pag.select_option('select[data-sc="ripristina"]', "")
             pag.wait_for_timeout(800)
-            scelte = chiama(codice, "/api/impostazioni")["scorciatoie"]
+            scelte = chiama(codice, "/api/settings")["scorciatoie"]
             segna("scorciatoie: lettera cambiata e scorciatoia spenta dalla pagina", scelte == {"sostituisci": "ctrl+alt+s", "maschera": "ctrl+alt+k", "ripristina": ""}, str(scelte))
 
             # --- elenchi personali da Testo e testi troppo lunghi (solo se gli elenchi sono quelli della copia di prova)
             if os.environ.get("OMISSIS_LISTS"):
-                elenchi = chiama(codice, "/api/liste")
+                elenchi = chiama(codice, "/api/lists")
                 try:
-                    chiama(codice, "/api/liste/aggiungi", {"lista": "mai", "termine": "aldo.bruschi@nevatek.example"})
-                    chiama(codice, "/api/liste/aggiungi", {"lista": "sempre", "termine": "gestionale"})
-                    r = chiama(codice, "/api/prova", {"testo": TESTO})["testi"][0]
+                    chiama(codice, "/api/lists/add", {"lista": "mai", "termine": "aldo.bruschi@nevatek.example"})
+                    chiama(codice, "/api/lists/add", {"lista": "sempre", "termine": "gestionale"})
+                    r = chiama(codice, "/api/try", {"testo": TESTO})["testi"][0]
                     segna("elenchi: «non mascherare mai» vale anche per ciò che trovano le regole, «maschera sempre» aggiunge",
                           "aldo.bruschi@nevatek.example" in r and "[ELENCO_" in r and "gestionale" not in r and "[PERSONA_" in r, r[:120])
                 finally:
-                    chiama(codice, "/api/liste", elenchi)
+                    chiama(codice, "/api/lists", elenchi)
             else:
                 print("SALTATO elenchi personali: senza OMISSIS_LISTS toccherebbe gli elenchi veri")
             try:
-                chiama(codice, "/api/prova", {"testo": "parola " * 40000})
+                chiama(codice, "/api/try", {"testo": "parola " * 40000})
                 segna("testo troppo lungo: rifiutato, non tagliato in silenzio", False)
             except urllib.error.HTTPError as ex:
                 segna("testo troppo lungo: rifiutato, non tagliato in silenzio", ex.code == 422)
@@ -312,17 +312,17 @@ def main():
             # --- l'analisi vera di questo PC, dal pulsante: viene salvata come una in più (i nomi restano su questo PC)
             pag.goto(f"{PANNELLO}/#/servizi/rilevati")
             pag.wait_for_selector("#analizza")
-            salvate = chiama(codice, "/api/inventario")["n_analisi"]
+            salvate = chiama(codice, "/api/inventory")["n_analisi"]
             pag.click("#analizza")
             fatta = aspetta(pag, "() => !document.getElementById('analizza').disabled", attesa=180)
-            dopo = chiama(codice, "/api/inventario")
+            dopo = chiama(codice, "/api/inventory")
             segna("inventario: «Analizza ora» fotografa il PC e salva l'analisi", fatta and dopo["n_analisi"] == salvate + 1 and dopo["analisi"][0]["origine"] == "manuale",
                   f"{dopo['analisi'][0]['secondi']} s, {dopo['analisi'][0]['elementi']} voci")
             segna("nessun errore nelle prove finali", not errori, "; ".join(errori[:3]))
             errori.clear()
 
             # --- tema scuro e schermo stretto
-            chiama(codice, "/api/impostazioni", {"lingua": "it", "tema": "scuro", "vista": "avanzata"})
+            chiama(codice, "/api/settings", {"lingua": "it", "tema": "scuro", "vista": "avanzata"})
             pag.goto(f"{PANNELLO}/#/inizio")
             pag.reload()
             pag.wait_for_selector("#statoTitolo")
@@ -335,7 +335,7 @@ def main():
             pag.screenshot(path=str(foto / "inizio-telefono.png"))
             segna("tema scuro applicato, e su uno schermo stretto la pagina non esce dai bordi", scuro == "rgb(10, 10, 10)" and largo, f"{scuro} · {largo}")
         finally:
-            chiama(codice, "/api/impostazioni", {k: prima[k] for k in ("lingua", "tema", "vista", "scorciatoie") if k in prima})
+            chiama(codice, "/api/settings", {k: prima[k] for k in ("lingua", "tema", "vista", "scorciatoie") if k in prima})
             inventory.svuota()
             br.close()
 

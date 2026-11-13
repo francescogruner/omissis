@@ -67,7 +67,7 @@ class MspPii:
         mancanti = [s for s in set(segnaposto) if s not in self.valori and s not in self.assenti]
         if mancanti:
             try:
-                trovati = motore("/valori", {"segnaposto": mancanti})["mappa"]
+                trovati = motore("/values", {"segnaposto": mancanti})["mappa"]
             except Exception:   # noqa: BLE001  (senza motore i segnaposto restano tali: nessun danno)
                 return
             self.valori.update(trovati)
@@ -96,7 +96,7 @@ class MspPii:
         return None, None
 
     async def maschera(self, testi):
-        esito = await asyncio.to_thread(motore, "/maschera", {"testi": testi})
+        esito = await asyncio.to_thread(motore, "/mask", {"testi": testi})
         self.valori.update(esito["mappa"])
         for seg, val in esito["mappa"].items():
             if len(val) >= 5:
@@ -224,7 +224,7 @@ class MspPii:
                                 byte=len(msg.content), struttura=forma(oggetto) if oggetto is not None else "non JSON")
                 return
             try:
-                esito = motore("/maschera", {"testi": [c[k] for c, k in rif]})
+                esito = motore("/mask", {"testi": [c[k] for c, k in rif]})
             except Exception as ex:   # noqa: BLE001
                 msg.drop()
                 self.scrivi(servizio=servizio, percorso=self.percorso(flow), evento="BLOCCATO messaggio websocket: motore non raggiungibile",

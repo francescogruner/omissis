@@ -5,14 +5,14 @@ L'estensione intercetta le richieste DENTRO la pagina (prima che vengano cifrate
 il lavoro vero lo fanno gli stessi adattatori del proxy (restore.py), cosi' c'e' un solo posto
 in cui si decide dove sta il testo e come si riscrive una risposta. Gira dentro engine.py.
 
-  POST /ponte/stato       politiche dei servizi (cosa proteggere, registrare, bloccare)
-  POST /ponte/richiesta   {url, metodo, tipo, corpo}        -> {azione: passa | sostituisci | blocca, corpo}
-  POST /ponte/apri        {url, tipo}                       -> {id} se la risposta va riscritta mentre arriva
-  POST /ponte/pezzo       {id, dati (base64), fine}         -> {dati (base64)}
-  POST /ponte/intera      {url, tipo, testo}                -> {testo}
-  POST /ponte/valori      {segnaposto: [...]}               -> {mappa}   (ripristino nel testo della pagina)
-  POST /ponte/visita      {host}                            contatto con un servizio AI (Shadow AI)
-  POST /ponte/websocket   {url}                             canale che l'estensione non sa leggere
+  POST /bridge/stato       politiche dei servizi (cosa proteggere, registrare, bloccare)
+  POST /bridge/richiesta   {url, metodo, tipo, corpo}        -> {azione: passa | sostituisci | blocca, corpo}
+  POST /bridge/apri        {url, tipo}                       -> {id} se la risposta va riscritta mentre arriva
+  POST /bridge/pezzo       {id, dati (base64), fine}         -> {dati (base64)}
+  POST /bridge/intera      {url, tipo, testo}                -> {testo}
+  POST /bridge/valori      {segnaposto: [...]}               -> {mappa}   (ripristino nel testo della pagina)
+  POST /bridge/visita      {host}                            contatto con un servizio AI (Shadow AI)
+  POST /bridge/websocket   {url}                             canale che l'estensione non sa leggere
 
 Stesse regole del proxy: se il modello non risponde la richiesta viene bloccata; nel registro solo
 conteggi e struttura.
@@ -249,7 +249,7 @@ class Ponte:
             except documenti.Errore as ex:
                 raise NonFatto(ex.codice) from None
         token = (paths.DATI / "token.txt").read_text(encoding="utf-8").strip()
-        rich = urllib.request.Request(f"http://127.0.0.1:{paths.PORTA_PANNELLO}/interno/allegato",
+        rich = urllib.request.Request(f"http://127.0.0.1:{paths.PORTA_PANNELLO}/internal/attachment",
                                       data=json.dumps({"nome": nome, "dati": base64.b64encode(grezzo).decode("ascii")}).encode("utf-8"),
                                       headers={"Content-Type": "application/json", "X-Token": token})
         try:

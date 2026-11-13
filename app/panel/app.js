@@ -14,7 +14,7 @@ let TESTI = {}, RISERVA = {}, LINGUA = "it";
 // Le scorciatoie in uso, già scritte come tasti: le frasi le nominano con {sostituisci}, {maschera}, {ripristina}.
 let TASTI = {};
 const leggiTasti = async () => {
-  const s = await api("/api/scorciatoie");
+  const s = await api("/api/shortcuts");
   TASTI = Object.fromEntries(s.voci.map(v => [v.nome, v.combinazione ? v.scritta.split("+").map(k => `<kbd>${esc(k)}</kbd>`).join("+") : `<i>${esc(t("scorciatoie.spenta"))}</i>`]));
 };
 /** La frase per una chiave, con i valori tra graffe sostituiti. Se manca nella lingua scelta vale l'italiano. */
@@ -169,7 +169,7 @@ function applicaVista() {
 
 const FASI = ["attiva", "avvio", "errore", "ferma", "modello"];
 const leggiStato = prova(async () => {
-  S = await api("/api/stato");
+  S = await api("/api/status");
   const fase = FASI.includes(S.fase) ? S.fase : "ferma";
   $("#latoPunto").className = "punto " + fase;
   $("#latoTesto").textContent = t(`stato.breve.${fase}`);
@@ -198,8 +198,8 @@ DISEGNA.inizio = el => {
       ${scheda(`<h2>${esc(t("inizio.grafico.servizi"))}</h2><div class="barre" id="perServizio"></div>`)}
     </div>
     ${scheda(`<h2>${esc(t("inizio.grafico.tipi"))}</h2><div class="barre" id="perTipo"></div>`, "", "solo-avanzata")}`;
-  $("#interruttore").onclick = prova(async () => { await api("/api/protezione", {azione: ["attiva", "modello"].includes(S?.fase) ? "ferma" : "avvia"}); leggiStato(); });
-  $("#riavvia").onclick = prova(async () => { await api("/api/protezione", {azione: "riavvia"}); leggiStato(); });
+  $("#interruttore").onclick = prova(async () => { await api("/api/protection", {azione: ["attiva", "modello"].includes(S?.fase) ? "ferma" : "avvia"}); leggiStato(); });
+  $("#riavvia").onclick = prova(async () => { await api("/api/protection", {azione: "riavvia"}); leggiStato(); });
   canali();
 };
 AGGIORNA.inizio = s => {
@@ -246,7 +246,7 @@ function avvisoAggiornamento(a) {
   avvisoVisto = html; el.innerHTML = html;
   $$("button[data-azione]", el).forEach(b => b.onclick = prova(async () => {
     b.disabled = true;
-    await api("/api/aggiornamenti", {azione: b.dataset.azione});
+    await api("/api/updates", {azione: b.dataset.azione});
     if (b.dataset.azione === "installa") avvisa(t("aggiornamenti.installazione_avviata"));
     leggiStato();
   }));
@@ -314,7 +314,7 @@ DISEGNA.testo = el => {
     });
   };
   const maschera = prova(async () => {
-    const r = await api("/api/prova", {testo: $("#ingresso").value, mai: correzioni.mai, anche: correzioni.anche});
+    const r = await api("/api/try", {testo: $("#ingresso").value, mai: correzioni.mai, anche: correzioni.anche});
     risultato = r.testi[0];
     $("#esito").innerHTML = esc(risultato).replace(new RegExp(RX_SEGNAPOSTO, "g"), s => `<button type="button" class="segnaposto" data-s="${s}" data-v="${esc(r.mappa[s] ?? "")}" title="${esc(r.mappa[s] ?? "")}">${s}</button>`);
     $$("#esito button").forEach(b => b.onclick = () => suSegnaposto(b.dataset.s, b.dataset.v));
@@ -324,7 +324,7 @@ DISEGNA.testo = el => {
     await consegna("mascherato", `${r.ms} ms`);
   });
   const ripristina = prova(async () => {
-    const r = await api("/api/ripristina", {testo: $("#ingresso").value});
+    const r = await api("/api/restore", {testo: $("#ingresso").value});
     risultato = r.testo;
     $("#esito").textContent = r.testo;
     $("#trovati").innerHTML = "";
@@ -340,7 +340,7 @@ DISEGNA.testo = el => {
       <button type="button" class="bottone" data-fai="chiudi" aria-label="${esc(t("generale.chiudi"))}">×</button>`;
     $$("button", zona).forEach(b => b.onclick = prova(async () => {
       if (b.dataset.fai === "chiudi") { zona.hidden = true; return; }
-      if (b.dataset.fai === "mai") { await api("/api/liste/aggiungi", {lista: "mai", termine: valore}); avvisa(t("testo.correggi.mai.fatto", {valore})); }
+      if (b.dataset.fai === "mai") { await api("/api/lists/add", {lista: "mai", termine: valore}); avvisa(t("testo.correggi.mai.fatto", {valore})); }
       if (!correzioni.mai.includes(valore)) correzioni.mai.push(valore);
       await maschera();
     }));
@@ -350,7 +350,7 @@ DISEGNA.testo = el => {
     e.preventDefault();
     const termine = $("#daMascherare").value.trim();
     if (termine.length < 2) { $("#daMascherare").focus(); return; }
-    if ($("#ancheSempre").checked) { await api("/api/liste/aggiungi", {lista: "sempre", termine}); avvisa(t("testo.correggi.sempre.fatto", {valore: termine})); }
+    if ($("#ancheSempre").checked) { await api("/api/lists/add", {lista: "sempre", termine}); avvisa(t("testo.correggi.sempre.fatto", {valore: termine})); }
     correzioni.mai = correzioni.mai.filter(v => v !== termine);
     correzioni.anche[termine] = $("#tipoAMano").value;
     $("#daMascherare").value = ""; $("#ancheSempre").checked = false;
@@ -411,7 +411,7 @@ DISEGNA.documenti = el => {
       $("#esitiFile").prepend(r);
       try {
         if (f.size > 40e6) throw new Error(t("documenti.troppo_grande"));
-        const d = await api("/api/documenti/file", {nome: f.name, azione, contenuto: base64(await f.arrayBuffer())});
+        const d = await api("/api/documents/file", {nome: f.name, azione, contenuto: base64(await f.arrayBuffer())});
         const url = URL.createObjectURL(new Blob([Uint8Array.from(atob(d.contenuto), c => c.charCodeAt(0))]));
         r.innerHTML = `<b>${esc(f.name)}</b>${etichetta(t(`documenti.fatto.${d.azione}`))}<span class="etichette">${conteggi(d.conteggi) || etichetta(t("documenti.nessuna_sostituzione"))}</span><span class="spazio"></span>
           <a class="bottone${daSolo.checked ? "" : " primario"}" download="${esc(d.nome)}" href="${url}">${esc(t("documenti.scarica", {nome: d.nome}))}</a>`;
@@ -432,7 +432,7 @@ DISEGNA.documenti = el => {
   $("#sfoglia").onclick = prova(async e => {
     e.target.disabled = true;
     try {
-      const r = await api("/api/cartella/scegli", {iniziale: $("#percorsoCartella").value});
+      const r = await api("/api/folder/choose", {iniziale: $("#percorsoCartella").value});
       if (r.percorso) $("#percorsoCartella").value = r.percorso;
     } finally { e.target.disabled = false; e.target.focus(); }
   });
@@ -441,13 +441,13 @@ DISEGNA.documenti = el => {
     if (!$("#percorsoCartella").value.trim()) { $("#percorsoCartella").focus(); return; }
     esito.innerHTML = `<span class="sfumato">${esc(t("generale.in_lavorazione"))}</span>`;
     try {
-      const r = await api("/api/documenti/percorso", {percorso: $("#percorsoCartella").value, azione: b.dataset.cartella});
+      const r = await api("/api/documents/path", {percorso: $("#percorsoCartella").value, azione: b.dataset.cartella});
       esito.innerHTML = `<div class="riga"><p class="spazio">${t("documenti.cartella.esito", {fatti: `<b>${r.fatti.length}</b>`, saltati: `<b>${r.saltati.length}</b>`, dove: `<code>${esc(r.destinazione)}</code>`})}</p>
           <button class="bottone" id="apriCartella">${esc(t("documenti.cartella.apri"))}</button></div>
         <div class="etichette">${conteggi(r.conteggi) || etichetta(t("documenti.nessuna_sostituzione"))}</div>`
         + tabella(t("documenti.elaborati"), r.fatti, [x => esc(x.file), x => `<span class="sotto">${esc(x.uscita)}</span>`, x => `<span class="etichette">${conteggi(x.conteggi)}</span>`])
         + tabella(t("documenti.saltati"), r.saltati, [x => esc(x.file), x => etichetta(x.motivo, "attenzione")]);
-      $("#apriCartella").onclick = prova(() => api("/api/cartella/apri", {percorso: r.destinazione}));
+      $("#apriCartella").onclick = prova(() => api("/api/folder/open", {percorso: r.destinazione}));
     } catch (e) { esito.innerHTML = ""; throw e; }
   }));
 };
@@ -463,10 +463,10 @@ DISEGNA.guida = el => {
 };
 
 // ---- Impostazioni
-const salva = async (dati, messaggio = "impostazioni.salvata") => { const r = await api("/api/impostazioni", dati); avvisa(t(messaggio) + (r.da_riavviare ? " " + t("impostazioni.da_riavviare") : "")); leggiStato(); return r; };
+const salva = async (dati, messaggio = "impostazioni.salvata") => { const r = await api("/api/settings", dati); avvisa(t(messaggio) + (r.da_riavviare ? " " + t("impostazioni.da_riavviare") : "")); leggiStato(); return r; };
 DISEGNA.impostazioni = (el, quale) => (quale === "riconoscimento" ? impostazioniRiconoscimento : impostazioniGenerali)(el);
 const impostazioniGenerali = prova(async el => {
-  const [i, l] = await Promise.all([api("/api/impostazioni"), api("/api/lingue")]);
+  const [i, l] = await Promise.all([api("/api/settings"), api("/api/languages")]);
   const opzioni = (voci, scelta) => voci.map(([v, n]) => `<option value="${esc(v)}"${v === scelta ? " selected" : ""}>${esc(n)}</option>`).join("");
   el.innerHTML = `<section class="scheda" aria-label="${esc(t("impostazioni.aspetto"))}">
       ${riga(t("impostazioni.lingua"), esc(t("impostazioni.lingua.sotto")), `<select id="lingua" aria-label="${esc(t("impostazioni.lingua"))}">${opzioni([["auto", t("impostazioni.automatica")], ...l.disponibili.map(x => [x.codice, x.nome])], l.scelta)}</select>`)}
@@ -482,7 +482,7 @@ const impostazioniGenerali = prova(async el => {
       ${riga(t("aggiornamenti.installata"), `<span id="aggQuando"></span>`, `<b id="aggVersione">…</b>`)}
       <div id="aggScelta">${riga(t("aggiornamenti.nuove"), "", `<select id="aggiornamenti" aria-label="${esc(t("aggiornamenti.nuove"))}">${opzioni(["automatici", "avvisa", "mai"].map(v => [v, t(`aggiornamenti.modo.${v}`)]), i.aggiornamenti)}</select><button class="bottone" id="aggControlla">${esc(t("aggiornamenti.controlla"))}</button>`)}</div>
     </section>`;
-  $("#lingua").onchange = prova(async e => { await api("/api/impostazioni", {lingua: e.target.value}); location.reload(); });
+  $("#lingua").onchange = prova(async e => { await api("/api/settings", {lingua: e.target.value}); location.reload(); });
   $("#tema").onchange = prova(async e => { applicaTema(e.target.value); await salva({tema: e.target.value}); });
   $("#avanzata2").checked = vista === "avanzata";
   $("#avanzata2").onchange = e => cambiaVista(e.target.checked);
@@ -490,7 +490,7 @@ const impostazioniGenerali = prova(async el => {
   $("#aggControlla").onclick = prova(async e => {
     e.target.disabled = true;
     try {
-      const a = await api("/api/aggiornamenti", {azione: "controlla"});
+      const a = await api("/api/updates", {azione: "controlla"});
       avvisa(a.fase === "errore" ? a.errore : a.fase === "aggiornato" ? t("aggiornamenti.ultima") : t("aggiornamenti.disponibile", {v: a.versione}), a.fase === "errore");
       leggiStato();
     } finally { e.target.disabled = false; }
@@ -503,7 +503,7 @@ const LETTERE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const disegnaScorciatoie = prova(async () => {
   const el = $("#scorciatoie");
   if (!el) return;
-  const s = await api("/api/scorciatoie");
+  const s = await api("/api/shortcuts");
   el.innerHTML = s.voci.map(v => {
     const semplice = /^ctrl\+alt\+[a-z]$/.test(v.combinazione), lettera = semplice ? v.combinazione.slice(-1).toUpperCase() : "";
     const stato = !v.combinazione ? etichetta(t("scorciatoie.spenta")) : !s.disponibili ? "" : v.attiva ? etichetta(t("scorciatoie.attiva"), "ok") : etichetta(t(`scorciatoie.errore.${v.errore === "non_valida" ? "non_valida" : "occupata"}`), "errore");
@@ -516,8 +516,8 @@ const disegnaScorciatoie = prova(async () => {
   $$("select[data-sc]", el).forEach(x => x.onchange = prova(async () => {
     const scelte = Object.fromEntries(s.voci.map(v => [v.nome, v.combinazione]));
     scelte[x.dataset.sc] = x.value;
-    await api("/api/impostazioni", {scorciatoie: scelte});
-    const dopo = (await api("/api/scorciatoie")).voci.find(v => v.nome === x.dataset.sc);
+    await api("/api/settings", {scorciatoie: scelte});
+    const dopo = (await api("/api/shortcuts")).voci.find(v => v.nome === x.dataset.sc);
     if (dopo.combinazione && !dopo.attiva && dopo.errore) avvisa(t(`scorciatoie.errore.${dopo.errore === "non_valida" ? "non_valida" : "occupata"}.lungo`, {tasti: dopo.scritta}), true);
     else avvisa(t("impostazioni.salvata"));
     await leggiTasti();
@@ -534,7 +534,7 @@ AGGIORNA.impostazioni = s => {
   $("#aggNota").textContent = t(`aggiornamenti.nota.${["store", "sorgenti"].includes(a.canale) ? a.canale : "installer"}`);
 };
 const impostazioniRiconoscimento = prova(async el => {
-  const [i, l, cat] = await Promise.all([api("/api/impostazioni"), api("/api/liste"), api("/api/categorie")]);
+  const [i, l, cat] = await Promise.all([api("/api/settings"), api("/api/lists"), api("/api/categories")]);
   // le categorie in più del modello, in due gruppi: si accendono insieme perché da sole servono a poco
   const GRUPPI = {particolari: ["SALUTE", "RELIGIONE", "POLITICA", "ORIENTAMENTO", "ORIGINE"],
                   dettagli: ["DATA", "ORA", "ETA", "GENERE", "TITOLO", "PROFESSIONE", "ISTRUZIONE", "LUOGO"]};
@@ -565,7 +565,7 @@ const impostazioniRiconoscimento = prova(async el => {
   }
   $("#sempre").value = l.sempre.join("\n"); $("#mai").value = l.mai.join("\n");
   $("#salvaListe").onclick = prova(async () => {
-    const r = await api("/api/liste", {sempre: $("#sempre").value.split("\n"), mai: $("#mai").value.split("\n")});
+    const r = await api("/api/lists", {sempre: $("#sempre").value.split("\n"), mai: $("#mai").value.split("\n")});
     avvisa(t("liste.salvate", {sempre: r.sempre.length, mai: r.mai.length}));
   });
 });
@@ -584,7 +584,7 @@ function disegnaEstensione() {
   $("#estCollega").disabled = !estensione;
   $("#estCollega").textContent = t(estensione && estensione.collegata ? "browser.ricollega" : "browser.collega");
 }
-const datiEstensione = async () => { const d = await api("/api/estensione"); if (!d.token) throw new Error(t("browser.codice_non_pronto")); return d; };
+const datiEstensione = async () => { const d = await api("/api/extension"); if (!d.token) throw new Error(t("browser.codice_non_pronto")); return d; };
 const collegaBrowser = prova(async el => {
   el.innerHTML = scheda(`<h2>${esc(t("browser.collegamento"))}</h2><p>${esc(t("browser.collegamento.sotto"))}</p>`,
       `<span id="estStato" class="etichetta">…</span><span class="spazio"></span><button class="bottone primario" id="estCollega">${esc(t("browser.collega"))}</button>`)
@@ -598,7 +598,7 @@ const collegaBrowser = prova(async el => {
   $("#estCopiaCartella").onclick = () => copia($("#estCartella").textContent);
   $("#estCopiaCodice").onclick = prova(async () => copia((await datiEstensione()).token));
   window.postMessage({msp_pii: "ci sei?"}, location.origin);
-  $("#estCartella").textContent = (await api("/api/estensione")).cartella;
+  $("#estCartella").textContent = (await api("/api/extension")).cartella;
 });
 
 function disegnaApp(elenco) {
@@ -647,7 +647,7 @@ const collegaTerminale = prova(async el => {
 });
 
 const collegaProxy = prova(async el => {
-  const i = await api("/api/impostazioni");
+  const i = await api("/api/settings");
   el.innerHTML = `<section class="scheda" aria-label="${esc(t("collegamenti.scheda.proxy"))}">
       ${riga(t("proxy.porta"), esc(t("proxy.porta.sotto")), `<input type="number" id="porta" min="1024" max="65535" value="${esc(i.porta)}" aria-label="${esc(t("proxy.porta"))}"><button class="bottone" id="salvaPorta">${esc(t("generale.salva"))}</button>`)}
       ${riga(t("proxy.certificato"), esc(t("proxy.certificato.sotto")), `<span id="certStato" class="etichetta">…</span><button class="bottone" id="certInstalla">${esc(t("proxy.certificato.installa"))}</button><button class="bottone pericolo" id="certRimuovi">${esc(t("proxy.certificato.rimuovi"))}</button>`)}
@@ -662,13 +662,13 @@ const collegaProxy = prova(async el => {
   };
   certificato(i.certificato);
   $("#salvaPorta").onclick = prova(() => salva({porta: +$("#porta").value}));
-  $("#certInstalla").onclick = prova(async () => certificato(await api("/api/certificato", {azione: "installa"})));
-  $("#certRimuovi").onclick = prova(async () => certificato(await api("/api/certificato", {azione: "rimuovi"})));
+  $("#certInstalla").onclick = prova(async () => certificato(await api("/api/certificate", {azione: "installa"})));
+  $("#certRimuovi").onclick = prova(async () => certificato(await api("/api/certificate", {azione: "rimuovi"})));
   $$("button[data-indirizzo]").forEach(b => b.onclick = prova(async () => avvisa((await api("/api/browser", {indirizzo: b.dataset.indirizzo})).esito)));
 });
 
 const collegaCompatibilita = prova(async el => {
-  const c = await api("/api/compatibilita");
+  const c = await api("/api/compatibility");
   const quando = s => esc((s || "").slice(0, 16));
   const riga = g => `<tr><td><b>${esc(g.nome)}</b></td><td>${esc(tSe("via." + g.via, g.via))}</td><td>${esc(g.cliente || t("compatibilita.sconosciuto"))}</td>
     <td>${etichetta(t(`compatibilita.stato.${g.stato}`), g.stato === "funziona" ? "ok" : "attenzione")}<div class="sotto">${g.metodi.map(m => esc(t(`compatibilita.metodo.${m}`))).join(", ")}</div></td>
@@ -695,7 +695,7 @@ const serviziRegole = prova(async el => {
     <p class="aiuto">${esc(t("servizi.radar.nota"))}</p>
     <section class="scheda"><div class="tabella"><table><caption class="vh">${esc(t("servizi.scheda.regole"))}</caption><thead><tr>
       ${["servizio", "tipo", "lettura", "cosa_fare", "contatti"].map(c => `<th scope="col">${esc(t(`servizi.colonna.${c}`))}</th>`).join("")}</tr></thead><tbody id="tabServizi"></tbody></table></div></section>`;
-  elencoServizi = await api("/api/servizi");
+  elencoServizi = await api("/api/services");
   const disegna = () => {
     const f = $("#filtro").value.toLowerCase(), quali = $("#quali").value;
     const visibili = elencoServizi.filter(s => quali === "tutti" || (quali === "radar") === !!s.radar).filter(s => `${s.nome} ${s.fornitore} ${tSe("servizi.tipo." + s.tipo, s.tipo)} ${s.domini.join(" ")}`.toLowerCase().includes(f));
@@ -708,7 +708,7 @@ const serviziRegole = prova(async el => {
         <td><select data-id="${esc(s.id)}" aria-label="${esc(t("servizi.cosa_fare_per", {nome: s.nome}))}">${opzioni}</select></td>
         <td>${s.contatti || ""}<div class="sotto">${esc((s.ultimo || "").slice(0, 16))}</div></td></tr>`;
     }).join("");
-    $$("#tabServizi select").forEach(x => x.onchange = prova(async () => { await api("/api/servizi", {id: x.dataset.id, politica: x.value}); elencoServizi = await api("/api/servizi"); disegna(); leggiStato(); }));
+    $$("#tabServizi select").forEach(x => x.onchange = prova(async () => { await api("/api/services", {id: x.dataset.id, politica: x.value}); elencoServizi = await api("/api/services"); disegna(); leggiStato(); }));
   };
   $("#filtro").oninput = disegna;
   $("#quali").onchange = disegna;
@@ -735,7 +735,7 @@ const serviziRilevati = prova(async el => {
     + scheda(`<div class="riga"><h2>${esc(t("rilevati.rete"))}</h2><span class="spazio"></span><span class="sfumato piccolo" id="reteQuando"></span><button class="bottone" id="analizzaRete">${esc(t("rilevati.aggiorna"))}</button></div>
       <div id="rete" class="blocco sfumato" aria-live="polite">${esc(t("rilevati.rete.sotto"))}</div>`);
   const nome = (a, b) => `<b>${esc(a)}</b><div class="sotto">${esc(b)}</div>`;
-  let inv = await api("/api/inventario");
+  let inv = await api("/api/inventory");
   const disegna = () => {
     const ultima = inv.analisi[0];
     $("#invOgni").value = inv.ogni || "settimanale";
@@ -759,28 +759,28 @@ const serviziRilevati = prova(async el => {
           <input type="text" class="nota-breve" data-nota="${esc(e.chiave)}" value="${esc(e.nota || "")}" maxlength="300" placeholder="${esc(t("inventario.nota"))}" aria-label="${esc(t("inventario.nota_per", {nome: e.nome}))}"></td></tr>`).join("")
       : `<tr><td colspan="5" class="vuoto">${esc((inv.elementi.length ? t("inventario.nessuno_filtro") : t("inventario.vuoto")))}</td></tr>`;
     $$("#invTabella select").forEach(x => x.onchange = prova(async () => {
-      await api("/api/inventario/giudizio", {chiave: x.dataset.chiave, giudizio: x.value});
+      await api("/api/inventory/verdict", {chiave: x.dataset.chiave, giudizio: x.value});
       inv.elementi.find(e => e.chiave === x.dataset.chiave).giudizio = x.value;
     }));
     $$("#invTabella input").forEach(x => x.onchange = prova(async () => {
-      await api("/api/inventario/giudizio", {chiave: x.dataset.nota, nota: x.value});
+      await api("/api/inventory/verdict", {chiave: x.dataset.nota, nota: x.value});
       inv.elementi.find(e => e.chiave === x.dataset.nota).nota = x.value;
     }));
   };
   $("#invCerca").oninput = disegna;
   $("#invQuali").onchange = disegna;
-  $("#invOgni").onchange = prova(async e => { await salva({analisi: e.target.value}); inv = await api("/api/inventario"); disegna(); });
+  $("#invOgni").onchange = prova(async e => { await salva({analisi: e.target.value}); inv = await api("/api/inventory"); disegna(); });
   $("#analizza").onclick = prova(async e => {
     e.target.disabled = true;
     $("#invQuando").textContent = t("rilevati.in_corso");
     try {
-      inv = await api("/api/inventario/analizza", {});
+      inv = await api("/api/inventory/scan", {});
       const n = inv.novita;
       avvisa(n.prima ? t("inventario.prima_fatta", {n: inv.elementi.length}) : n.nuovi.length || n.spariti.length ? t("inventario.cambiato", {nuovi: n.nuovi.length, spariti: n.spariti.length}) : t("inventario.invariato"));
     } finally { e.target.disabled = false; disegna(); }
   });
   $("#invEsporta").onclick = prova(async () => {
-    const r = await fetch("/api/inventario/csv", {headers: {"X-Pannello": CODICE}});
+    const r = await fetch("/api/inventory/csv", {headers: {"X-Pannello": CODICE}});
     if (!r.ok) throw new Error(String(r.status));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(await r.blob()); a.download = `omissis-inventario-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -790,11 +790,11 @@ const serviziRilevati = prova(async el => {
     const n = inv.elementi.filter(e => !e.presente).length;
     if (!n) { avvisa(t("inventario.dimentica.niente")); return; }
     if (!await conferma(t("inventario.dimentica.titolo"), t("inventario.dimentica.testo", {n}), t("inventario.dimentica"))) return;
-    inv = await api("/api/inventario/dimentica", {}); disegna();
+    inv = await api("/api/inventory/forget", {}); disegna();
   });
   $("#analizzaRete").onclick = prova(async () => {
     $("#rete").textContent = t("rilevati.in_corso");
-    const r = await api("/api/shadow/rete");
+    const r = await api("/api/shadow/network");
     $("#reteQuando").textContent = r.quando.slice(11, 16);
     $("#rete").className = "blocco";
     $("#rete").innerHTML = (tabella(t("rilevati.contattati"), r.proxy, [x => `<b>${esc(x.servizio)}</b>`, x => `<span class="etichette">${Object.entries(x.esiti).map(([e, n]) => etichetta(`${tSe("rilevati.esito." + e, e)} ${n}`, e === "protetto" ? "ok" : e === "bloccato" ? "errore" : "attenzione")).join("")}</span>`, x => `<span class="sotto">${esc(x.ultimo.slice(0, 16))}</span>`])
@@ -814,7 +814,7 @@ DISEGNA.attivita = el => {
 };
 AGGIORNA.attivita = () => registro();
 const registro = prova(async () => {
-  const righe = await api("/api/registro?n=300"), corpo = $("#registro");
+  const righe = await api("/api/activity?n=300"), corpo = $("#registro");
   if (!corpo) return;
   corpo.innerHTML = righe.length ? righe.map(v => {
     const ev = v.evento || "", tono = ev === "mascherata" ? "ok" : /BLOCC|bloccato/.test(ev) ? "errore" : /NON|nessun/.test(ev) ? "attenzione" : "";
@@ -857,7 +857,7 @@ DISEGNA.archivio = el => {
   const scelte = () => $$("#tabArchivio input:checked").map(x => x.value);
   const aggiornaScelte = () => { const n = scelte().length; $("#archElimina").disabled = !n; $("#archElimina").textContent = n ? t("archivio.elimina_n", {n}) : t("archivio.elimina_scelte"); };
   const leggi = prova(async () => {
-    const a = await api("/api/archivio", {in_chiaro: $("#inChiaro").checked, cerca: $("#archCerca").value, etichetta: $("#archTipo").value, ordine: $("#archOrdine").value});
+    const a = await api("/api/vault", {in_chiaro: $("#inChiaro").checked, cerca: $("#archCerca").value, etichetta: $("#archTipo").value, ordine: $("#archOrdine").value});
     const tipo = $("#archTipo").value;
     $("#archTipo").innerHTML = opzioni([["", t("archivio.tipo.tutti", {n: num(a.totale)})], ...Object.entries(a.per_tipo).sort((x, y) => y[1] - x[1]).map(([k, n]) => [k, `${tipoDato(k)} (${num(n)})`])], tipo);
     $("#archConta").innerHTML = (a.totale ? esc(t("archivio.conta", {mostrate: num(a.voci.length), trovate: num(a.trovate), totale: num(a.totale)})) : esc(t("archivio.vuoto")))
@@ -873,20 +873,20 @@ DISEGNA.archivio = el => {
   for (const id of ["archTipo", "archOrdine", "inChiaro"]) $(`#${id}`).onchange = leggi;
   $("#archTutte").onchange = e => { $$("#tabArchivio input").forEach(x => { x.checked = e.target.checked; }); aggiornaScelte(); };
   const elimina = async (dati, titolo) => {
-    const quante = (await api("/api/archivio/elimina", {...dati, solo_conta: true})).eliminate;
+    const quante = (await api("/api/vault/delete", {...dati, solo_conta: true})).eliminate;
     if (!quante) { avvisa(t("archivio.elimina.niente")); return; }
     if (!await conferma(titolo, t("archivio.elimina.testo", {n: num(quante)}), t("archivio.elimina.si", {n: num(quante)}))) return;
-    const r = await api("/api/archivio/elimina", dati);
+    const r = await api("/api/vault/delete", dati);
     avvisa(t("archivio.eliminate", {n: num(r.eliminate)}));
     leggi(); leggiStato();
   };
   $("#archElimina").onclick = prova(() => elimina({segnaposto: scelte()}, t("archivio.elimina.titolo")));
   $("#pulFermi").onclick = prova(() => elimina({fermi_da_giorni: +$("#pulGiorni").value, etichetta: $("#archTipo").value}, t("archivio.pulizia.titolo", {n: $("#pulGiorni").value})));
-  api("/api/impostazioni").then(i => { $("#pulDaSola").value = String(i.archivio_giorni || 0); }).catch(() => {});
+  api("/api/settings").then(i => { $("#pulDaSola").value = String(i.archivio_giorni || 0); }).catch(() => {});
   $("#pulDaSola").onchange = prova(e => salva({archivio_giorni: +e.target.value}));
   $("#svuota").onclick = prova(async () => {
     if (!await conferma(t("archivio.svuota.titolo"), t("archivio.svuota.testo"), t("archivio.svuota"))) return;
-    await api("/api/archivio/svuota", {}); leggi(); leggiStato();
+    await api("/api/vault/clear", {}); leggi(); leggiStato();
   });
   leggi();
 };
@@ -900,7 +900,7 @@ function applicaTema(tema) {
 function cambiaVista(avanzata) {
   vista = avanzata ? "avanzata" : "semplice";
   applicaVista();
-  api("/api/impostazioni", {vista}).catch(() => {});
+  api("/api/settings", {vista}).catch(() => {});
   mostra(false);
 }
 
@@ -915,12 +915,12 @@ window.addEventListener("message", e => {
 
 async function avvia() {
   try { applicaTema(localStorage.getItem("tema") || "auto"); } catch { /* vedi sopra */ }
-  const lingue = await api("/api/lingue");
+  const lingue = await api("/api/languages");
   LINGUA = lingue.attiva;
   document.documentElement.lang = LINGUA;
   const leggi = async codice => (await fetch(`/locales/${codice}.json`)).json();
   [TESTI, RISERVA] = await Promise.all([leggi(LINGUA), LINGUA === "it" ? Promise.resolve({}) : leggi("it")]);
-  const i = await api("/api/impostazioni");
+  const i = await api("/api/settings");
   await leggiTasti();
   vista = i.vista === "avanzata" ? "avanzata" : "semplice";
   applicaTema(i.tema || "auto");

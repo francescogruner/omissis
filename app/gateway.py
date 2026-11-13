@@ -79,7 +79,7 @@ class Gateway:
             mancanti = [s for s in set(segnaposto) if s not in self.valori and s not in self.assenti]
         if mancanti:
             try:
-                trovati = self.motore("/valori", {"segnaposto": mancanti}, 30)["mappa"]
+                trovati = self.motore("/values", {"segnaposto": mancanti}, 30)["mappa"]
             except Exception:   # noqa: BLE001  (senza motore i segnaposto restano tali: nessun danno)
                 return
             with self.lucchetto:
@@ -195,7 +195,7 @@ class Gateway:
                             for indici, escludi in zip(gruppi, ([], agents.TECNICHE)):
                                 if not indici:
                                     continue
-                                parte = self.motore("/maschera", {"testi": [originali[i] for i in indici], "escludi": escludi,
+                                parte = self.motore("/mask", {"testi": [originali[i] for i in indici], "escludi": escludi,
                                                                  "mai": agents.vocabolario(interpretato)})
                                 for i, nuovo in zip(indici, parte["testi"]):
                                     esito["testi"][i] = nuovo

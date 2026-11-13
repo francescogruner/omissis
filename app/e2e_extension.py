@@ -25,7 +25,7 @@ from playwright.sync_api import sync_playwright   # noqa: E402
 import paths   # noqa: E402
 
 FINTO, PANNELLO = "http://localhost:9911", f"http://127.0.0.1:{paths.PORTA_PANNELLO}"
-CHIAMA_SERVIZI = "(d) => fetch('/api/servizi', {method: 'POST', headers: {'X-Pannello': document.querySelector('meta[name=omissis-codice]').content, 'Content-Type': 'application/json'}, body: JSON.stringify(d)}).then(r => r.json())"
+CHIAMA_SERVIZI = "(d) => fetch('/api/services', {method: 'POST', headers: {'X-Pannello': document.querySelector('meta[name=omissis-codice]').content, 'Content-Type': 'application/json'}, body: JSON.stringify(d)}).then(r => r.json())"
 # --lang=en avvia il browser in inglese: l'estensione segue la lingua del browser
 LINGUA = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--lang=")), "it")
 BROWSER = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--browser=")), None)

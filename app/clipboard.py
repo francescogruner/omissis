@@ -93,7 +93,7 @@ def trasforma(azione, motore):
         return i18n.t("appunti.troppo_lungo", n=MAX_TESTO)
     try:
         if azione == "maschera":
-            r = motore("/maschera", {"testi": [testo]})
+            r = motore("/mask", {"testi": [testo]})
             n = sum(r["conteggi"].values())
             if n and not scrivi(r["testi"][0]):
                 return i18n.t("appunti.non_scrivibili")
@@ -101,7 +101,7 @@ def trasforma(azione, motore):
         trovati = sorted({m.group() for m in R.RX_SEGNAPOSTO.finditer(testo)})
         if not trovati:
             return i18n.t("appunti.senza_segnaposto")
-        mappa = motore("/valori", {"segnaposto": trovati})["mappa"]
+        mappa = motore("/values", {"segnaposto": trovati})["mappa"]
         if mappa and not scrivi(R.ripristina(testo, mappa.get)):
             return i18n.t("appunti.non_scrivibili")
         return i18n.t("appunti.ripristinati", n=len(mappa)) + (" " + i18n.t("appunti.non_riconosciuti", n=len(trovati) - len(mappa)) if len(mappa) < len(trovati) else "")
@@ -183,7 +183,7 @@ def sostituisci(motore, solo_finestra=None):
     if len(testo) > MAX_TESTO:
         return i18n.t("appunti.troppo_lungo", n=MAX_TESTO)
     try:
-        r = motore("/maschera", {"testi": [testo]})
+        r = motore("/mask", {"testi": [testo]})
     except Exception:   # noqa: BLE001
         return i18n.t("appunti.sul_posto.protezione_ferma")
     n = sum(r["conteggi"].values())

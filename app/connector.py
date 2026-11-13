@@ -188,7 +188,7 @@ class Connettore:
     # ---------------------------------------------------------------- motore
     def _ponte(self, azione, dati, attesa=90):
         token = (DATI / "token_extension.txt").read_text(encoding="utf-8").strip()
-        rich = urllib.request.Request(f"http://127.0.0.1:{self.porta_motore}/ponte/{azione}",
+        rich = urllib.request.Request(f"http://127.0.0.1:{self.porta_motore}/bridge/{azione}",
                                       data=json.dumps({**dati, "via": "app", "cliente": self.cliente}).encode("utf-8"),
                                       headers={"Content-Type": "application/json", "X-Token": token})
         with urllib.request.urlopen(rich, timeout=attesa) as r:

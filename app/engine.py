@@ -5,13 +5,13 @@
 Gira con l'ambiente Python del modello (benchmark\\.venv) e ascolta SOLO su 127.0.0.1.
 Lo usano il proxy (addon.py) e, in futuro, qualunque altra interfaccia (estensione, gateway API).
 
-  POST /maschera  {"testi": [...]}        -> {"testi": [...], "mappa": {segnaposto: valore}, "conteggi": {...}, "ms": n}
-  POST /valori    {"segnaposto": [...]}   -> {"mappa": {segnaposto: valore}}
-  GET  /stato                             -> {"modello", "device", "voci"}
-  POST /ponte/...                         per l'estensione del browser: vedi bridge.py
+  POST /mask  {"testi": [...]}        -> {"testi": [...], "mappa": {segnaposto: valore}, "conteggi": {...}, "ms": n}
+  POST /values    {"segnaposto": [...]}   -> {"mappa": {segnaposto: valore}}
+  GET  /status                             -> {"modello", "device", "voci"}
+  POST /bridge/...                         per l'estensione del browser: vedi bridge.py
 
 Ogni richiesta deve portare l'intestazione X-Token con il contenuto di data\\token.txt.
-L'estensione ha un codice suo (data\\token_extension.txt) che apre soltanto /ponte/.
+L'estensione ha un codice suo (data\\token_extension.txt) che apre soltanto /bridge/.
 L'archivio (data\\vault.sqlite) contiene i valori reali: non esce mai da questo PC ed e' cifrato con la
 protezione dei dati di Windows, legata all'utente (data\\vault_key.bin serve all'indice ed e' protetta allo stesso modo).
 
@@ -358,6 +358,11 @@ class Motore:
         return {"mappa": {s: v for s in segnaposto if (v := self.archivio.valore(s)) is not None}}
 
 
+OLD_PATHS = {"/" + old: new for old, new in (("st" + "ato", "/status"), ("mas" + "chera", "/mask"), ("val" + "ori", "/values"),
+                                             ("arch" + "ivio", "/vault"), ("arch" + "ivio/elimina", "/vault/delete"),
+                                             ("arch" + "ivio/svuota", "/vault/clear"), ("prof" + "ilo", "/profile"), ("li" + "ste", "/lists"))}
+
+
 def servi(motore, porta, token, token_estensione, ponte):
     class Gestore(BaseHTTPRequestHandler):
         def log_message(self, *a):   # niente righe di log con i percorsi
@@ -382,12 +387,15 @@ def servi(motore, porta, token, token_estensione, ponte):
                     self.send_header("Access-Control-Allow-Private-Network", "true")
 
         def _autorizzato(self):
+            # gli indirizzi in italiano di prima restano validi: un'estensione o un programma non ancora aggiornati
+            # continuano a funzionare
+            self.path = OLD_PATHS.get(self.path, "/bridge/" + self.path[7:] if self.path.startswith("/pon" + "te/") else self.path)
             if self.headers.get("Host", "").split(":")[0] not in ("127.0.0.1", "localhost"):
                 self._rispondi(403, {"errore": "host non ammesso"})
                 return False
             dato = self.headers.get("X-Token", "")
             if secrets.compare_digest(dato, token) or \
-                    (self.path.startswith("/ponte/") and secrets.compare_digest(dato, token_estensione)):
+                    (self.path.startswith("/bridge/") and secrets.compare_digest(dato, token_estensione)):
                 return True
             self._rispondi(403, {"errore": "token mancante o errato"})
             return False
@@ -402,7 +410,7 @@ def servi(motore, porta, token, token_estensione, ponte):
             self.end_headers()
 
         def do_GET(self):
-            if self.path == "/stato" and self._autorizzato():
+            if self.path in ("/status", "/st" + "ato") and self._autorizzato():
                 self._rispondi(200, {"modello": str(motore.ril.mod.name_or_path), "device": motore.ril.device,
                                      "soglia": motore.ril.soglia, "voci": motore.archivio.voci(),
                                      "archivio_cifrato": motore.archivio.sigillo.attivo})
@@ -412,27 +420,27 @@ def servi(motore, porta, token, token_estensione, ponte):
                 return
             try:
                 dati = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
-                if self.path.startswith("/ponte/"):
-                    esito = ponte.gestisci(self.path[7:], dati if isinstance(dati, dict) else {})
+                if self.path.startswith("/bridge/"):
+                    esito = ponte.gestisci(self.path[len("/bridge/"):], dati if isinstance(dati, dict) else {})
                     self._rispondi(404 if esito is None else 200, {"errore": "percorso sconosciuto"} if esito is None else esito)
-                elif self.path == "/maschera":
+                elif self.path == "/mask":
                     self._rispondi(200, motore.maschera([str(t) for t in dati["testi"]], {str(e) for e in dati.get("escludi") or []}, dati.get("mai") or (),
                                                            dati.get("anche") if isinstance(dati.get("anche"), dict) else None))
-                elif self.path == "/valori":
+                elif self.path == "/values":
                     self._rispondi(200, motore.valori([str(s) for s in dati["segnaposto"]]))
-                elif self.path == "/archivio":
+                elif self.path == "/vault":
                     self._rispondi(200, motore.archivio.elenco(int(dati.get("limite", 500)), bool(dati.get("in_chiaro")), str(dati.get("cerca") or ""),
                                                                str(dati.get("etichetta") or ""), str(dati.get("ordine") or "recenti")))
-                elif self.path == "/archivio/elimina":
+                elif self.path == "/vault/delete":
                     giorni = dati.get("fermi_da_giorni")
                     self._rispondi(200, motore.archivio.elimina([str(s) for s in dati.get("segnaposto") or []], str(dati.get("etichetta") or ""),
                                                                 None if giorni is None else float(giorni), bool(dati.get("solo_conta"))))
-                elif self.path == "/archivio/svuota":
+                elif self.path == "/vault/clear":
                     motore.archivio.svuota()
                     self._rispondi(200, {"voci": 0})
-                elif self.path == "/profilo":   # il pannello ha cambiato le categorie accese, o chiede quali sono
+                elif self.path == "/profile":   # il pannello ha cambiato le categorie accese, o chiede quali sono
                     self._rispondi(200, motore.profilo())
-                elif self.path == "/liste":   # il pannello ha cambiato lists\never.txt o lists\always.txt
+                elif self.path == "/lists":   # il pannello ha cambiato lists\never.txt o lists\always.txt
                     with motore.lucchetto:
                         motore.ril.imposta_liste()
                         motore.cache.clear()

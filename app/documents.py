@@ -106,7 +106,7 @@ class Lavoro:
         if self.azione == "anonimizza":
             out = []
             for k in range(0, len(testi), 150):
-                r = motore("/maschera", {"testi": testi[k:k + 150]})
+                r = motore("/mask", {"testi": testi[k:k + 150]})
                 out += r["posizioni"]
                 for e, n in r["conteggi"].items():
                     self.conteggi[e] = self.conteggi.get(e, 0) + n
@@ -114,7 +114,7 @@ class Lavoro:
         trovati = [[(m.start(), m.end(), m.group()) for m in R.RX_SEGNAPOSTO.finditer(t)] for t in testi]
         mancanti = sorted({seg for riga in trovati for _, _, seg in riga} - set(self.cache))
         for k in range(0, len(mancanti), 500):
-            self.cache.update(motore("/valori", {"segnaposto": mancanti[k:k + 500]})["mappa"])
+            self.cache.update(motore("/values", {"segnaposto": mancanti[k:k + 500]})["mappa"])
         out = []
         for riga in trovati:
             buoni = [[s, e, self.cache[seg]] for s, e, seg in riga if seg in self.cache]

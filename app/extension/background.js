@@ -25,7 +25,7 @@ async function motore(azione, dati, attesa) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), attesa || 90000);
   try {
-    const r = await fetch(`http://127.0.0.1:${c.porta}/ponte/${azione}`, {
+    const r = await fetch(`http://127.0.0.1:${c.porta}/bridge/${azione}`, {
       method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': c.token},
       body: JSON.stringify({...(dati || {}), cliente: CLIENTE}), signal: ctl.signal, cache: 'no-store'});
     if (!r.ok) throw new Error(r.status === 403 ? 'codice non valido' : 'errore ' + r.status);

@@ -27,7 +27,7 @@ PORTA_MOTORE = paths.PORTA_MOTORE
 
 def stato():
     token = (paths.DATI / "token.txt").read_text(encoding="utf-8").strip()
-    rich = urllib.request.Request(f"http://127.0.0.1:{PORTA_MOTORE}/stato", headers={"X-Token": token})
+    rich = urllib.request.Request(f"http://127.0.0.1:{PORTA_MOTORE}/status", headers={"X-Token": token})
     with urllib.request.urlopen(rich, timeout=3) as r:
         return json.loads(r.read().decode("utf-8"))
 
