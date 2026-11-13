@@ -87,6 +87,9 @@ Measured on 13 November 2026. The best of the other 36 models listed by PIIMB sc
 average; ours are first on average, not in every task, and the training splits of the same datasets
 are among their training data (the test splits were never used).
 
+How the two models compare with other PII detectors (OpenAI's privacy-filter, Presidio, the best models of
+the public list), on the public benchmark, on Italian and on real texts: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
 What these numbers are **not**: precision on real text has not been measured yet (it needs a
 hand-labelled set, which is being prepared), and "known values" are those that could be derived from
 ticket metadata, not every sensitive value in the text. Details and limits are in the model cards under

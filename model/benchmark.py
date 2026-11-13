@@ -2,6 +2,7 @@
 """Measures a model on public PII-masking benchmarks. Prints counts and scores only.
 
   python benchmark.py <model folder> [--mode full|model] [--limit N] [--save]
+  python benchmark.py <hub id of another model> --mode other [--save]
 
 Benchmarks (test data is downloaded once into data/benchmarks/, data files only):
 
@@ -21,6 +22,9 @@ Modes:
   model   the network alone, most likely class per token: what PIIMB runs for token classifiers
   full    what Omissis really does: decision threshold, checksum rules, list of well-known names
           (personal lists are left empty so the result does not depend on the PC)
+  other   any token-classification model of the Hugging Face hub, measured like "model": the network
+          alone, most likely class, whatever is not "O" counts as masked (other_models.py). It is how
+          the comparison tables are made: same code, same texts, for every model
 
 Profiles (models from version 2 on): "strict" turns on every category the model knows; "standard" is
 how Omissis ships, with the extra categories (dates, ages, occupations, special categories) left in
@@ -108,7 +112,7 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("model")
-    ap.add_argument("--mode", choices=["full", "model"], default="full")
+    ap.add_argument("--mode", choices=["full", "model", "other"], default="full")
     ap.add_argument("--profile", choices=["strict", "standard"], default="strict",
                     help="strict: every category the model knows; standard: as Omissis ships, extra categories left in clear")
     ap.add_argument("--limit", type=int, default=0, help="only the first N rows of each file (to try it out)")
@@ -117,7 +121,10 @@ def main():
     a = ap.parse_args()
     fetch()
     extra = {} if a.profile == "standard" else {"spente": []}
-    if a.mode == "model":
+    if a.mode == "other":
+        from other_models import Other
+        detector = Other(a.model)
+    elif a.mode == "model":
         detector = Rilevatore(a.model, regole=False, soglia=None, noti=False, mai=[], sempre=[], **extra)
     else:
         detector = Rilevatore(a.model, mai=[], sempre=[], **extra)
@@ -161,7 +168,7 @@ def main():
                           + (("CV-PII-Bench all Italian CVs",) if r.get("lang") == "it" else ())):
                 groups[group].add(r["text"], gold, spans, ignore)
 
-    name = Path(a.model).name
+    name = a.model.replace("/", "__") if a.mode == "other" and not Path(a.model).is_dir() else Path(a.model).name
     print(f"\n{name} · mode {a.mode} · profile {a.profile} · {sentences:,} texts in {seconds:.0f} s ({1000 * seconds / max(1, sentences):.1f} ms each)\n")
     print(f"{'group':44} {'docs':>7} {'recall':>7} {'prec.':>7} {'F1':>6} {'F2':>6} {'FPR':>6} {'with a miss':>12}")
     results = {}

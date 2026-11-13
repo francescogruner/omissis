@@ -60,6 +60,10 @@ parti di addestramento, che sono altri testi (vedi sotto).
 Il 13 novembre 2026, con i soli pesi: `omissis-base` F2 medio 0,911, `omissis-small` 0,912; il migliore
 degli altri 36 modelli in elenco 0,836. `python leaderboard.py` rifà il confronto.
 
+`python benchmark.py <nome di un modello su Hugging Face> --mode other` misura con lo stesso codice un altro
+classificatore (solo i pesi in formato safetensors, nessun codice del modello viene eseguito): è così che sono
+fatte le tabelle di [docs/BENCHMARKS.md](../docs/BENCHMARKS.md).
+
 ## Rifare l'addestramento
 
 I dati sono di due tipi. Tutto è sintetico, tranne due raccolte di sentenze che contengono nomi veri,

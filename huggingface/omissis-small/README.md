@@ -156,6 +156,26 @@ The same benchmark, as the Omissis program works (thresholds, rules, lists):
 
 With all 41 labels on: average F2 0.910, recall 93.7%, precision 83.2%.
 
+### Next to other models
+
+Five other models, measured by us with the same code as ours (`benchmark.py --mode other`: the weights alone,
+most likely class). For each of them the PIIMB average obtained this way matches the published one.
+
+| Model | Parameters | PIIMB average | PIIMB, Italian sentences | Real IT-support texts, known values protected |
+|---|---|---|---|---|
+| **omissis-base** | 308 M | **0.911** | **0.925** | **95.1%** (98.8% as the program works) |
+| **omissis-small** | 141 M | **0.912** | **0.927** | **94.6%** (98.8% as the program works) |
+| OpenMed/privacy-filter-multilingual-v2 | 1,400 M | 0.840 | 0.879 | 81.5% |
+| openai/privacy-filter | 1,400 M | 0.664 | 0.811 | 79.0% |
+| bardsai/eu-pii-anonimization-multilang | 278 M | 0.686 | 0.705 | 88.3% |
+| tabularisai/eu-pii-safeguard | 559 M | 0.634 | 0.687 | 40.5% |
+| iiiorg/piiranha-v1-detect-personal-information | 278 M | 0.518 | 0.687 | 32.3% |
+
+Not first everywhere: on the 40 CVs of CV-PII-Bench the bardsai model scores 0.837, ours 0.75 and 0.71 with
+every label on (0.840 as the program ships, with the 28 identifiers only). The full comparison, with what it
+does and does not show, is in
+[docs/BENCHMARKS.md](https://github.com/francescogruner/omissis/blob/main/docs/BENCHMARKS.md).
+
 ### Real texts
 
 On a **private** set of 2,000 real IT-support texts, not publishable, with the thresholds of the
@@ -309,6 +329,26 @@ Lo stesso benchmark, come lavora il programma Omissis (soglie, regole, elenchi):
 | Precisione con i soli 28 identificativi (di serie) | 96,6% | 97,3% | 94,5% | 96,0% | 90,2% |
 
 Con tutte le 41 etichette accese: F2 medio 0,910, copertura 93,7%, precisione 83,2%.
+
+### Accanto agli altri modelli
+
+Cinque altri modelli, misurati da noi con lo stesso codice dei nostri (`benchmark.py --mode other`: solo i
+pesi, la classe più probabile). Per ognuno la media su PIIMB ottenuta così coincide con quella pubblicata.
+
+| Modello | Parametri | PIIMB, media | PIIMB, frasi in italiano | Testi reali di assistenza, valori noti protetti |
+|---|---|---|---|---|
+| **omissis-base** | 308 M | **0,911** | **0,925** | **95,1%** (98,8% come lavora il programma) |
+| **omissis-small** | 141 M | **0,912** | **0,927** | **94,6%** (98,8% come lavora il programma) |
+| OpenMed/privacy-filter-multilingual-v2 | 1.400 M | 0,840 | 0,879 | 81,5% |
+| openai/privacy-filter | 1.400 M | 0,664 | 0,811 | 79,0% |
+| bardsai/eu-pii-anonimization-multilang | 278 M | 0,686 | 0,705 | 88,3% |
+| tabularisai/eu-pii-safeguard | 559 M | 0,634 | 0,687 | 40,5% |
+| iiiorg/piiranha-v1-detect-personal-information | 278 M | 0,518 | 0,687 | 32,3% |
+
+Non primi dappertutto: sui 40 curriculum di CV-PII-Bench il modello di bardsai fa 0,837, i nostri 0,75 e 0,71
+con tutte le etichette accese (0,840 con le impostazioni di serie del programma, solo i 28 identificativi). Il
+confronto completo, con ciò che mostra e ciò che non mostra, è in
+[docs/BENCHMARKS.md](https://github.com/francescogruner/omissis/blob/main/docs/BENCHMARKS.md).
 
 ### Testi reali
 

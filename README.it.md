@@ -71,6 +71,10 @@ Misure del 13 novembre 2026. Il migliore degli altri 36 modelli in elenco su PII
 0,836; i nostri sono primi in media, non in ogni gruppo, e le parti di addestramento delle stesse
 raccolte sono tra i loro dati di addestramento (quelle di prova non sono mai state usate).
 
+Il confronto dei due modelli con altri riconoscitori di dati personali (il privacy-filter di OpenAI,
+Presidio, i migliori della classifica pubblica), sul benchmark pubblico, sull'italiano e sui testi reali, è in
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md) (in inglese).
+
 Cosa questi numeri **non** dicono: la precisione sui testi reali non è ancora misurata (serve un
 insieme etichettato a mano, in preparazione), e i "valori noti" sono quelli ricavabili dai dati dei
 ticket, non tutti i dati sensibili presenti nel testo. Dettagli e limiti nelle schede del modello in
