@@ -21,7 +21,7 @@ SEME = 7301
 QUI = Path(__file__).resolve().parent
 _FMT = Formatter()
 AMBITI = list(F.PROSA)
-PESI_AMBITI = [3 if a in ("msp", "cyber") else 1 for a in AMBITI]
+PESI_AMBITI = [3 if a in ("msp", "cyber") else 2 if a in ("profilo", "pubblico") else 1 for a in AMBITI]
 
 
 def riempi(modello, ctx):
@@ -89,7 +89,7 @@ def email(r, ctx, profondita=0):
     parti.append(prosa(r, ctx, k=r.choice([1, 1, 2, 3])))
     parti.append((r.choice(F.CHIUSE), []))
     if r.random() < .75:
-        parti.append(riempi(r.choice(F.FIRME).replace("{RUOLO}", r.choice(F.RUOLI)), ctx))
+        parti.append(riempi(r.choice(F.FIRME).replace("{RUOLO}", r.choice(["{x.ruolo}", "{x.ruolo}", "{x.ruolo}", "{x.ufficio}"])), ctx))
     if r.random() < .3:
         parti.append((r.choice(F.DISCLAIMER), []))
     if profondita < 2 and r.random() < .3:

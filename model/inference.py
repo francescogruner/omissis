@@ -35,14 +35,34 @@ FINESTRA, PASSO = 512, 128
 LISTE = Path(os.environ.get("OMISSIS_LISTS") or Path(__file__).resolve().parent / "lists")   # liste personali
 
 
+# Sotto questa lunghezza un valore non puo' essere cio' che l'etichetta dice (una partita IVA di due caratteri, un CAP di
+# una cifra): sono pezzetti che la rete lascia cadere qua e la', soprattutto su stringhe senza contesto, e mascherarli
+# rovina il testo senza proteggere nulla. Vale per cio' che trova la rete, non per le regole, che controllano gia' la forma.
+MINIMO = {"EMAIL": 6, "CAP": 3, "DATA_NASCITA": 4, "CF": 8, "PIVA": 8, "IBAN": 8, "CARTA": 8, "DOC_ID": 4, "TARGA": 5,
+          "ID_VEICOLO": 8, "ID_PRATICA": 3, "ID_UTENZA": 4, "IP": 3, "MAC": 8, "DOMINIO": 4, "URL": 4, "SEGRETO": 3, "ID_CLOUD": 6,
+          "ID_DISPOSITIVO": 3, "CARTA_SEC": 3}
+
+
 class Rilevatore:
-    def __init__(self, cartella, device=None, regole=True, soglia="auto", noti=True, mai=None, sempre=None):
+    def __init__(self, cartella, device=None, regole=True, soglia="auto", noti=True, mai=None, sempre=None, spente="auto"):
         """soglia: un token resta "non sensibile" solo se il modello ne e' sicuro almeno quanto la soglia
         (None = classe piu' probabile). Alzarla protegge di piu' e maschera di piu'.
-        "auto" usa quella scelta per il modello (file omissis.json nella sua cartella), se c'e'."""
+        "auto" usa quella scelta per il modello (file omissis.json nella sua cartella), se c'e'.
+        spente: etichette che il modello conosce ma che non vanno restituite (per esempio date e professioni, che di
+        serie restano in chiaro). La loro probabilita' viene contata come "non sensibile": cosi' spegnerle non sposta
+        le altre decisioni. "auto" usa l'elenco del modello (omissis.json), [] le accende tutte."""
+        f = Path(cartella) / "omissis.json"
+        scelte = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
         if soglia == "auto":
-            f = Path(cartella) / "omissis.json"
-            soglia = json.loads(f.read_text(encoding="utf-8")).get("soglia") if f.exists() else None
+            soglia = scelte.get("soglia")
+        self.spente_modello = list(scelte.get("spente") or [])
+        # soglie proprie di singole etichette: dove sbagliare costa di piu' (il nome di un cliente) si maschera piu' volentieri
+        self.soglie = dict(scelte.get("soglie") or {})
+        # calibrate.py puo' aver abbassato nei pesi il punteggio di "niente" (cosi' il modello e' prudente anche per chi lo
+        # usa senza questo codice): quando qui si applica una soglia propria, quel tanto va rimesso, e nulla cambia
+        self.spostamento = float(scelte.get("spostamento") or 0.0)
+        # lo stesso per le soglie proprie di singole etichette: {etichetta: di quanto e' stato alzato il suo punteggio}
+        self.spostamenti = {k: float(v) for k, v in (scelte.get("spostamenti") or {}).items()}
         self.onnx = torch is None or os.environ.get("OMISSIS_ENGINE") == "onnx"
         if self.onnx:
             self._apri_onnx(Path(cartella))
@@ -52,7 +72,23 @@ class Rilevatore:
             self.mod = AutoModelForTokenClassification.from_pretrained(cartella).to(self.device).eval()
             self.classi = [self.mod.config.id2label[i] for i in range(self.mod.config.num_labels)]
         self.regole, self.soglia, self.noti = regole, soglia, noti
+        self.imposta_spente(self.spente_modello if spente == "auto" else spente)
         self.imposta_liste(mai, sempre)
+        self.col_spostate = [([i for i, c in enumerate(self.classi) if c != "O" and c[2:] == e], d) for e, d in self.spostamenti.items() if d]
+
+    def _pesi_classe(self):
+        """Per ogni classe quanto pesa la sua probabilita' contro quella di "niente": soglia / (1 - soglia).
+        Una parola viene mascherata se la somma delle probabilita' sensibili, cosi' pesate, supera quella di "niente", e
+        prende l'etichetta che pesa di piu'. Con una soglia sola e' esattamente "niente non raggiunge la soglia"; con
+        soglie diverse per etichetta, una parola contesa tra due etichette (il nome di un server, tra HOSTNAME e
+        DOMINIO) non viene persa solo perche' la piu' probabile delle due ha la soglia severa."""
+        soglie = [min(self.soglie.get(c[2:], self.soglia), 0.9999) for c in self.classi]
+        return [0.0 if c == "O" else s / (1 - s) for c, s in zip(self.classi, soglie)]
+
+    def imposta_spente(self, etichette):
+        """Sceglie le etichette da non restituire (vedi __init__). Si puo' cambiare a modello gia' caricato."""
+        self.spente = sorted(set(etichette or []))
+        self.col_spente = [i for i, c in enumerate(self.classi) if c != "O" and c[2:] in self.spente]
 
     def imposta_liste(self, mai=None, sempre=None):
         """Carica (o ricarica) gli elenchi personali: None = dai file lists\\never.txt e lists\\always.txt."""
@@ -95,12 +131,23 @@ class Rilevatore:
             for r, (_, w, _) in enumerate(gruppo):
                 ids[r, :len(w)], att[r, :len(w)] = w, 1
             logits = self.sessione.run(None, {"input_ids": ids, "attention_mask": att})[0].astype(np.float64)
-            if self.soglia is None:
+            if self.soglia is None and not self.col_spente:
                 pred = logits.argmax(-1)
             else:
+                if self.soglia is not None:
+                    logits[..., 0] += self.spostamento
+                    for colonne, quanto in self.col_spostate:
+                        logits[..., colonne] -= quanto
                 prob = np.exp(logits - logits.max(-1, keepdims=True))
                 prob /= prob.sum(-1, keepdims=True)
-                pred = np.where(prob[..., 0] >= self.soglia, prob.argmax(-1), prob[..., 1:].argmax(-1) + 1)
+                if self.col_spente:   # cio' che e' spento vale come "non sensibile"
+                    prob[..., 0] += prob[..., self.col_spente].sum(-1)
+                    prob[..., self.col_spente] = 0.0
+                if self.soglia is None:
+                    pred = prob.argmax(-1)
+                else:   # vedi _pesi_classe
+                    pesate = prob * np.asarray(self._pesi_classe())
+                    pred = np.where(prob[..., 0] >= pesate.sum(-1), 0, pesate.argmax(-1))
             for r, (doc, w, off) in enumerate(gruppo):
                 n = len(w)
                 for i in range(n):
@@ -128,11 +175,24 @@ class Rilevatore:
             logits = torch.cat([self.mod(input_ids=enc["input_ids"][k:k + 32].to(self.device),
                                          attention_mask=enc["attention_mask"][k:k + 32].to(self.device)).logits
                                 for k in range(0, len(mappa), 32)])
-        if self.soglia is None:
+        if self.soglia is None and not self.col_spente:
             pred = logits.argmax(-1).tolist()
         else:
-            prob = logits.float().softmax(-1)
-            pred = torch.where(prob[..., 0] >= self.soglia, prob.argmax(-1), prob[..., 1:].argmax(-1) + 1).tolist()
+            logits = logits.float()
+            if self.soglia is not None:
+                logits[..., 0] += self.spostamento
+                for colonne, quanto in self.col_spostate:
+                    logits[..., colonne] -= quanto
+            prob = logits.softmax(-1)
+            if self.col_spente:   # cio' che e' spento vale come "non sensibile"
+                prob[..., 0] += prob[..., self.col_spente].sum(-1)
+                prob[..., self.col_spente] = 0.0
+            if self.soglia is None:
+                pred = prob.argmax(-1).tolist()
+            else:   # vedi _pesi_classe
+                pesate = prob * torch.tensor(self._pesi_classe(), device=prob.device, dtype=prob.dtype)
+                migliore = pesate.argmax(-1)
+                pred = torch.where(prob[..., 0] >= pesate.sum(-1), torch.zeros_like(migliore), migliore).tolist()
         n_tok = enc["attention_mask"].sum(1).tolist()
         migliori = [dict() for _ in testi]
         for w, doc in enumerate(mappa):
@@ -162,11 +222,40 @@ class Rilevatore:
         for s, e, l in spans:
             while s < e and testo[s].isspace():
                 s += 1
+            # la virgola o i due punti che seguono un valore non ne fanno parte: tenerli darebbe alla stessa azienda
+            # due segnaposto diversi, uno con la virgola e uno senza (una password invece puo' finire cosi')
+            # ... e nemmeno una parentesi che si apre o un trattino staccato ("Brescia (", "via Garibaldi, 12 -")
+            while e > s and l != "SEGRETO" and (testo[e - 1].isspace() or testo[e - 1] in ",;:([" or (
+                    testo[e - 1] in "-–" and testo[e - 2:e - 1].isspace())):
+                e -= 1
             while e > s and testo[e - 1].isspace():
                 e -= 1
             if e > s and any(ch.isalnum() for ch in testo[s:e]):   # niente span di soli simboli o caratteri invisibili
                 out.append([s, e, l])
-        return out
+        # pezzi che si toccano con etichette diverse, o divisi da una sola barra, trattino o punto quando uno dei due e' un
+        # pezzetto, sono un valore solo che la rete ha etichettato a tratti: "1/27/13" non deve diventare quattro
+        # segnaposto. Diventano un dato solo, con l'etichetta del pezzo piu' lungo
+        fusi = []
+        for s, e, l in out:
+            if fusi:
+                ps, pe, pl, lungo = fusi[-1]
+                tra = testo[pe:s]
+                if (tra == "" and pl != l) or (len(tra) == 1 and tra in "/-." and min(e - s, pe - ps) < 3):
+                    fusi[-1] = [ps, e, l if e - s > lungo else pl, max(lungo, e - s)]
+                    continue
+            fusi.append([s, e, l, e - s])
+        out = [x[:3] for x in fusi]
+        # troppo corti per la loro etichetta (vedi MINIMO). Un valore scritto a gruppi ("4910 5209 24641") arriva in piu'
+        # pezzi vicini, a volte con etichette diverse: conta la lunghezza di tutti insieme, non quella di ciascuno
+        tenuti, i = [], 0
+        while i < len(out):
+            j = i + 1
+            while j < len(out) and out[j][0] - out[j - 1][1] <= 2 and not any(ch.isalnum() for ch in testo[out[j - 1][1]:out[j][0]]):
+                j += 1
+            insieme = sum(e - s for s, e, _ in out[i:j])
+            tenuti += [x for x in out[i:j] if insieme >= MINIMO.get(x[2], 1)]
+            i = j
+        return tenuti
 
     def modello(self, testi):
         return [self._span(t, tk) for t, tk in zip(testi, self._token(testi))]
@@ -183,6 +272,8 @@ class Rilevatore:
             certi += [[m.start(), m.end(), "ELENCO"] for m in self.rx_sempre.finditer(testo)]
         if certi:
             spans = certi + [m for m in spans if not any(r[0] <= m[0] and m[1] <= r[1] for r in certi)]
+        if self.noti:   # indirizzi tecnici di dominio pubblico: localhost, DNS pubblici, siti di produttori ed enti
+            spans = [m for m in spans if m[2] not in ("IP", "URL", "DOMINIO", "HOSTNAME") or not _noti.tecnico_pubblico(testo[m[0]:m[1]], m[2])]
         return sorted(spans)
 
     def analizza(self, testo):

@@ -35,6 +35,7 @@ from pathlib import Path
 
 QUI = Path(__file__).resolve().parent
 import paths   # noqa: E402
+import settings   # noqa: E402
 
 DATI = paths.DATI
 os.environ.setdefault("OMISSIS_LISTS", str(paths.liste()))   # il modello legge da li' le liste personali
@@ -215,7 +216,7 @@ class Archivio:
             trovate += 1
             if len(voci) < limite:
                 v = self.sigillo.decifra(salvato) if v is None else v
-                voci.append({"segnaposto": seg, "etichetta": e, "valore": v if in_chiaro else v[:1] + "•" * min(len(v) - 1, 11),
+                voci.append({"segnaposto": seg, "etichetta": e, "valore": v if in_chiaro else (v[:1] + "•" * min(len(v) - 1, 11) if len(v) > 1 else "•"),
                              "creato": giorno(c), "usato": giorno(u or c)})
         return {"per_tipo": per_tipo, "voci": voci, "cifrato": self.sigillo.attivo, "totale": sum(per_tipo.values()), "trovate": trovate}
 
@@ -262,6 +263,19 @@ class Motore:
         self.archivio = Archivio(DATI / "vault.sqlite")
         self.lucchetto = threading.Lock()                # un'inferenza per volta
         self.cache = collections.OrderedDict()           # testo gia' visto -> span (le cronologie si ripetono)
+        self.profilo()
+
+    def profilo(self):
+        """Le categorie che il modello conosce ma che di serie restano in chiaro (date, professioni, dati particolari...):
+        accende quelle scelte nelle impostazioni («categorie»). Restituisce cosa c'e' e cosa e' acceso."""
+        conosciute = list(self.ril.spente_modello)
+        accese = [e for e in settings.leggi().get("categorie") or [] if e in conosciute]
+        spente = [e for e in conosciute if e not in accese]
+        if spente != self.ril.spente:
+            with self.lucchetto:
+                self.ril.imposta_spente(spente)
+                self.cache.clear()
+        return {"conosciute": conosciute, "accese": accese}
 
     def _span(self, testi):
         chiavi = [hashlib.sha256(t.encode("utf-8")).digest() for t in testi]
@@ -416,6 +430,8 @@ def servi(motore, porta, token, token_estensione, ponte):
                 elif self.path == "/archivio/svuota":
                     motore.archivio.svuota()
                     self._rispondi(200, {"voci": 0})
+                elif self.path == "/profilo":   # il pannello ha cambiato le categorie accese, o chiede quali sono
+                    self._rispondi(200, motore.profilo())
                 elif self.path == "/liste":   # il pannello ha cambiato lists\never.txt o lists\always.txt
                     with motore.lucchetto:
                         motore.ril.imposta_liste()

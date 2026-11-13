@@ -27,7 +27,7 @@ viene mandato a un server di Omissis, perché non esiste.
 
 | Parte | A cosa serve |
 |---|---|
-| **Modello** (`model/`) | Riconosce i dati personali in testi italiani: un classificatore su [mmBERT](https://huggingface.co/jhu-clsp/mmBERT-base) con 28 etichette, più regole con controllo delle cifre (codice fiscale, partita IVA, IBAN, carte) ed elenchi personalizzabili |
+| **Modello** (`model/`) | Riconosce i dati personali in testi italiani: un classificatore su [mmBERT](https://huggingface.co/jhu-clsp/mmBERT-base) con 41 etichette (28 identificativi sempre mascherati, altre 13 a richiesta), più regole con controllo delle cifre (codice fiscale, partita IVA, IBAN, carte) ed elenchi personalizzabili |
 | **Motore** (`app/engine.py`) | Servizio locale su `127.0.0.1`: maschera il testo e tiene in SQLite la corrispondenza stabile *segnaposto ↔ valore*, così una conversazione riaperta giorni dopo si può ancora ripristinare |
 | **Estensione del browser** (`app/extension/`) | Chrome ed Edge. Lavora dentro la pagina, prima che la richiesta venga cifrata: niente proxy, niente certificato. Registra anche le visite ai servizi AI e può bloccarli |
 | **Gateway per il terminale** (`app/gateway.py`) | Per Claude Code, Codex, opencode, aider e ogni strumento a cui si può indicare l'indirizzo del servizio: `http://127.0.0.1:8767/<servizio>`. Maschera messaggi, risultati degli strumenti e azioni già fatte; ripristina il testo e gli argomenti delle nuove azioni. Senza certificato |
@@ -44,8 +44,10 @@ in chiaro.
 
 ## Il modello
 
-Due taglie, stesse etichette e stessi dati di addestramento (180.000 documenti sintetici in italiano,
-scritti dal nostro generatore: per l'addestramento non è stato usato alcun dato personale reale).
+Due taglie, stesse etichette e stessi dati di addestramento: circa un milione di testi, cioè 200.000
+documenti sintetici in italiano scritti dal nostro generatore e le parti di addestramento di nove
+raccolte pubbliche in 23 lingue. Tutto è sintetico, tranne due raccolte di sentenze che contengono
+nomi già pubblici negli atti.
 
 | | Parametri | Dimensione | Tempo su processore* |
 |---|---|---|---|
@@ -54,17 +56,24 @@ scritti dal nostro generatore: per l'addestramento non è stato usato alcun dato
 
 \* per un testo breve, su un processore da scrivania.
 
-Su un insieme privato di 2.000 testi reali di assistenza informatica, mai usato per mettere a punto il
-modello e non pubblicabile, misurando *quanti dei valori sensibili noti risultano mascherati*:
+Su un insieme privato di 2.000 testi reali di assistenza informatica (non pubblicabile; le soglie
+sono state scelte su un secondo insieme tenuto a parte), misurando *quanti dei valori sensibili noti
+risultano mascherati*, e sul benchmark pubblico
+[PIIMB](https://huggingface.co/datasets/piimb/pii-masking-benchmark) (circa 150.000 frasi in sei
+gruppi, a livello di carattere, solo i pesi del modello):
 
-| | Valori noti protetti | Testo mascherato |
-|---|---|---|
-| `omissis-base` | 98,4 % | 17,2 % |
-| `omissis-small` | 98,0 % | 17,6 % |
+| | Valori noti protetti | Testo mascherato | Nomi di azienda in testo libero | PIIMB, F2 medio |
+|---|---|---|---|---|
+| `omissis-base` | 98,8 % | 17,0 % | 94 % | 0,911 |
+| `omissis-small` | 98,8 % | 17,2 % | 92 % | 0,912 |
+
+Misure del 13 novembre 2026. Il migliore degli altri 36 modelli in elenco su PIIMB ottiene in media
+0,836; i nostri sono primi in media, non in ogni gruppo, e le parti di addestramento delle stesse
+raccolte sono tra i loro dati di addestramento (quelle di prova non sono mai state usate).
 
 Cosa questi numeri **non** dicono: la precisione sui testi reali non è ancora misurata (serve un
-insieme etichettato a mano), e i "valori noti" sono quelli ricavabili dai dati dei ticket, non tutti i
-dati sensibili presenti nel testo. Dettagli e limiti nelle schede del modello in
+insieme etichettato a mano, in preparazione), e i "valori noti" sono quelli ricavabili dai dati dei
+ticket, non tutti i dati sensibili presenti nel testo. Dettagli e limiti nelle schede del modello in
 [`huggingface/`](huggingface/).
 
 I pesi si scaricano da Hugging Face con `model/download_model.py`; non stanno in questo repository.

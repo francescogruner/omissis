@@ -53,3 +53,26 @@ Inno Setup (licenza propria, libera). I pesi del modello non sono nell'installer
 nostro codice. Se si distribuisce un installer che la contiene, chi lo riceve deve poterla
 sostituire con una versione modificata: con Python basta lasciarla come modulo separato e riportare
 qui la sua licenza. Nessun componente di questo progetto è AGPL: per i PDF si usa `pypdf`.
+
+## Dati di addestramento dei modelli
+
+I pesi di `omissis-base` e `omissis-small` sono stati addestrati, oltre che sui documenti sintetici
+prodotti da questo progetto, sulle parti di addestramento di queste raccolte pubbliche, convertite
+alle etichette del progetto da `model/external_data.py` (che le scarica: non sono ridistribuite qui).
+Le parti di prova non sono state usate.
+
+| Raccolta | Autori | Licenza |
+|---|---|---|
+| [ai4privacy/pii-masking-openpii-1m](https://huggingface.co/datasets/ai4privacy/pii-masking-openpii-1m) | Ai4Privacy | CC BY 4.0 |
+| [nvidia/Nemotron-PII](https://huggingface.co/datasets/nvidia/Nemotron-PII) | NVIDIA | CC BY 4.0 |
+| [gretelai/gretel-pii-masking-en-v1](https://huggingface.co/datasets/gretelai/gretel-pii-masking-en-v1) | Gretel | Apache-2.0 |
+| [gretelai/synthetic_pii_finance_multilingual](https://huggingface.co/datasets/gretelai/synthetic_pii_finance_multilingual) | Gretel | Apache-2.0 |
+| [piimb/privy](https://huggingface.co/datasets/piimb/privy) (da beki/privy) | Benjamin Kilimnik | MIT |
+| [dglover1/mapa-eur-lex](https://huggingface.co/datasets/dglover1/mapa-eur-lex) | progetto MAPA, su testi di EUR-Lex | CC BY 4.0 |
+| [Wismut/nym-pii-multilingual-data](https://huggingface.co/datasets/Wismut/nym-pii-multilingual-data) | progetto nym | MIT |
+| [Text Anonymization Benchmark](https://huggingface.co/datasets/mattmdjaga/text-anonymization-benchmark-train) | Pilán, Lison, Øvrelid, Papadopoulou, Sánchez, Batet (2022), su sentenze della Corte europea dei diritti dell'uomo | MIT |
+| [urchade/synthetic-pii-ner-mistral-v1](https://huggingface.co/datasets/urchade/synthetic-pii-ner-mistral-v1) | Urchade Zaratiana | Apache-2.0 |
+
+Il benchmark [PIIMB](https://huggingface.co/datasets/piimb/pii-masking-benchmark) (CC BY-NC 4.0) è
+usato solo per misurare: `model/benchmark.py` lo scarica, non è ridistribuito e non è servito ad
+addestrare.

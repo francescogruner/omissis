@@ -22,6 +22,10 @@ Modes:
   full    what Omissis really does: decision threshold, checksum rules, list of well-known names
           (personal lists are left empty so the result does not depend on the PC)
 
+Profiles (models from version 2 on): "strict" turns on every category the model knows; "standard" is
+how Omissis ships, with the extra categories (dates, ages, occupations, special categories) left in
+clear because removing them changes the meaning of the text.
+
 These test sets were never used to train or tune the models.
 """
 import argparse
@@ -105,15 +109,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("model")
     ap.add_argument("--mode", choices=["full", "model"], default="full")
+    ap.add_argument("--profile", choices=["strict", "standard"], default="strict",
+                    help="strict: every category the model knows; standard: as Omissis ships, extra categories left in clear")
     ap.add_argument("--limit", type=int, default=0, help="only the first N rows of each file (to try it out)")
     ap.add_argument("--by-label", dest="by_label", default="", help="also print recall per benchmark label: 'all', or a piece of a task name (e.g. Italian, mapa)")
     ap.add_argument("--save", action="store_true", help="write the scores to data/benchmarks/results/<model>-<mode>.json")
     a = ap.parse_args()
     fetch()
+    extra = {} if a.profile == "standard" else {"spente": []}
     if a.mode == "model":
-        detector = Rilevatore(a.model, regole=False, soglia=None, noti=False, mai=[], sempre=[])
+        detector = Rilevatore(a.model, regole=False, soglia=None, noti=False, mai=[], sempre=[], **extra)
     else:
-        detector = Rilevatore(a.model, mai=[], sempre=[])
+        detector = Rilevatore(a.model, mai=[], sempre=[], **extra)
 
     def predict(texts):
         t0, out = time.time(), detector.molti(texts, completo=a.mode == "full")
@@ -155,7 +162,7 @@ def main():
                 groups[group].add(r["text"], gold, spans, ignore)
 
     name = Path(a.model).name
-    print(f"\n{name} · mode {a.mode} · {sentences:,} texts in {seconds:.0f} s ({1000 * seconds / max(1, sentences):.1f} ms each)\n")
+    print(f"\n{name} · mode {a.mode} · profile {a.profile} · {sentences:,} texts in {seconds:.0f} s ({1000 * seconds / max(1, sentences):.1f} ms each)\n")
     print(f"{'group':44} {'docs':>7} {'recall':>7} {'prec.':>7} {'F1':>6} {'F2':>6} {'FPR':>6} {'with a miss':>12}")
     results = {}
     for group in sorted(groups):
@@ -174,9 +181,9 @@ def main():
             for (_, label), (n, chars, hit, missed) in sorted(((k, v) for k, v in by_label.items() if k[0] == group), key=lambda kv: -kv[1][1]):
                 print(f"  {label:28} {n:6,} entities  {hit / max(1, chars):6.1%} of characters covered  {missed:6,} fully missed")
     if a.save:
-        target = DATA / "results" / f"{name}-{a.mode}.json"
+        target = DATA / "results" / f"{name}-{a.mode}-{a.profile}.json"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps({"model": name, "mode": a.mode, "texts": sentences, "seconds": round(seconds, 1), "scores": results},
+        target.write_text(json.dumps({"model": name, "mode": a.mode, "profile": a.profile, "texts": sentences, "seconds": round(seconds, 1), "scores": results},
                                      ensure_ascii=False, indent=1), encoding="utf-8")
         print("saved", target)
 

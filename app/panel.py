@@ -476,6 +476,11 @@ class Gestore(BaseHTTPRequestHandler):
                 f = DATI / "token_extension.txt"
                 self._rispondi(200, {"cartella": str(QUI / "extension"), "porta": PORTA_MOTORE,
                                      "token": f.read_text(encoding="utf-8").strip() if f.exists() else ""})
+            elif u.path == "/api/categorie":   # le categorie in piu' che il modello in uso conosce, e quelle accese
+                try:
+                    self._rispondi(200, motore("/profilo", {}))
+                except Exception:   # noqa: BLE001
+                    self._rispondi(200, {"conosciute": [], "accese": settings.leggi().get("categorie", [])})
             elif u.path == "/api/scorciatoie":
                 self._rispondi(200, scorciatoie())
             elif u.path == "/api/inventario":
@@ -522,6 +527,11 @@ class Gestore(BaseHTTPRequestHandler):
                 nuove = settings.scrivi({**settings.leggi(), **{k: v for k, v in dati.items() if k in settings.PREDEFINITE}})
                 if "scorciatoie" in dati and SCORCIATOIE is not None:
                     SCORCIATOIE.imposta(clipboard.scelte(nuove))
+                if "categorie" in dati:   # il motore rilegge quali categorie in piu' sostituire
+                    try:
+                        motore("/profilo", {})
+                    except Exception:   # noqa: BLE001  (motore spento: le leggera' all'avvio)
+                        pass
                 self._rispondi(200, {**nuove, "da_riavviare": SUP.da_riavviare()})
             elif p == "/api/servizi":
                 imp = settings.leggi()

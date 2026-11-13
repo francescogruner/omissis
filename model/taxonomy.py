@@ -14,7 +14,7 @@ Regole di confine (valgono per dati di addestramento e benchmark):
     (INPS, Agenzia delle Entrate, Microsoft, Fortinet) NON si mascherano.
   - CITTA si maschera quando e' residenza, sede, luogo di nascita o parte di un indirizzo;
     non dentro il nome di un ente ("Tribunale di Milano").
-  - DATA_NASCITA si maschera; le altre date no.
+  - DATA_NASCITA si maschera sempre; le altre date sono DATA, che di serie resta in chiaro.
   - ID_PRATICA e' un numero che porta a una persona: polizza, sinistro, matricola, cartella
     clinica, protocollo, RG, prenotazione, PNR, ordine, codice cliente. Numeri di fattura,
     tracking e ticket no.
@@ -56,17 +56,30 @@ TASSONOMIA = [
     ("SEGRETO",        "password, token, chiavi, stringhe di connessione",       ("regole", "modello"),               "maschera", 0),
     ("ID_CLOUD",       "tenant ID, subscription ID, account cloud",              ("modello", "regole"),               "maschera", 0),
     ("ID_DISPOSITIVO", "seriale, IMEI, ICCID, service tag, ID di controllo remoto", ("modello", "dizionario"),        "maschera", 0),
-    ("SALUTE",         "diagnosi, farmaci, esenzioni, codici ICD",               ("modello",),                        "profilo",  2),
-    ("DATO_PARTICOLARE", "sindacato, religione, orientamento, condanne (art. 9 e 10 GDPR)", ("modello",),            "profilo",  2),
-    ("DATA",           "date diverse dalla nascita",                             (),                                  "lascia",   2),
+    # --- dalla versione 2: quasi-identificatori e categorie particolari (art. 9 GDPR). Il modello le riconosce tutte;
+    #     nel programma sono spente finche' non si sceglie la protezione rigorosa, perche' toglierle cambia il senso del testo.
+    ("DATA",           "date e date con ora, diverse dalla nascita",             ("modello",),                        "profilo",  0),
+    ("ORA",            "orari",                                                  ("modello",),                        "profilo",  0),
+    ("ETA",            "eta' di una persona (il numero)",                        ("modello",),                        "profilo",  0),
+    ("GENERE",         "sesso o genere",                                         ("modello",),                        "profilo",  0),
+    ("TITOLO",         "titoli e appellativi: Dott., Avv., Sig.ra",              ("modello",),                        "profilo",  0),
+    ("PROFESSIONE",    "mestiere, mansione, condizione lavorativa",              ("modello",),                        "profilo",  0),
+    ("ISTRUZIONE",     "titolo di studio",                                       ("modello",),                        "profilo",  0),
+    ("ORIGINE",        "nazionalita', etnia, lingua madre",                      ("modello",),                        "profilo",  0),
+    ("LUOGO",          "paese, regione, provincia, coordinate (non la citta')",  ("modello",),                        "profilo",  0),
+    ("SALUTE",         "diagnosi, farmaci, gruppo sanguigno, invalidita'",       ("modello",),                        "profilo",  0),
+    ("RELIGIONE",      "fede o convinzione religiosa",                           ("modello",),                        "profilo",  0),
+    ("POLITICA",       "opinioni politiche, appartenenza a partiti e sindacati", ("modello",),                        "profilo",  0),
+    ("ORIENTAMENTO",   "orientamento sessuale",                                  ("modello",),                        "profilo",  0),
     ("IMPORTO",        "somme di denaro",                                        (),                                  "lascia",   2),
 ]
 
-ETICHETTE = [t[0] for t in TASSONOMIA if t[4] == 0]          # quelle del modello v0
+ETICHETTE = [t[0] for t in TASSONOMIA if t[4] == 0]          # quelle che il modello riconosce
+SPENTE = [t[0] for t in TASSONOMIA if t[4] == 0 and t[3] == "profilo"]   # riconosciute ma non sostituite, salvo richiesta
 CLASSI = ["O"] + [f"{p}-{e}" for e in ETICHETTE for p in ("B", "I")]
 ID_CLASSE = {c: i for i, c in enumerate(CLASSI)}
 
 if __name__ == "__main__":
-    print(f"{len(ETICHETTE)} etichette nel modello v0, {len(CLASSI)} classi BIO")
+    print(f"{len(ETICHETTE)} etichette nel modello ({len(SPENTE)} spente di serie), {len(CLASSI)} classi BIO")
     for e, d, s, a, f in TASSONOMIA:
         print(f"{e:17} fase {f}  {a:9} {'+'.join(s) or '-':22} {d}")

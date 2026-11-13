@@ -490,6 +490,19 @@
  "tipo.ripristinati": "ripristinati",
  "tipo.sconosciuti": "segnaposto non riconosciuti",
  "tipo.pagine_lette": "pagine lette dall'immagine (da rileggere)",
+ "tipo.DATA": "Date",
+ "tipo.ORA": "Orari",
+ "tipo.ETA": "Età",
+ "tipo.GENERE": "Genere",
+ "tipo.TITOLO": "Titoli",
+ "tipo.PROFESSIONE": "Professioni",
+ "tipo.ISTRUZIONE": "Titoli di studio",
+ "tipo.ORIGINE": "Origine e nazionalità",
+ "tipo.LUOGO": "Luoghi",
+ "tipo.SALUTE": "Salute",
+ "tipo.RELIGIONE": "Religione",
+ "tipo.POLITICA": "Opinioni politiche",
+ "tipo.ORIENTAMENTO": "Orientamento sessuale",
 
  "programma.protezione_non_attiva": "La protezione non è attiva: avviala prima.",
  "programma.non_trovato": "Non trovato.",
@@ -657,5 +670,12 @@
  "inventario.nota": "Nota",
  "inventario.nota_per": "Nota per {nome}",
  "inventario.nessuno_filtro": "Nessuna voce corrisponde ai filtri.",
- "inventario.vuoto": "Inventario vuoto."
+ "inventario.vuoto": "Inventario vuoto.",
+
+ "categorie.titolo": "Categorie in più",
+ "categorie.sotto": "Il modello le riconosce, ma di serie le lascia in chiaro: toglierle tutte rende le risposte dell'AI meno utili, perché spesso sono proprio il contenuto del testo. Accendile quando serve la protezione più stretta.",
+ "categorie.particolari": "Dati particolari",
+ "categorie.particolari.sotto": "Quelli che il GDPR tratta come più delicati: {elenco}.",
+ "categorie.dettagli": "Dettagli che aiutano a riconoscere una persona",
+ "categorie.dettagli.sotto": "Da soli non dicono chi è, insieme sì: {elenco}."
 }

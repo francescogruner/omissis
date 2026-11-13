@@ -29,7 +29,7 @@ is sent to any Omissis server, because there is none.
 
 | Part | What it does |
 |---|---|
-| **Model** (`model/`) | Italian-first PII detector: a token classifier on [mmBERT](https://huggingface.co/jhu-clsp/mmBERT-base) with 28 labels, plus checksum rules (tax code, VAT number, IBAN, cards) and allow/deny lists |
+| **Model** (`model/`) | Italian-first PII detector: a token classifier on [mmBERT](https://huggingface.co/jhu-clsp/mmBERT-base) with 41 labels (28 identifiers always masked, 13 more on request), plus checksum rules (tax code, VAT number, IBAN, cards) and allow/deny lists |
 | **Engine** (`app/engine.py`) | Local service on `127.0.0.1`: masks text and keeps a stable vault *placeholder ↔ value* in SQLite, so a conversation reopened days later can still be restored |
 | **Browser extension** (`app/extension/`) | Chrome / Edge, Manifest V3. Works inside the page, before the request is encrypted: no proxy, no certificate. Also logs visits to AI services and can block them |
 | **Terminal gateway** (`app/gateway.py`) | For Claude Code, Codex, opencode, aider and any tool with a configurable base URL: point it at `http://127.0.0.1:8767/<service>`. Masks prompts, tool results and past tool calls, restores text and new tool arguments. No certificate |
@@ -61,8 +61,10 @@ If the engine does not answer, protected requests are **blocked**, never forward
 
 ## The model
 
-Two sizes, same labels and same training data (180,000 synthetic Italian documents written by our
-own generator; no real personal data was used for training):
+Two sizes, same labels and same training data: about one million texts, made of 200,000 synthetic
+Italian documents written by our own generator and the training splits of nine public datasets in 23
+languages. Everything is synthetic except two collections of court decisions, which contain names
+that are already public in the decisions.
 
 | | Parameters | Size | CPU latency* |
 |---|---|---|---|
@@ -71,17 +73,23 @@ own generator; no real personal data was used for training):
 
 \* per short text on a desktop CPU, single thread of work.
 
-On a private held-out set of 2,000 real IT help-desk texts (never used for tuning, not releasable),
-measured as *share of known sensitive values that ended up masked*:
+On a private set of 2,000 real IT help-desk texts (not releasable; the thresholds were chosen on a
+second set kept apart), measured as *share of known sensitive values that ended up masked*, and on
+the public benchmark [PIIMB](https://huggingface.co/datasets/piimb/pii-masking-benchmark) (about
+150,000 sentences in six tasks, character level, model weights alone):
 
-| | Known values protected | Share of text masked |
-|---|---|---|
-| `omissis-base` | 98.4 % | 17.2 % |
-| `omissis-small` | 98.0 % | 17.6 % |
+| | Known values protected | Share of text masked | Company names in free text | PIIMB, average F2 |
+|---|---|---|---|---|
+| `omissis-base` | 98.8 % | 17.0 % | 94 % | 0.911 |
+| `omissis-small` | 98.8 % | 17.2 % | 92 % | 0.912 |
+
+Measured on 13 November 2026. The best of the other 36 models listed by PIIMB scores 0.836 on
+average; ours are first on average, not in every task, and the training splits of the same datasets
+are among their training data (the test splits were never used).
 
 What these numbers are **not**: precision on real text has not been measured yet (it needs a
-hand-labelled set), and "known values" are those that could be derived from ticket metadata, not
-every sensitive value in the text. Details and limits are in the model cards under
+hand-labelled set, which is being prepared), and "known values" are those that could be derived from
+ticket metadata, not every sensitive value in the text. Details and limits are in the model cards under
 [`huggingface/`](huggingface/).
 
 Weights are published on Hugging Face (`francescogruner/omissis-base`, `francescogruner/omissis-small`)

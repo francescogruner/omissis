@@ -193,6 +193,25 @@ vengono saltati, non copiati); da PDF e immagini esce un file di testo; nei
 fogli Excel ogni cella è valutata da sola, senza l'intestazione della colonna, quindi il modello
 può sbagliare di più; i nomi dei file e dei fogli restano come sono.
 
+## Categorie in più
+
+Dalla versione 2 il modello riconosce, oltre agli identificativi diretti (nomi, contatti, codici,
+dati informatici), altre 13 categorie in due gruppi:
+
+- **dati particolari**, quelli che il GDPR tratta come più delicati: salute, religione, opinioni
+  politiche e sindacali, orientamento sessuale, origine e nazionalità;
+- **dettagli che aiutano a riconoscere una persona**: date, orari, età, genere, titoli,
+  professione, titolo di studio, luoghi (paese, regione, provincia).
+
+Di serie **restano in chiaro**: spesso sono proprio il contenuto su cui l'AI deve lavorare («il
+paziente ha il diabete», «la riunione è il 3 marzo»), e una volta tolto chi è la persona non sono
+più riferibili a nessuno. Chi ha bisogno della protezione più stretta le accende, un gruppo per
+volta, in Impostazioni → Riconoscimento → Categorie in più; l'effetto è immediato e vale per tutti
+i collegamenti. Tecnicamente: le categorie spente sono elencate in `omissis.json` accanto ai pesi
+del modello, quelle accese stanno nell'impostazione `categorie`, e la probabilità che il modello
+assegna a una categoria spenta viene contata come «non sensibile», così spegnerle non cambia le
+decisioni sulle altre. Con un modello della versione 1 la scheda non compare.
+
 ## Archivio
 
 `data\vault.sqlite` tiene la corrispondenza tra ogni valore e il suo segnaposto, cifrata con la

@@ -490,6 +490,19 @@
  "tipo.ripristinati": "restored",
  "tipo.sconosciuti": "placeholders not recognised",
  "tipo.pagine_lette": "pages read from the image (read them through)",
+ "tipo.DATA": "Dates",
+ "tipo.ORA": "Times",
+ "tipo.ETA": "Age",
+ "tipo.GENERE": "Gender",
+ "tipo.TITOLO": "Titles",
+ "tipo.PROFESSIONE": "Occupations",
+ "tipo.ISTRUZIONE": "Education",
+ "tipo.ORIGINE": "Origin and nationality",
+ "tipo.LUOGO": "Places",
+ "tipo.SALUTE": "Health",
+ "tipo.RELIGIONE": "Religion",
+ "tipo.POLITICA": "Political views",
+ "tipo.ORIENTAMENTO": "Sexual orientation",
 
  "programma.protezione_non_attiva": "Protection is off: start it first.",
  "programma.non_trovato": "Not found.",
@@ -657,5 +670,12 @@
  "inventario.nota": "Note",
  "inventario.nota_per": "Note for {nome}",
  "inventario.nessuno_filtro": "No item matches the filters.",
- "inventario.vuoto": "Empty inventory."
+ "inventario.vuoto": "Empty inventory.",
+
+ "categorie.titolo": "Extra categories",
+ "categorie.sotto": "The model recognises them, but by default leaves them in clear: removing them all makes the AI's answers less useful, because they are often the very content of the text. Turn them on when you need the strictest protection.",
+ "categorie.particolari": "Special categories",
+ "categorie.particolari.sotto": "The ones the GDPR treats as most sensitive: {elenco}.",
+ "categorie.dettagli": "Details that help recognise a person",
+ "categorie.dettagli.sotto": "Alone they do not say who it is, together they do: {elenco}."
 }

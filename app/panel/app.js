@@ -534,12 +534,20 @@ AGGIORNA.impostazioni = s => {
   $("#aggNota").textContent = t(`aggiornamenti.nota.${["store", "sorgenti"].includes(a.canale) ? a.canale : "installer"}`);
 };
 const impostazioniRiconoscimento = prova(async el => {
-  const [i, l] = await Promise.all([api("/api/impostazioni"), api("/api/liste")]);
+  const [i, l, cat] = await Promise.all([api("/api/impostazioni"), api("/api/liste"), api("/api/categorie")]);
+  // le categorie in più del modello, in due gruppi: si accendono insieme perché da sole servono a poco
+  const GRUPPI = {particolari: ["SALUTE", "RELIGIONE", "POLITICA", "ORIENTAMENTO", "ORIGINE"],
+                  dettagli: ["DATA", "ORA", "ETA", "GENERE", "TITOLO", "PROFESSIONE", "ISTRUZIONE", "LUOGO"]};
+  const gruppi = Object.entries(GRUPPI).map(([nome, voci]) => [nome, voci.filter(v => cat.conosciute.includes(v))]).filter(([, voci]) => voci.length);
   el.innerHTML = `<section class="scheda" aria-label="${esc(t("impostazioni.scheda.riconoscimento"))}">
       ${riga(t("riconoscimento.modello"), esc(t("riconoscimento.modello.sotto")), `<select id="modello" aria-label="${esc(t("riconoscimento.modello"))}"><option value="omissis-base">${esc(t("riconoscimento.modello.base"))}</option><option value="omissis-small">${esc(t("riconoscimento.modello.small"))}</option></select>`)}
       ${riga(t("riconoscimento.dove"), "", `<select id="device" aria-label="${esc(t("riconoscimento.dove"))}">${["auto", "cuda", "cpu"].map(v => `<option value="${v}">${esc(t(`riconoscimento.dove.${v}`))}</option>`).join("")}</select>`)}
       ${["casella", "allegati", "ripristina", "blocca_file"].map(k => riga(t(`riconoscimento.${k}`), esc(t(`riconoscimento.${k}.sotto`)), levetta(k, t(`riconoscimento.${k}`)))).join("")}
     </section>
+    ${gruppi.length ? `<section class="scheda" aria-labelledby="catTitolo">
+      <div class="dentro"><h2 id="catTitolo">${esc(t("categorie.titolo"))}</h2><p>${esc(t("categorie.sotto"))}</p></div>
+      ${gruppi.map(([nome, voci]) => riga(t(`categorie.${nome}`), esc(t(`categorie.${nome}.sotto`, {elenco: voci.map(tipoDato).join(", ").toLowerCase()})), levetta(`cat-${nome}`, t(`categorie.${nome}`)))).join("")}
+    </section>` : ""}
     <div class="due">
       ${scheda(`<h2 id="lSempre">${esc(t("liste.sempre"))}</h2><p>${esc(t("liste.sempre.sotto"))}</p><textarea id="sempre" aria-labelledby="lSempre"></textarea>`)}
       ${scheda(`<h2 id="lMai">${esc(t("liste.mai"))}</h2><p>${esc(t("liste.mai.sotto"))}</p><textarea id="mai" aria-labelledby="lMai"></textarea>`)}
@@ -547,6 +555,14 @@ const impostazioniRiconoscimento = prova(async el => {
     <div class="riga"><button class="bottone primario" id="salvaListe">${esc(t("liste.salva"))}</button><span class="sfumato piccolo">${esc(t("liste.nota"))}</span></div>`;
   for (const k of ["modello", "device"]) { $(`#${k}`).value = i[k]; $(`#${k}`).onchange = prova(e => salva({[k]: e.target.value})); }
   for (const k of ["casella", "allegati", "ripristina", "blocca_file"]) { $(`#${k}`).checked = i[k] !== false && !!i[k]; $(`#${k}`).onchange = prova(e => salva({[k]: e.target.checked})); }
+  let accese = cat.accese.slice();
+  for (const [nome, voci] of gruppi) {
+    $(`#cat-${nome}`).checked = voci.every(v => accese.includes(v));
+    $(`#cat-${nome}`).onchange = prova(async e => {
+      accese = accese.filter(v => !voci.includes(v)).concat(e.target.checked ? voci : []);
+      await salva({categorie: accese});
+    });
+  }
   $("#sempre").value = l.sempre.join("\n"); $("#mai").value = l.mai.join("\n");
   $("#salvaListe").onclick = prova(async () => {
     const r = await api("/api/liste", {sempre: $("#sempre").value.split("\n"), mai: $("#mai").value.split("\n")});

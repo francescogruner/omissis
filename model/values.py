@@ -360,6 +360,12 @@ def _fmt_iban(r, i):
     return "-".join(i[k:k + 4] for k in range(0, 27, 4))
 
 
+FAMOSI_OMONIMI = ["Giuseppe Verdi", "Vasco Rossi", "Valentino Rossi", "Mario Draghi", "Giuseppe Conte", "Matteo Renzi", "Matteo Salvini",
+                  "Enrico Letta", "Paolo Maldini", "Roberto Baggio", "Francesco Totti", "Laura Pausini", "Lucio Dalla", "Renzo Piano",
+                  "Carlo Rubbia", "Elsa Fornero", "Giovanni Falcone", "Aldo Moro", "Romano Prodi", "Enzo Ferrari", "Giorgio Armani",
+                  "Primo Levi", "Umberto Eco", "Italo Calvino", "Sergio Mattarella", "Antonio Tajani", "Marco Polo", "Andrea Bocelli"]
+
+
 class Persona:
     ETI = dict(nc="PERSONA", cn="PERSONA", CN="PERSONA", NC="PERSONA", n="PERSONA", c="PERSONA", C="PERSONA",
                N="PERSONA", nc_min="PERSONA", iniz="PERSONA", x="PERSONA", n_c="PERSONA", c_n="PERSONA", cC="PERSONA",
@@ -368,7 +374,8 @@ class Persona:
                tel_parole="TELEFONO", cf="CF", cf_min="CF", cf_sp="CF", cf_err="CF", dn="DATA_NASCITA",
                citta="CITTA", luogo_n="CITTA", via="INDIRIZZO", cap="CAP", iban="IBAN", carta="CARTA", cvv="CARTA_SEC",
                scad="CARTA_SEC", targa="TARGA", vin="ID_VEICOLO", ci="DOC_ID", passap="DOC_ID", patente="DOC_ID",
-               ts="DOC_ID", user="ACCOUNT", upn="ACCOUNT", handle="ACCOUNT", matr="ID_PRATICA")
+               ts="DOC_ID", user="ACCOUNT", upn="ACCOUNT", handle="ACCOUNT", matr="ID_PRATICA",
+               eta="ETA", sig="TITOLO", tit="TITOLO", sesso="GENERE")
 
     def __init__(s, r, az=None):
         s.r, s.az = r, az
@@ -385,6 +392,8 @@ class Persona:
                 s.cogn = r.choice(["De ", "Di ", "Lo ", "D'", "Dal ", "Della ", "La ", "Del "]) + s.cogn
             elif f < .12:
                 s.cogn += r.choice([" ", " ", "-"]) + r.choice(COGNOMI)
+        if r.random() < .012:   # un omonimo di una persona famosa resta una persona da proteggere
+            s.nome, _, s.cogn = r.choice([x for x in FAMOSI_OMONIMI]).partition(" ")
         s._n, s._c = pulisci(s.nome).lower(), pulisci(s.cogn).lower()
         s._g, s._m, s._a = r.randint(1, 28), r.randint(1, 12), r.randint(1940, 2015)
         s._citta, s._via, s._cap, s._ln = r.choice(COMUNI), indirizzo(r), cifre(r, 5), r.choice(COMUNI)
@@ -458,6 +467,8 @@ class Persona:
     def handle(s): return "@" + s.r.choice([s._user, s._n + s._c + cifre(s.r, 2), s._n + "_" + s._c, s._c + "." + s._n])
     def matr(s): return s.r.choice(["", "M", "MAT-", "00"]) + cifre(s.r, s.r.randint(4, 6))
     def sig(s): return "Sig.ra" if s.f else "Sig."
+    def tit(s): return s.r.choice(TITOLI_F if s.f else TITOLI_M)
+    def sesso(s): return s.r.choice(["femmina", "F", "donna", "femminile", "Femmina"] if s.f else ["maschio", "M", "uomo", "maschile", "Maschio"])
     def oa(s): return "a" if s.f else "o"
 
 
@@ -599,7 +610,8 @@ class Varie:
     ETI = dict(marchio="ORG", polizza="ID_PRATICA", sinistro="ID_PRATICA", cartella="ID_PRATICA", prot="ID_PRATICA", rg="ID_PRATICA",
                pren="ID_PRATICA", pnr="ID_PRATICA", ordine="ID_PRATICA", cli="ID_PRATICA", mutuo="ID_PRATICA",
                nre="ID_PRATICA", pratica="ID_PRATICA", inps="ID_PRATICA", catasto="CATASTO", pod="ID_UTENZA",
-               pdr="ID_UTENZA", forn="ID_UTENZA", contatore="ID_UTENZA")
+               pdr="ID_UTENZA", forn="ID_UTENZA", contatore="ID_UTENZA",
+               data="DATA", ora="ORA", diag="SALUTE", farmaco="SALUTE")
 
     def __init__(s, r): s.r = r
     def data(s): return data(s.r)
@@ -665,7 +677,171 @@ class Varie:
     def contatore(s): return s.r.choice([cifre(s.r, 8), caso(s.r, 2, string.ascii_uppercase) + cifre(s.r, 9), f"{cifre(s.r, 2)}E{cifre(s.r, 9)}"])
 
 
+# --- versione 2: quasi-identificatori e categorie particolari. Valori inventati, scelti a caso: non descrivono nessuno.
+TITOLI_M = ["Dott.", "Dott.", "Dr.", "Avv.", "Ing.", "Arch.", "Geom.", "Rag.", "Prof.", "Sig.", "Sig.", "Signor", "On.", "Cav.", "Notaio", "P.I.", "dott.", "avv.", "ing."]
+TITOLI_F = ["Dott.ssa", "Dott.ssa", "Dr.ssa", "Avv.", "Ing.", "Arch.", "Prof.ssa", "Sig.ra", "Sig.ra", "Signora", "Sig.na", "On.", "Notaio", "dott.ssa", "avv."]
+PROFESSIONI = ("impiegato impiegata operaio operaia insegnante infermiere infermiera medico avvocato commercialista geometra architetto "
+               "ingegnere idraulico elettricista muratore cuoco cameriera commessa autista magazziniere programmatore sistemista "
+               "farmacista veterinario dentista notaio giornalista fotografo parrucchiera estetista falegname meccanico carrozziere "
+               "agricoltore panettiere macellaio barista bidello segretaria ragioniere contabile fisioterapista psicologa "
+               "biologo chimico ricercatrice bibliotecaria postino vigile carabiniere pompiere camionista tassista pilota "
+               "hostess portiere badante colf baby-sitter traduttrice interprete grafico designer sviluppatore analista "
+               "consulente dirigente imprenditore artigiano commerciante rappresentante saldatore tornitore fresatore gruista").split()
+PROFESSIONI += ["tecnico informatico", "responsabile amministrativo", "agente di commercio", "consulente del lavoro", "addetta alle vendite",
+                "medico di base", "direttore tecnico", "IT manager", "libero professionista", "responsabile del personale",
+                "addetto alla logistica", "operatore socio-sanitario", "assistente sociale", "guardia giurata", "docente di ruolo",
+                "responsabile di produzione", "capo cantiere", "addetta alla contabilità", "tecnico di laboratorio", "amministratore di condominio",
+                "project manager", "software engineer", "account manager", "responsabile acquisti", "educatrice professionale",
+                "operaio specializzato", "impiegata amministrativa", "autista di autobus", "collaboratore scolastico", "medico chirurgo",
+                "giudice", "magistrato", "cancelliere", "avvocato generale", "presidente di sezione", "giudice relatore", "procuratore",
+                "pubblico ministero", "ufficiale giudiziario", "funzionario", "dirigente scolastico", "sindaco", "assessore",
+                "segretario comunale", "professore ordinario", "ricercatore", "primario", "direttore sanitario", "revisore dei conti",
+                "curatore fallimentare", "perito", "consulente tecnico d'ufficio", "mediatore", "ispettore del lavoro"]
+STATI_LAVORO = ["disoccupato", "disoccupata", "pensionato", "pensionata", "in cassa integrazione", "assunto a tempo indeterminato",
+                "assunta a tempo determinato", "lavoratore autonomo", "studente", "studentessa", "casalinga", "part-time", "tirocinante",
+                "in cerca di prima occupazione", "apprendista", "stagionale", "in mobilità", "full time"]
+STUDI = ["laurea magistrale in Economia", "laurea triennale in Informatica", "laurea in Giurisprudenza", "laurea in Medicina e Chirurgia",
+         "diploma di ragioneria", "diploma di liceo scientifico", "diploma di liceo classico", "licenza media", "licenza elementare",
+         "dottorato di ricerca in Chimica", "master in Diritto tributario", "diploma di perito industriale", "qualifica professionale",
+         "diploma di geometra", "laurea in Ingegneria gestionale", "diploma magistrale", "laurea in Scienze infermieristiche",
+         "diploma ITIS", "laurea in Lettere", "diploma alberghiero", "master di secondo livello", "specializzazione in Cardiologia",
+         "terza media", "diploma di maturità", "laurea in Psicologia", "abilitazione forense"]
+NAZIONALITA = ("italiana italiano rumena rumeno albanese marocchina marocchino cinese ucraina ucraino tedesca tedesco francese spagnola "
+               "polacca polacco moldava indiana indiano filippina senegalese egiziano pakistano brasiliana peruviana nigeriano tunisina "
+               "bengalese svizzera austriaco croata serbo greca turco russa americano inglese argentina colombiana").split()
+ORIGINI = ["di origine rom", "di etnia curda", "di origine magrebina", "afrodiscendente", "di origine sinti", "madrelingua araba",
+           "di madrelingua tedesca", "di lingua slovena", "madrelingua ucraina", "di origine albanese", "di etnia tamil", "di origine cinese",
+           "parla solo rumeno", "madrelingua spagnolo", "di origine eritrea"]
+RELIGIONI = ["cattolico", "cattolica", "musulmano", "musulmana", "ebreo", "ebrea", "evangelico", "ortodossa", "buddista", "induista",
+             "testimone di Geova", "valdese", "ateo", "agnostica", "sikh", "di religione islamica", "di fede ebraica", "cattolico praticante",
+             "di religione ortodossa", "protestante", "di fede buddista", "di confessione valdese", "mormone", "avventista"]
+POLITICHE = ["iscritto al Partito Democratico", "tesserata di Fratelli d'Italia", "simpatizzante della Lega", "militante del Movimento 5 Stelle",
+             "elettore di Forza Italia", "iscritto alla CGIL", "delegata CISL", "rappresentante sindacale UIL", "di idee progressiste",
+             "di orientamento conservatore", "attivista di Sinistra Italiana", "iscritto a un sindacato di base", "candidato in una lista civica",
+             "iscritta alla FIOM", "vicino ai Verdi", "consigliere comunale di Azione", "tesserato di Italia Viva", "RSU della USB",
+             "di simpatie anarchiche", "iscritto ai Radicali"]
+ORIENTAMENTI = ["omosessuale", "eterosessuale", "bisessuale", "gay", "lesbica", "asessuale", "pansessuale"]
+SALUTE = ["gruppo sanguigno A positivo", "gruppo sanguigno 0 Rh negativo", "gruppo B+", "gruppo AB negativo", "0+", "A-",
+          "invalidità civile al 75%", "invalidità al 46%", "allergia alla penicillina", "portatore di pacemaker", "celiachia",
+          "in gravidanza alla ventesima settimana", "intolleranza al lattosio", "disturbo d'ansia generalizzato", "sieropositivo",
+          "dializzato", "ipovedente", "portatrice di protesi d'anca", "in trattamento chemioterapico", "asma bronchiale",
+          "depressione maggiore", "epilessia", "disabilità ai sensi della legge 104"]
+REGIONI = ("Lombardia Piemonte Veneto Liguria Toscana Lazio Campania Puglia Sicilia Sardegna Calabria Umbria Marche Abruzzo Molise "
+           "Basilicata Friuli-Venezia Giulia Trentino-Alto Adige Emilia-Romagna Valle d'Aosta").split()
+REGIONI = [x for x in REGIONI if x not in ("Giulia", "Adige", "d'Aosta")] + ["Friuli-Venezia Giulia", "Trentino-Alto Adige", "Valle d'Aosta"]
+PAESI = ("Italia Francia Germania Spagna Svizzera Austria Romania Albania Marocco Cina Ucraina Polonia Regno Unito Stati Uniti Brasile "
+         "India Egitto Tunisia Grecia Belgio Olanda Portogallo Croazia Slovenia Argentina Senegal Nigeria Pakistan Filippine").split()
+PAESI = [x for x in PAESI if x not in ("Regno", "Unito", "Stati", "Uniti")] + ["Regno Unito", "Stati Uniti", "San Marino"]
+
+
+class Profilo:
+    """Ciò che descrive una persona senza nominarla: mestiere, studi, origine, convinzioni, salute, orientamento, luoghi."""
+    ETI = dict(prof="PROFESSIONE", stato="PROFESSIONE", ruolo="PROFESSIONE", studio="ISTRUZIONE", naz="ORIGINE", origine="ORIGINE",
+               religione="RELIGIONE", politica="POLITICA", orient="ORIENTAMENTO", salute="SALUTE", regione="LUOGO", paese="LUOGO",
+               provincia="LUOGO", genere="GENERE", eta="ETA")
+
+    def __init__(s, r): s.r = r
+    def prof(s): return s.r.choice(PROFESSIONI)
+    def stato(s): return s.r.choice(STATI_LAVORO)
+    def ruolo(s): return s.r.choice(RUOLI_MESTIERE)
+    def ufficio(s): return s.r.choice(RUOLI_UFFICIO)     # un reparto, non un mestiere: resta senza etichetta
+    def studio(s): return s.r.choice(STUDI)
+    def naz(s): return s.r.choice(NAZIONALITA)
+    def origine(s): return s.r.choice(ORIGINI)
+    def religione(s): return s.r.choice(RELIGIONI)
+    def politica(s): return s.r.choice(POLITICHE)
+    def orient(s): return s.r.choice(ORIENTAMENTI)
+    def salute(s): return s.r.choice(SALUTE)
+    def regione(s): return s.r.choice(REGIONI)
+    def paese(s): return s.r.choice(PAESI)
+    def provincia(s): return "provincia di " + s.r.choice(COMUNI)
+    def genere(s): return s.r.choice(["maschio", "femmina", "M", "F", "uomo", "donna", "maschile", "femminile", "non binario", "Maschio", "Femmina"])
+    def eta(s): return str(s.r.randint(18, 92))
+
+
+RUOLI_MESTIERE = ["Responsabile amministrativo", "IT Manager", "Titolare", "Direttore tecnico", "Responsabile HR", "Sales Account", "Avvocato",
+                  "Dottore commercialista", "Geometra", "Consulente", "Sistemista", "Responsabile di produzione", "CEO", "Office manager",
+                  "Impiegata", "Tecnico", "Amministratore delegato", "Project manager", "Responsabile acquisti", "Contabile", "Ingegnere"]
+RUOLI_UFFICIO = ["Ufficio acquisti", "Amministrazione", "Segreteria", "Helpdesk", "Ufficio tecnico", "Assistenza clienti", "Direzione"]
+
+
+# --- cio' che e' di dominio pubblico: in un discorso generale (storia, notizie, geografia, richieste a un'AI) NON va
+#     mascherato. Gli stessi nomi, dentro dati personali veri (un modulo, una firma), restano da mascherare: decide il contesto.
+FAMOSI = [
+    "Dante Alighieri", "Leonardo da Vinci", "Michelangelo Buonarroti", "Galileo Galilei", "Giuseppe Garibaldi", "Giuseppe Verdi",
+    "Giacomo Puccini", "Alessandro Manzoni", "Giacomo Leopardi", "Francesco Petrarca", "Giovanni Boccaccio", "Niccolò Machiavelli",
+    "Cristoforo Colombo", "Marco Polo", "Raffaello Sanzio", "Antonio Vivaldi", "Gioachino Rossini", "Guglielmo Marconi", "Enrico Fermi",
+    "Alessandro Volta", "Maria Montessori", "Rita Levi-Montalcini", "Luigi Pirandello", "Italo Calvino", "Umberto Eco", "Primo Levi",
+    "Federico Fellini", "Sophia Loren", "Luciano Pavarotti", "Andrea Bocelli", "Giorgio Armani", "Enzo Ferrari", "Gianni Agnelli",
+    "Giuseppe Mazzini", "Aldo Moro", "Sandro Pertini", "Giorgio Napolitano", "Sergio Mattarella", "Giorgia Meloni", "Mario Draghi",
+    "Giuseppe Conte", "Matteo Renzi", "Matteo Salvini", "Silvio Berlusconi", "Romano Prodi", "Enrico Letta", "Elly Schlein",
+    "Antonio Tajani", "Roberto Baggio", "Francesco Totti", "Alessandro Del Piero", "Gianluigi Buffon", "Paolo Maldini", "Valentino Rossi",
+    "Jannik Sinner", "Federica Pellegrini", "Marcell Jacobs", "Roberto Benigni", "Adriano Celentano", "Laura Pausini", "Eros Ramazzotti",
+    "Vasco Rossi", "Lucio Dalla", "Fabrizio De André", "Ennio Morricone", "Renzo Piano", "Carlo Rubbia", "Samantha Cristoforetti",
+    "Elsa Fornero", "Giovanni Falcone", "Paolo Borsellino", "Camillo Benso di Cavour", "Lorenzo de' Medici", "Giulio Cesare",
+    "Marco Aurelio", "Albert Einstein", "Isaac Newton", "Charles Darwin", "Marie Curie", "Nikola Tesla", "Thomas Edison",
+    "Stephen Hawking", "Alan Turing", "William Shakespeare", "Napoleone Bonaparte", "Abraham Lincoln", "George Washington",
+    "Winston Churchill", "Nelson Mandela", "Mahatma Gandhi", "Martin Luther King", "John Kennedy", "Barack Obama", "Donald Trump",
+    "Joe Biden", "Angela Merkel", "Emmanuel Macron", "Vladimir Putin", "Xi Jinping", "Ursula von der Leyen", "Christine Lagarde",
+    "Bill Gates", "Steve Jobs", "Elon Musk", "Jeff Bezos", "Mark Zuckerberg", "Tim Cook", "Satya Nadella", "Sam Altman", "Sundar Pichai",
+    "Warren Buffett", "Pablo Picasso", "Vincent van Gogh", "Wolfgang Amadeus Mozart", "Ludwig van Beethoven", "Johann Sebastian Bach",
+    "Sigmund Freud", "Karl Marx", "Immanuel Kant", "Friedrich Nietzsche", "Lionel Messi", "Cristiano Ronaldo", "Diego Maradona",
+    "Michael Jordan", "Roger Federer", "Rafael Nadal", "Novak Djokovic", "Usain Bolt", "Michael Schumacher", "Lewis Hamilton",
+    "Ayrton Senna", "Muhammad Ali", "Michael Jackson", "Elvis Presley", "John Lennon", "Bob Dylan", "Taylor Swift",
+    "Leonardo DiCaprio", "Meryl Streep", "Steven Spielberg", "Quentin Tarantino", "Walt Disney", "Charlie Chaplin", "Marilyn Monroe",
+    "Ernest Hemingway", "George Orwell", "Franz Kafka", "Victor Hugo", "Greta Thunberg", "Malala Yousafzai", "Papa Francesco",
+    "Giovanni Paolo II", "Madre Teresa", "Carlo Magno", "Giovanna d'Arco", "Adam Smith", "John Maynard Keynes", "Max Weber",
+    "Tim Berners-Lee", "Linus Torvalds", "Ada Lovelace", "Guido van Rossum", "Jane Austen", "Agatha Christie", "Oscar Wilde",
+]
+FAMOSI_SOLI = ["Pitagora", "Archimede", "Platone", "Aristotele", "Socrate", "Caravaggio", "Dante", "Leonardo", "Michelangelo", "Galileo",
+               "Garibaldi", "Mozart", "Beethoven", "Einstein", "Newton", "Darwin", "Shakespeare", "Napoleone", "Picasso", "Maradona",
+               "Pelé", "Madonna", "Beyoncé", "Cleopatra", "Omero", "Virgilio", "Cicerone", "Euclide", "Keplero", "Copernico", "Fibonacci"]
+CITTA_NOTE = ("Roma Milano Napoli Torino Palermo Genova Bologna Firenze Bari Catania Venezia Verona Trieste Padova Parma Pisa Siena Perugia "
+              "Cagliari Parigi Londra Berlino Madrid Barcellona Tokyo Pechino Mosca Bruxelles Vienna Lisbona Atene Dublino Amsterdam Zurigo "
+              "Ginevra Chicago Washington Sydney Dubai Paris London Rome Milan Berlin Monaco Lione Marsiglia Francoforte Stoccolma Praga "
+              "Budapest Varsavia Istanbul Singapore Toronto Boston Seattle").split() + ["New York", "Los Angeles", "San Francisco", "Hong Kong"]
+LUOGHI_NOTI = ["Colosseo", "Torre di Pisa", "Duomo di Milano", "Fontana di Trevi", "Ponte Vecchio", "Torre Eiffel", "Louvre", "Big Ben",
+               "Statua della Libertà", "Cappella Sistina", "Galleria degli Uffizi", "Pantheon", "Teatro alla Scala", "Etna", "Vesuvio",
+               "Monte Bianco", "Lago di Garda", "Lago di Como", "Po", "Tevere", "Arno", "Dolomiti", "Alpi", "Appennini", "Mar Mediterraneo",
+               "Mar Adriatico", "Mar Tirreno", "Pianura Padana", "Costiera Amalfitana", "Cinque Terre", "Valle dei Templi", "Arena di Verona",
+               "Piazza San Marco", "Piazza del Duomo", "Vaticano", "Reggia di Caserta", "Canal Grande", "Central Park", "Muraglia cinese"]
+SQUADRE = ["Juventus", "Inter", "Milan", "Roma", "Napoli", "Lazio", "Atalanta", "Fiorentina", "Torino", "Bologna", "Real Madrid",
+           "Barcellona", "Bayern Monaco", "Manchester United", "Liverpool", "Paris Saint-Germain", "Chelsea", "Arsenal", "Ferrari", "Ducati"]
+MARCHE = ["Ferrari", "Lamborghini", "Maserati", "Fiat", "Alfa Romeo", "Barilla", "Ferrero", "Lavazza", "Armani", "Prada", "Gucci", "Versace",
+          "Benetton", "Pirelli", "Piaggio", "Ducati", "Campari", "Peroni", "Mondadori", "Feltrinelli", "Volkswagen", "BMW", "Mercedes",
+          "Toyota", "Tesla", "Ford", "Renault", "Nike", "Adidas", "Ikea", "Coca-Cola", "Nestlé", "Samsung", "Sony", "Stellantis", "Luxottica",
+          "Eni", "Enel", "Leonardo", "Fincantieri", "Brembo", "Illy", "Mulino Bianco", "Nutella", "Vespa", "Olivetti", "Zara", "Rolex"]
+IP_PUBBLICI = ["127.0.0.1", "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "0.0.0.0", "255.255.255.0", "255.255.255.255", "::1",
+               "208.67.222.222", "255.255.0.0"]
+SITI_PUBBLICI = ["https://www.microsoft.com/it-it/software-download", "https://support.microsoft.com", "https://learn.microsoft.com/it-it/",
+                 "https://www.google.com", "https://github.com", "https://it.wikipedia.org/wiki/Italia", "https://www.agenziaentrate.gov.it",
+                 "https://www.inps.it", "https://www.garanteprivacy.it", "https://www.python.org/downloads/", "https://docs.fortinet.com",
+                 "https://www.cisco.com", "https://support.apple.com/it-it", "https://www.mozilla.org", "https://eur-lex.europa.eu",
+                 "www.google.it", "www.youtube.com", "https://stackoverflow.com/questions", "https://www.amazon.it", "https://www.poste.it"]
+DOMINI_PUBBLICI = ["example.com", "example.org", "microsoft.com", "google.com", "github.com", "wikipedia.org", "apple.com", "amazon.it",
+                   "gov.it", "europa.eu", "outlook.com", "gmail.com", "office.com", "windowsupdate.com", "localhost"]
+
+
+class Pubblico:
+    """Persone famose, citta' e indirizzi di dominio pubblico: nessuna etichetta. Le marche restano ORG come ogni azienda:
+    che "Ferrari" si possa lasciare in chiaro lo decide l'elenco dei nomi noti (known.py), non il modello, altrimenti
+    impara a ignorare anche il nome di un cliente scritto senza "S.r.l."."""
+    ETI = dict(marca="ORG")
+
+    def __init__(s, r): s.r = r
+    def famoso(s): return s.r.choice(FAMOSI)
+    def solo(s): return s.r.choice(FAMOSI_SOLI) if s.r.random() < .6 else s.r.choice(FAMOSI).split(" ")[-1]
+    def citta(s): return s.r.choice(CITTA_NOTE)
+    def luogo(s): return s.r.choice(LUOGHI_NOTI)
+    def squadra(s): return s.r.choice(SQUADRE)
+    def marca(s): return s.r.choice(MARCHE)
+    def paese(s): return s.r.choice(PAESI)
+    def ip(s): return s.r.choice(IP_PUBBLICI)
+    def sito(s): return s.r.choice(SITI_PUBBLICI)
+    def dominio(s): return s.r.choice(DOMINI_PUBBLICI)
+
+
 def contesto(r):
     a, b = Azienda(r), Azienda(r)
     p = Persona(r, a)
-    return dict(p=p, q=Persona(r, a if r.random() < .5 else b), r=Persona(r), a=a, b=b, t=IT(r, a, p), v=Varie(r))
+    return dict(p=p, q=Persona(r, a if r.random() < .5 else b), r=Persona(r), a=a, b=b, t=IT(r, a, p), v=Varie(r), x=Profilo(r), g=Pubblico(r))

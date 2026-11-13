@@ -24,6 +24,7 @@ PREDEFINITE = {
     "scorciatoie": {"sostituisci": "ctrl+alt+s", "maschera": "ctrl+alt+m", "ripristina": "ctrl+alt+r"},
     "analisi": "settimanale",    # analisi degli strumenti AI sul PC: settimanale | giornaliera | mai (resta quella a mano)
     "archivio_giorni": 0,        # 0 = l'archivio tiene tutto; N = toglie da solo le voci non usate da N giorni
+    "categorie": [],             # categorie in piu' da sostituire (DATA, PROFESSIONE, SALUTE...): di serie restano in chiaro
 }
 _cache = {"mtime": None, "dati": None}
 
@@ -48,6 +49,7 @@ def scrivi(dati):
                            if k in catalog.PER_ID and v in catalog.POLITICHE}
     date = puliti["scorciatoie"] if isinstance(puliti["scorciatoie"], dict) else {}
     puliti["scorciatoie"] = {k: str(date.get(k, v)).strip().lower()[:40] for k, v in PREDEFINITE["scorciatoie"].items()}
+    puliti["categorie"] = sorted({str(x) for x in puliti["categorie"] or [] if str(x).isupper() and len(str(x)) <= 24})
     if puliti["analisi"] not in ("settimanale", "giornaliera", "mai"):
         puliti["analisi"] = PREDEFINITE["analisi"]
     try:
