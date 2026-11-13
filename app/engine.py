@@ -40,6 +40,8 @@ DATI = paths.DATI
 os.environ.setdefault("OMISSIS_LISTS", str(paths.liste()))   # il modello legge da li' le liste personali
 sys.path.insert(0, str(paths.cartella_modello()))
 RX_SEGNAPOSTO = re.compile(r"\[([A-Z][A-Z_]{1,22})_(\d{1,7})\]")
+RX_ETICHETTA = re.compile(r"[A-Z][A-Z_]{1,22}")
+BORDI = " `'\"()[]{}<>.,;:"   # cio' che puo' stare attaccato a un valore senza farne parte
 
 
 class Sigillo:
@@ -102,16 +104,25 @@ class Sigillo:
 class Archivio:
     """Corrispondenza stabile valore <-> segnaposto. Lo stesso valore ha sempre lo stesso segnaposto,
     cosi' una conversazione riaperta giorni dopo si puo' ancora ripristinare. Nel file i valori sono
-    cifrati (vedi Sigillo) e l'indice per ritrovarli e' un'impronta con chiave, non il valore."""
+    cifrati (vedi Sigillo) e l'indice per ritrovarli e' un'impronta con chiave, non il valore.
+    Un numero non viene mai riusato: un segnaposto eliminato non torna a indicare un altro valore."""
+    ORDINI = {"recenti": "creato DESC", "usati": "usato DESC", "fermi": "usato ASC", "tipo": "etichetta, n"}
 
     def __init__(self, percorso):
         self.sigillo = Sigillo(Path(percorso).parent)
         self.db = sqlite3.connect(percorso, check_same_thread=False)
         self.db.execute("CREATE TABLE IF NOT EXISTS voci (etichetta TEXT, n INTEGER, chiave TEXT, valore TEXT, "
-                        "creato REAL, PRIMARY KEY (etichetta, n))")
+                        "creato REAL, usato REAL, PRIMARY KEY (etichetta, n))")
         self.db.execute("CREATE UNIQUE INDEX IF NOT EXISTS per_chiave ON voci (etichetta, chiave)")
+        if "usato" not in {r[1] for r in self.db.execute("PRAGMA table_info(voci)")}:   # archivio di una versione precedente
+            self.db.execute("ALTER TABLE voci ADD COLUMN usato REAL")
+            self.db.execute("UPDATE voci SET usato = creato")
+        self.db.execute("CREATE TABLE IF NOT EXISTS contatori (etichetta TEXT PRIMARY KEY, ultimo INTEGER)")
+        self.db.execute("INSERT OR IGNORE INTO contatori SELECT etichetta, MAX(n) FROM voci GROUP BY etichetta")
+        self.db.commit()
         self.lucchetto = threading.Lock()
         self.letti = {}   # segnaposto -> valore: evita di decifrare a ogni richiesta
+        self.toccati, self.scritti = {}, time.time()   # (etichetta, n) -> ultimo uso, da scrivere ogni tanto
         self.convertiti = self._converti()
 
     def _converti(self):
@@ -132,17 +143,35 @@ class Archivio:
     def chiave(valore):
         return re.sub(r"\s+", " ", valore).strip().casefold()
 
+    def _tocca(self, etichetta, n):
+        """Segna l'ultimo uso (con il lucchetto preso). Si scrive sul disco ogni tanto, non a ogni messaggio."""
+        self.toccati[(etichetta, n)] = time.time()
+        if len(self.toccati) > 2000 or time.time() - self.scritti > 120:
+            self._scrivi_toccati()
+
+    def _scrivi_toccati(self):
+        if self.toccati:
+            self.db.executemany("UPDATE voci SET usato=? WHERE etichetta=? AND n=?", [(quando, e, n) for (e, n), quando in self.toccati.items()])
+            self.db.commit()
+            self.toccati.clear()
+        self.scritti = time.time()
+
     def segnaposto(self, etichetta, valore):
         k = self.sigillo.indice(self.chiave(valore))
         with self.lucchetto:
             r = self.db.execute("SELECT n FROM voci WHERE etichetta=? AND chiave=?", (etichetta, k)).fetchone()
             if r is None:
-                n = self.db.execute("SELECT COALESCE(MAX(n), 0) + 1 FROM voci WHERE etichetta=?", (etichetta,)).fetchone()[0]
-                self.db.execute("INSERT INTO voci VALUES (?, ?, ?, ?, ?)", (etichetta, n, k, self.sigillo.cifra(valore), time.time()))
+                n = self.db.execute("SELECT MAX(COALESCE((SELECT ultimo FROM contatori WHERE etichetta=?), 0), "
+                                    "COALESCE((SELECT MAX(n) FROM voci WHERE etichetta=?), 0)) + 1", (etichetta, etichetta)).fetchone()[0]
+                ora = time.time()
+                self.db.execute("INSERT INTO voci (etichetta, n, chiave, valore, creato, usato) VALUES (?, ?, ?, ?, ?, ?)",
+                                (etichetta, n, k, self.sigillo.cifra(valore), ora, ora))
+                self.db.execute("INSERT OR REPLACE INTO contatori VALUES (?, ?)", (etichetta, n))
                 self.db.commit()
                 self.letti[f"[{etichetta}_{n}]"] = valore
             else:
                 n = r[0]
+                self._tocca(etichetta, n)
         return f"[{etichetta}_{n}]"
 
     def valore(self, segnaposto):
@@ -151,6 +180,7 @@ class Archivio:
             return None
         with self.lucchetto:
             if segnaposto in self.letti:
+                self._tocca(m.group(1), int(m.group(2)))
                 return self.letti[segnaposto]
             r = self.db.execute("SELECT valore FROM voci WHERE etichetta=? AND n=?", (m.group(1), int(m.group(2)))).fetchone()
             if r is None:
@@ -158,27 +188,68 @@ class Archivio:
             if len(self.letti) > 50000:
                 self.letti.clear()
             v = self.letti[segnaposto] = self.sigillo.decifra(r[0])
+            self._tocca(m.group(1), int(m.group(2)))
         return v
 
     def voci(self):
         with self.lucchetto:
             return self.db.execute("SELECT COUNT(*) FROM voci").fetchone()[0]
 
-    def elenco(self, limite=500, in_chiaro=False):
-        """Voci piu' recenti. Senza in_chiaro il valore e' ridotto alla prima lettera e alla lunghezza."""
+    def elenco(self, limite=500, in_chiaro=False, cerca="", etichetta="", ordine="recenti"):
+        """Le voci, al massimo `limite`. cerca: un pezzo del segnaposto o del valore vero (la ricerca guarda i valori veri
+        anche quando non vengono mostrati). Senza in_chiaro il valore e' ridotto alla prima lettera e alla lunghezza."""
+        cerca = str(cerca or "").strip().casefold()
         with self.lucchetto:
-            righe = self.db.execute("SELECT etichetta, n, valore, creato FROM voci ORDER BY creato DESC LIMIT ?", (limite,)).fetchall()
+            self._scrivi_toccati()
+            righe = self.db.execute("SELECT etichetta, n, valore, creato, usato FROM voci" + (" WHERE etichetta=?" if etichetta else "")
+                                    + " ORDER BY " + self.ORDINI.get(ordine, self.ORDINI["recenti"]), (etichetta,) if etichetta else ()).fetchall()
             per_tipo = dict(self.db.execute("SELECT etichetta, COUNT(*) FROM voci GROUP BY etichetta").fetchall())
-        voci = []
-        for e, n, salvato, c in righe:
-            v = self.sigillo.decifra(salvato)
-            voci.append({"segnaposto": f"[{e}_{n}]", "etichetta": e, "valore": v if in_chiaro else v[:1] + "•" * min(len(v) - 1, 11),
-                         "creato": time.strftime("%Y-%m-%d %H:%M", time.localtime(c))})
-        return {"per_tipo": per_tipo, "voci": voci, "cifrato": self.sigillo.attivo}
+        voci, trovate = [], 0
+        giorno = lambda x: time.strftime("%Y-%m-%d %H:%M", time.localtime(x or 0))   # noqa: E731
+        for e, n, salvato, c, u in righe:
+            seg, v = f"[{e}_{n}]", None
+            if cerca and cerca not in seg.casefold():
+                v = self.sigillo.decifra(salvato)
+                if cerca not in v.casefold():
+                    continue
+            trovate += 1
+            if len(voci) < limite:
+                v = self.sigillo.decifra(salvato) if v is None else v
+                voci.append({"segnaposto": seg, "etichetta": e, "valore": v if in_chiaro else v[:1] + "•" * min(len(v) - 1, 11),
+                             "creato": giorno(c), "usato": giorno(u or c)})
+        return {"per_tipo": per_tipo, "voci": voci, "cifrato": self.sigillo.attivo, "totale": sum(per_tipo.values()), "trovate": trovate}
+
+    def elimina(self, segnaposto=(), etichetta="", fermi_da_giorni=None, solo_conta=False):
+        """Elimina le voci indicate una per una, oppure tutte quelle di un tipo e/o non usate da N giorni.
+        solo_conta: dice quante sarebbero, senza toccare nulla. I numeri eliminati non vengono riusati."""
+        coppie = [(m.group(1), int(m.group(2))) for s in segnaposto if (m := RX_SEGNAPOSTO.fullmatch(str(s)))]
+        dove, valori = [], []
+        if etichetta:
+            dove.append("etichetta=?"), valori.append(str(etichetta))
+        if fermi_da_giorni is not None:
+            dove.append("COALESCE(usato, creato) < ?"), valori.append(time.time() - 86400 * max(0.0, float(fermi_da_giorni)))
+        if not coppie and not dove:
+            return {"eliminate": 0, "voci": self.voci()}
+        with self.lucchetto:
+            self._scrivi_toccati()
+            if coppie:
+                n = sum(self.db.execute("SELECT COUNT(*) FROM voci WHERE etichetta=? AND n=?", c).fetchone()[0] for c in coppie)
+            else:
+                n = self.db.execute("SELECT COUNT(*) FROM voci WHERE " + " AND ".join(dove), valori).fetchone()[0]
+            if n and not solo_conta:
+                if coppie:
+                    self.db.executemany("DELETE FROM voci WHERE etichetta=? AND n=?", coppie)
+                else:
+                    self.db.execute("DELETE FROM voci WHERE " + " AND ".join(dove), valori)
+                self.db.commit()
+                self.letti.clear()
+            resto = self.db.execute("SELECT COUNT(*) FROM voci").fetchone()[0]
+        return {"eliminate": n, "voci": resto}
 
     def svuota(self):
         with self.lucchetto:
-            self.db.execute("DELETE FROM voci")
+            self.toccati.clear()
+            self.db.execute("DELETE FROM voci")   # i contatori restano: i numeri non ripartono da 1
             self.db.commit()
             self.db.execute("VACUUM")
             self.letti.clear()
@@ -214,10 +285,12 @@ class Motore:
                 out.append([s, e, l])
         return out
 
-    def maschera(self, testi, escludi=(), mai=()):
+    def maschera(self, testi, escludi=(), mai=(), anche=None):
         """escludi: etichette da NON sostituire in questa chiamata (es. quelle tecniche nel contesto di un agente).
-        mai: termini da non sostituire in questa chiamata (es. i nomi degli strumenti dichiarati da un agente)."""
-        mai = {str(x).casefold() for x in mai}
+        mai: termini da non sostituire in questa chiamata (es. i nomi degli strumenti dichiarati da un agente).
+        anche: {termine: etichetta} da sostituire comunque, ovunque compaiano (le correzioni fatte a mano nel pannello)."""
+        mai = {str(x).strip(BORDI).casefold() for x in mai}   # stessa pulizia dei bordi usata sotto: «Nevatek S.r.l.» finisce con un punto
+        anche = {str(v).strip(): (str(l) if RX_ETICHETTA.fullmatch(str(l)) else "ELENCO") for v, l in (anche or {}).items() if str(v).strip()}
         t0 = time.perf_counter()
         # i segnaposto gia' presenti non si toccano: mascherare due volte lo stesso testo deve dare lo stesso testo
         # (succede con un testo incollato gia' mascherato e con il secondo controllo fatto prima dell'invio)
@@ -225,7 +298,7 @@ class Motore:
 
         def liberi(spans, i):
             return [sp for sp in spans if sp[2] not in escludi and not any(sp[0] < e and s < sp[1] for s, e in occupati[i])
-                    and (not mai or testi[i][sp[0]:sp[1]].strip(" `'\"()[]{}<>.,;:").casefold() not in mai)]
+                    and (not mai or testi[i][sp[0]:sp[1]].strip(BORDI).casefold() not in mai)]
         per_testo = [liberi(self._unisci(sp), i) for i, sp in enumerate(self._span(testi))]
         # un valore riconosciuto in un testo va coperto anche dove ricompare negli altri (es. nella
         # cronologia), anche se li' il modello non lo ha segnalato
@@ -242,6 +315,14 @@ class Motore:
                          if not any(s < m.end() and m.start() < e for s, e, _ in per_testo[i])]
                 if extra:
                     per_testo[i] = liberi(self._unisci(per_testo[i] + extra), i)
+        if anche:   # scelti a mano: vincono su cio' che ha trovato il modello negli stessi punti
+            per_termine = {v.casefold(): l for v, l in anche.items()}
+            rx = re.compile("|".join(re.escape(v) for v in sorted(anche, key=len, reverse=True)), re.I)
+            for i, t in enumerate(testi):
+                forzati = [[m.start(), m.end(), per_termine.get(m.group().casefold(), "ELENCO")] for m in rx.finditer(t)
+                           if not any(m.start() < e and s < m.end() for s, e in occupati[i])]
+                if forzati:
+                    per_testo[i] = sorted(forzati + [sp for sp in per_testo[i] if not any(sp[0] < f[1] and f[0] < sp[1] for f in forzati)])
         mappa, conteggi, usciti, posizioni = {}, collections.Counter(), [], []
         for t, sp in zip(testi, per_testo):
             pezzi, pos, dove = [], 0, []
@@ -321,11 +402,17 @@ def servi(motore, porta, token, token_estensione, ponte):
                     esito = ponte.gestisci(self.path[7:], dati if isinstance(dati, dict) else {})
                     self._rispondi(404 if esito is None else 200, {"errore": "percorso sconosciuto"} if esito is None else esito)
                 elif self.path == "/maschera":
-                    self._rispondi(200, motore.maschera([str(t) for t in dati["testi"]], {str(e) for e in dati.get("escludi") or []}, dati.get("mai") or ()))
+                    self._rispondi(200, motore.maschera([str(t) for t in dati["testi"]], {str(e) for e in dati.get("escludi") or []}, dati.get("mai") or (),
+                                                           dati.get("anche") if isinstance(dati.get("anche"), dict) else None))
                 elif self.path == "/valori":
                     self._rispondi(200, motore.valori([str(s) for s in dati["segnaposto"]]))
                 elif self.path == "/archivio":
-                    self._rispondi(200, motore.archivio.elenco(int(dati.get("limite", 500)), bool(dati.get("in_chiaro"))))
+                    self._rispondi(200, motore.archivio.elenco(int(dati.get("limite", 500)), bool(dati.get("in_chiaro")), str(dati.get("cerca") or ""),
+                                                               str(dati.get("etichetta") or ""), str(dati.get("ordine") or "recenti")))
+                elif self.path == "/archivio/elimina":
+                    giorni = dati.get("fermi_da_giorni")
+                    self._rispondi(200, motore.archivio.elimina([str(s) for s in dati.get("segnaposto") or []], str(dati.get("etichetta") or ""),
+                                                                None if giorni is None else float(giorni), bool(dati.get("solo_conta"))))
                 elif self.path == "/archivio/svuota":
                     motore.archivio.svuota()
                     self._rispondi(200, {"voci": 0})

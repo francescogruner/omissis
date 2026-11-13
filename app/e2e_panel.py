@@ -14,15 +14,19 @@ e ai documenti.
 """
 import argparse
 import json
+import os
 import re
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+import catalog
+import inventory
 import paths
 
 QUI = Path(__file__).resolve().parent
@@ -65,6 +69,29 @@ def chiama(codice, percorso, dati=None):
         return json.loads(x.read().decode("utf-8"))
 
 
+def inventario_finto():
+    """Tre analisi inventate al posto di quelle di questo PC: la pagina e le schermate mostrano sempre le stesse cose."""
+    if not os.environ.get("OMISSIS_DATA"):
+        sys.exit("questa prova scrive un inventario inventato: va lanciata su una copia di prova (OMISSIS_DATA), non sui dati veri")
+    servizio = lambda nome: next(({"id": s["id"], "nome": s["nome"]} for s in catalog.SERVIZI if s["nome"] == nome), {"id": "", "nome": nome})   # noqa: E731
+    programma = lambda nome, versione, s: {"nome": nome, "versione": versione, "servizio": servizio(s)}   # noqa: E731
+
+    def analisi(programmi, estensioni, editor, comandi, locali):
+        return {"programmi": programmi, "processi": [], "secondi": 4.2, "comandi": [{"comando": c, "percorso": f"D:\\Strumenti\\npm\\{c}.cmd"} for c in comandi],
+                "estensioni_browser": [{"browser": "Edge", "profilo": "predefinito", "nome": n, "versione": v, "id": n.lower().replace(" ", "-"), "accesso_a_tutti_i_siti": True}
+                                       for n, v in estensioni],
+                "estensioni_editor": [{"editor": "VS Code", "nome": n, "autore": a, "versione": v} for n, a, v in editor],
+                "locali": [{"nome": n, "cosa": c, "gb": gb} for n, c, gb in locali]}
+    inventory.svuota()
+    chatgpt, claude = programma("ChatGPT", "1.2025.139", "ChatGPT"), programma("Claude", "1.1.2685", "Claude")
+    passi = [analisi([chatgpt], [("Scrivi Meglio AI", "3.1")], [("GitHub Copilot", "GitHub", "1.300.0")], [], []),
+             analisi([chatgpt, claude], [("Scrivi Meglio AI", "3.1")], [("GitHub Copilot", "GitHub", "1.302.0")], ["claude"], []),
+             analisi([chatgpt, claude], [], [("GitHub Copilot", "GitHub", "1.302.0")], ["claude"], [("Ollama", "D:\\Modelli\\ollama", 12.4)])]
+    for i, passo in enumerate(passi):
+        inventory.registra(passo, None, "automatica" if i < 2 else "manuale")
+        time.sleep(1.1)   # le analisi hanno l'ora al secondo
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
@@ -78,6 +105,7 @@ def main():
     if chiama(codice, "/api/stato")["fase"] != "attiva":
         sys.exit("la protezione non è attiva: avviarla prima")
     lavoro = Path(tempfile.mkdtemp(prefix="omissis_pannello_"))
+    inventario_finto()
 
     with sync_playwright() as p:
         exe = paths.browser_di_prova()
@@ -133,6 +161,25 @@ def main():
                       f"in chiaro negli appunti: {sum(s in appunti for s in SENSIBILI)}")
                 pag.wait_for_timeout(600)
                 pag.screenshot(path=str(foto / f"testo-{lingua}.png"))
+
+                # --- correzioni a mano: un segnaposto di troppo torna in chiaro, un dato sfuggito viene mascherato
+                pag.click('#esito button[data-s^="[ORG_"]')
+                pag.click('#suSegnaposto button[data-fai="chiaro"]')
+                aspetta(pag, "() => document.getElementById('esito').textContent.includes('Nevatek S.r.l') && !document.getElementById('esito').textContent.includes('[ORG_')")
+                pag.wait_for_timeout(400)
+                appunti = pag.evaluate("navigator.clipboard.readText()")
+                segna(f"{lingua}: correzione «lascia in chiaro» -> il testo è rifatto e ricopiato", "Nevatek S.r.l" in appunti and "[PERSONA_" in appunti and "Giulia Ferraresi" not in appunti)
+                pag.fill("#daMascherare", "gestionale")
+                pag.click("#mascheraAnche")
+                aspetta(pag, "() => document.getElementById('esito').textContent.includes('[ELENCO_') && !document.getElementById('esito').textContent.includes('gestionale')")
+                pag.wait_for_timeout(400)
+                appunti = pag.evaluate("navigator.clipboard.readText()")
+                segna(f"{lingua}: correzione «maschera anche questo» -> il dato sfuggito è sostituito", "[ELENCO_" in appunti and "gestionale" not in appunti and "Nevatek S.r.l" in appunti)
+                pag.screenshot(path=str(foto / f"testo-correzioni-{lingua}.png"))
+                pag.click('#correzioniFatte button[data-cosa="mai"]')
+                tolta = aspetta(pag, "() => document.getElementById('esito').textContent.includes('[ORG_')", attesa=10)
+                segna(f"{lingua}: una correzione si annulla con un clic", tolta and pag.locator("#correzioniFatte button").count() == 1)
+                pag.wait_for_timeout(400)
                 pag.click("#incolla")
                 aspetta(pag, "t => document.getElementById('esito').textContent === t", TESTO)
                 pag.wait_for_timeout(500)
@@ -159,6 +206,60 @@ def main():
                 segna(f"{lingua}: documento con i segnaposto -> riconosciuto e ripristinato", ".ripristinato" in tornato.name
                       and tornato.read_text(encoding="utf-8") == TESTO, tornato.name)
 
+                # --- cartella intera: scritto il percorso, la copia nasce accanto e si può aprire dal pannello
+                pratica = lavoro / f"pratica-{lingua}"
+                pratica.mkdir()
+                (pratica / "nota.txt").write_text(TESTO, encoding="utf-8")
+                pag.fill("#percorsoCartella", str(pratica))
+                pag.click('button[data-cartella="anonimizza"]')
+                fatta = aspetta(pag, "() => !!document.getElementById('apriCartella')", attesa=60)
+                copia_ = lavoro / f"pratica-{lingua}.anon" / "nota.anon.txt"
+                segna(f"{lingua}: cartella intera -> copia anonimizzata accanto, con il pulsante per aprirla", fatta and copia_.exists()
+                      and not any(s in copia_.read_text(encoding="utf-8") for s in SENSIBILI))
+
+                # --- archivio: si cerca per valore vero senza mostrarlo, si elimina una voce scelta
+                pag.goto(f"{PANNELLO}/#/archivio")
+                pag.wait_for_selector("#archCerca")
+                pag.fill("#archCerca", "ferraresi")
+                aspetta(pag, "() => [...document.querySelectorAll('#tabArchivio .segnaposto')].some(e => e.textContent.startsWith('[PERSONA_'))", attesa=15)
+                righe = pag.evaluate("[...document.querySelectorAll('#tabArchivio tr')].map(r => r.innerText)")
+                segna(f"{lingua}: archivio -> ricerca per valore vero, che resta nascosto", 1 <= len(righe) <= 30 and all("•" in r and "erraresi" not in r for r in righe), f"{len(righe)} voci")
+                pag.wait_for_timeout(300)
+                pag.screenshot(path=str(foto / f"archivio-{lingua}.png"))
+                prima_n = chiama(codice, "/api/archivio", {"cerca": "gestionale", "etichetta": "ELENCO"})["trovate"]
+                pag.fill("#archCerca", "gestionale")
+                aspetta(pag, "() => [...document.querySelectorAll('#tabArchivio .segnaposto')].some(e => e.textContent.startsWith('[ELENCO_'))", attesa=15)
+                pag.check("#tabArchivio tr:has(.segnaposto:text-matches('ELENCO_')) input[type=checkbox]")
+                pag.click("#archElimina")
+                pag.click("#confermaSi")
+                pag.wait_for_timeout(1200)
+                dopo_n = chiama(codice, "/api/archivio", {"cerca": "gestionale", "etichetta": "ELENCO"})["trovate"]
+                segna(f"{lingua}: archivio -> eliminata la voce scelta, dopo la conferma", prima_n >= 1 and dopo_n == prima_n - 1, f"{prima_n} -> {dopo_n}")
+
+                # --- inventario Shadow AI: analisi salvate, novità, giudizio, esportazione
+                pag.goto(f"{PANNELLO}/#/servizi/rilevati")
+                pag.wait_for_selector("#invTabella tr")
+                pag.wait_for_timeout(500)
+                viste = pag.locator("#invTabella tr").count()
+                novita = pag.locator("#invNovita li").count()
+                segna(f"{lingua}: inventario -> le analisi salvate si vedono senza rifarle, con le novità", viste == 5 and novita == 4, f"{viste} voci presenti, {novita} novità")
+                pag.select_option("#invTabella tr:has-text('Ollama') select", "approvato")
+                pag.fill("#invTabella tr:has-text('Ollama') input", "prova in laboratorio")
+                pag.keyboard.press("Tab")
+                pag.wait_for_timeout(600)
+                ollama = next(e for e in chiama(codice, "/api/inventario")["elementi"] if e["nome"] == "Ollama")
+                segna(f"{lingua}: inventario -> giudizio e nota salvati", ollama["giudizio"] == "approvato" and ollama["nota"] == "prova in laboratorio")
+                pag.evaluate("document.activeElement.blur(); scrollTo(0, 0)")
+                pag.wait_for_timeout(5500)   # gli avvisi delle prove precedenti spariscono dalla schermata
+                pag.screenshot(path=str(foto / f"rilevati-{lingua}.png"))
+                with pag.expect_download(timeout=30000) as d:
+                    pag.click("#invEsporta")
+                esportato = lavoro / f"inventario-{lingua}.csv"
+                d.value.save_as(str(esportato))
+                righe = esportato.read_text(encoding="utf-8-sig").strip().splitlines()
+                segna(f"{lingua}: inventario -> esportazione per Excel", d.value.suggested_filename.endswith(".csv") and len(righe) == 7 and righe[0].count(";") == 8, f"{len(righe)} righe")
+                inventory.giudica(ollama["chiave"], "", "")
+
                 # --- le schermate: ciò che vede l'utente normale, poi le sezioni del tecnico
                 chiama(codice, "/api/impostazioni", {"vista": "semplice"})
                 pag.goto(f"{PANNELLO}/#/inizio")
@@ -179,6 +280,47 @@ def main():
                 segna(f"{lingua}: nessun errore durante il giro completo", not errori, "; ".join(errori[:3]))
                 errori.clear()
 
+            # --- scorciatoie: la lettera scelta nella pagina arriva nelle impostazioni
+            pag.goto(f"{PANNELLO}/#/impostazioni/generali")
+            pag.wait_for_selector('select[data-sc="maschera"]')
+            pag.select_option('select[data-sc="maschera"]', "ctrl+alt+k")
+            pag.wait_for_timeout(800)
+            pag.select_option('select[data-sc="ripristina"]', "")
+            pag.wait_for_timeout(800)
+            scelte = chiama(codice, "/api/impostazioni")["scorciatoie"]
+            segna("scorciatoie: lettera cambiata e scorciatoia spenta dalla pagina", scelte == {"sostituisci": "ctrl+alt+s", "maschera": "ctrl+alt+k", "ripristina": ""}, str(scelte))
+
+            # --- elenchi personali da Testo e testi troppo lunghi (solo se gli elenchi sono quelli della copia di prova)
+            if os.environ.get("OMISSIS_LISTS"):
+                elenchi = chiama(codice, "/api/liste")
+                try:
+                    chiama(codice, "/api/liste/aggiungi", {"lista": "mai", "termine": "aldo.bruschi@nevatek.example"})
+                    chiama(codice, "/api/liste/aggiungi", {"lista": "sempre", "termine": "gestionale"})
+                    r = chiama(codice, "/api/prova", {"testo": TESTO})["testi"][0]
+                    segna("elenchi: «non mascherare mai» vale anche per ciò che trovano le regole, «maschera sempre» aggiunge",
+                          "aldo.bruschi@nevatek.example" in r and "[ELENCO_" in r and "gestionale" not in r and "[PERSONA_" in r, r[:120])
+                finally:
+                    chiama(codice, "/api/liste", elenchi)
+            else:
+                print("SALTATO elenchi personali: senza OMISSIS_LISTS toccherebbe gli elenchi veri")
+            try:
+                chiama(codice, "/api/prova", {"testo": "parola " * 40000})
+                segna("testo troppo lungo: rifiutato, non tagliato in silenzio", False)
+            except urllib.error.HTTPError as ex:
+                segna("testo troppo lungo: rifiutato, non tagliato in silenzio", ex.code == 422)
+
+            # --- l'analisi vera di questo PC, dal pulsante: viene salvata come una in più (i nomi restano su questo PC)
+            pag.goto(f"{PANNELLO}/#/servizi/rilevati")
+            pag.wait_for_selector("#analizza")
+            salvate = chiama(codice, "/api/inventario")["n_analisi"]
+            pag.click("#analizza")
+            fatta = aspetta(pag, "() => !document.getElementById('analizza').disabled", attesa=180)
+            dopo = chiama(codice, "/api/inventario")
+            segna("inventario: «Analizza ora» fotografa il PC e salva l'analisi", fatta and dopo["n_analisi"] == salvate + 1 and dopo["analisi"][0]["origine"] == "manuale",
+                  f"{dopo['analisi'][0]['secondi']} s, {dopo['analisi'][0]['elementi']} voci")
+            segna("nessun errore nelle prove finali", not errori, "; ".join(errori[:3]))
+            errori.clear()
+
             # --- tema scuro e schermo stretto
             chiama(codice, "/api/impostazioni", {"lingua": "it", "tema": "scuro", "vista": "avanzata"})
             pag.goto(f"{PANNELLO}/#/inizio")
@@ -193,7 +335,8 @@ def main():
             pag.screenshot(path=str(foto / "inizio-telefono.png"))
             segna("tema scuro applicato, e su uno schermo stretto la pagina non esce dai bordi", scuro == "rgb(10, 10, 10)" and largo, f"{scuro} · {largo}")
         finally:
-            chiama(codice, "/api/impostazioni", {k: prima[k] for k in ("lingua", "tema", "vista") if k in prima})
+            chiama(codice, "/api/impostazioni", {k: prima[k] for k in ("lingua", "tema", "vista", "scorciatoie") if k in prima})
+            inventory.svuota()
             br.close()
 
     print(f"\n{sum(esiti)}/{len(esiti)} controlli superati · schermate in {foto}")

@@ -34,7 +34,9 @@ import activity
 import catalog
 import connector
 import documents
+import folders
 import gateway
+import inventory
 import settings
 import i18n
 import weights
@@ -59,6 +61,12 @@ POLITICA_PAGINA = ("default-src 'none'; script-src 'self'; style-src 'self'; img
 # quanto e' provata la lettura di ciascun servizio: la pagina traduce il codice (servizi.lettura.<codice>)
 STATO_LETTURA = {"claude": "provato", "chatgpt": "provato", "anthropic": "provato", "openai": "provato",
                  "gemini": "sperimentale", "generico": "generico", None: "no"}
+
+
+SCORCIATOIE = None        # le scorciatoie da tastiera (clipboard.Scorciatoie), quando c'e' l'icona vicino all'orologio
+AVVISA = None             # funzione che mostra una notifica di Windows, quando c'e' l'icona
+CARTELLE = set()          # cartelle scelte o prodotte in questa sessione: le sole che la pagina puo' far aprire
+OGNI = {"giornaliera": 86400, "settimanale": 7 * 86400}   # ogni quanto si ripete l'analisi degli strumenti AI
 
 
 class Rifiuto(Exception):
@@ -307,6 +315,56 @@ def servizi():
              "ultimo": cont.get(s["id"], {}).get("ultimo", "")} for s in catalog.SERVIZI]
 
 
+def inventario():
+    """L'inventario degli strumenti AI con, per ogni voce legata a un servizio del catalogo, la scelta fatta nelle Regole."""
+    r, imp = inventory.riepilogo(), settings.leggi()
+    for e in r["elementi"]:
+        s = catalog.PER_ID.get(e["servizio"])
+        e["politica"] = settings.politica(s, imp) if s else None
+    ogni, ultima = OGNI.get(imp.get("analisi")), r["analisi"][0]["ora"] if r["analisi"] else ""
+    prossima = ""
+    if ogni and ultima:
+        prossima = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.mktime(time.strptime(ultima, "%Y-%m-%d %H:%M:%S")) + ogni))
+    return {**r, "ogni": imp.get("analisi"), "prossima": prossima}
+
+
+def analizza(origine):
+    """Fotografa il PC e la rete, salva l'analisi e restituisce le novita' rispetto alla precedente."""
+    return inventory.registra(scan.pc(), scan.rete(), origine)
+
+
+def sorveglia():
+    """In sottofondo: ripete l'analisi degli strumenti AI con la cadenza scelta e, se chiesto, alleggerisce l'archivio."""
+    time.sleep(120)   # non subito: all'avvio il PC ha gia' da fare
+    pulito = ""
+    while True:
+        try:
+            imp = settings.leggi()
+            ogni, ultima = OGNI.get(imp.get("analisi")), inventory.ultima()
+            passati = time.time() - time.mktime(time.strptime(ultima, "%Y-%m-%d %H:%M:%S")) if ultima else None
+            if ogni and (passati is None or passati >= ogni):
+                novita = analizza("automatica")
+                if novita["nuovi"] and AVVISA:
+                    nomi = ", ".join(sorted({e["nome"] for e in novita["nuovi"]})[:3])
+                    AVVISA(i18n.t("inventario.avviso_nuovi", n=len(novita["nuovi"]), nomi=nomi))
+            giorni, oggi = int(imp.get("archivio_giorni") or 0), time.strftime("%Y-%m-%d")
+            if giorni > 0 and pulito != oggi and SUP.fase == "attiva":
+                motore("/archivio/elimina", {"fermi_da_giorni": giorni})
+                pulito = oggi
+        except Exception:   # noqa: BLE001  (un giro andato male non deve fermare i successivi)
+            pass
+        time.sleep(600)
+
+
+def scorciatoie():
+    """Le scorciatoie da tastiera e il loro stato (attiva, oppure presa da un altro programma)."""
+    volute = clipboard.scelte(settings.leggi())
+    stato = SCORCIATOIE.stato if SCORCIATOIE is not None else {}
+    return {"disponibili": SCORCIATOIE is not None, "predefinite": clipboard.PREDEFINITE,
+            "voci": [{"nome": nome, "combinazione": c, "scritta": clipboard.scritta(c), "attiva": bool(stato.get(nome, {}).get("attiva")),
+                      "errore": stato.get(nome, {}).get("errore", "") if c else ""} for nome, c in volute.items()]}
+
+
 def leggi_liste():
     def f(nome):
         p = LISTE / nome
@@ -418,6 +476,14 @@ class Gestore(BaseHTTPRequestHandler):
                 f = DATI / "token_extension.txt"
                 self._rispondi(200, {"cartella": str(QUI / "extension"), "porta": PORTA_MOTORE,
                                      "token": f.read_text(encoding="utf-8").strip() if f.exists() else ""})
+            elif u.path == "/api/scorciatoie":
+                self._rispondi(200, scorciatoie())
+            elif u.path == "/api/inventario":
+                self._rispondi(200, inventario())
+            elif u.path == "/api/inventario/csv":
+                testo = inventory.csv([i18n.t(f"inventario.colonna.{c}") for c in ("categoria", "nome", "dettaglio", "versione", "primo", "ultimo", "presente", "giudizio", "nota")],
+                                      lambda c: i18n.t(f"inventario.categoria.{c}"), lambda g: i18n.t(f"inventario.giudizio.{g or 'da_valutare'}"))
+                self._rispondi(200, testo.encode("utf-8"), "text/csv; charset=utf-8")
             elif u.path == "/api/shadow/pc":
                 self._rispondi(200, scan.pc())
             elif u.path == "/api/shadow/rete":
@@ -454,6 +520,8 @@ class Gestore(BaseHTTPRequestHandler):
                 self._rispondi(200, SUP.stato())
             elif p == "/api/impostazioni":
                 nuove = settings.scrivi({**settings.leggi(), **{k: v for k, v in dati.items() if k in settings.PREDEFINITE}})
+                if "scorciatoie" in dati and SCORCIATOIE is not None:
+                    SCORCIATOIE.imposta(clipboard.scelte(nuove))
                 self._rispondi(200, {**nuove, "da_riavviare": SUP.da_riavviare()})
             elif p == "/api/servizi":
                 imp = settings.leggi()
@@ -491,9 +559,26 @@ class Gestore(BaseHTTPRequestHandler):
                     spegni()
                 self._rispondi(200, updates.stato())
             elif p == "/api/prova":
-                self._rispondi(200, motore("/maschera", {"testi": [str(dati.get("testo", ""))[:20000]]}))
+                testo = str(dati.get("testo", ""))
+                if len(testo) > clipboard.MAX_TESTO:   # mai tagliare in silenzio: il pezzo tagliato sembrerebbe controllato
+                    raise Rifiuto(i18n.t("programma.testo_troppo_lungo", n=clipboard.MAX_TESTO))
+                # le correzioni fatte a mano su questo testo: cosa lasciare in chiaro e cosa mascherare comunque
+                mai = [str(x)[:200] for x in dati.get("mai") or []][:200]
+                anche = {str(k)[:200]: str(v) for k, v in list((dati.get("anche") or {}).items())[:200]}
+                self._rispondi(200, motore("/maschera", {"testi": [testo], "mai": mai, "anche": anche}))
+            elif p == "/api/liste/aggiungi":   # da Testo: «non mascherare mai» e «maschera sempre», senza passare dalle Impostazioni
+                lista, termine = ("mai" if dati.get("lista") == "mai" else "sempre"), str(dati.get("termine", "")).strip()[:200]
+                if len(termine) < 2 or "\n" in termine or termine.startswith("#"):
+                    raise Rifiuto(i18n.t("programma.termine_non_valido"))
+                liste = leggi_liste()
+                if termine.casefold() not in {x.casefold() for x in liste[lista]}:
+                    liste[lista].append(termine)
+                    liste = scrivi_liste(liste)
+                self._rispondi(200, liste)
             elif p == "/api/ripristina":
-                testo = str(dati.get("testo", ""))[:200000]
+                testo = str(dati.get("testo", ""))
+                if len(testo) > clipboard.MAX_TESTO:
+                    raise Rifiuto(i18n.t("programma.testo_troppo_lungo", n=clipboard.MAX_TESTO))
                 trovati = sorted({m.group() for m in restore.RX_SEGNAPOSTO.finditer(testo)})
                 mappa = motore("/valori", {"segnaposto": trovati})["mappa"] if trovati else {}
                 self._rispondi(200, {"testo": restore.ripristina(testo, mappa.get), "ripristinati": len(mappa),
@@ -502,13 +587,45 @@ class Gestore(BaseHTTPRequestHandler):
                 self._rispondi(200, {"esito": clipboard.trasforma("ripristina" if dati.get("azione") == "ripristina" else "maschera", motore)})
             elif p == "/api/documenti/percorso":
                 azione = "ripristina" if dati.get("azione") == "ripristina" else "anonimizza"
-                self._rispondi(200, documents.percorso(str(dati.get("percorso", "")), azione))
+                esito = documents.percorso(str(dati.get("percorso", "")), azione)
+                CARTELLE.add(os.path.normcase(os.path.abspath(str(esito.get("destinazione", "")))))
+                self._rispondi(200, esito)
             elif p == "/api/documenti/file":
                 azione = dati.get("azione") if dati.get("azione") in ("anonimizza", "ripristina") else "auto"
                 azione, nome, nuovo, conteggi = documents.elabora_auto(Path(str(dati.get("nome", "file"))).name, base64.b64decode(dati.get("contenuto", "")), azione)
                 self._rispondi(200, {"azione": azione, "nome": nome, "contenuto": base64.b64encode(nuovo).decode("ascii"), "conteggi": conteggi})
             elif p == "/api/archivio":
-                self._rispondi(200, motore("/archivio", {"limite": 500, "in_chiaro": bool(dati.get("in_chiaro"))}))
+                self._rispondi(200, motore("/archivio", {"limite": 500, "in_chiaro": bool(dati.get("in_chiaro")), "cerca": str(dati.get("cerca") or "")[:200],
+                                                         "etichetta": str(dati.get("etichetta") or "")[:40], "ordine": str(dati.get("ordine") or "recenti")}))
+            elif p == "/api/archivio/elimina":   # voci scelte una per una, oppure per tipo e/o non usate da N giorni
+                giorni = dati.get("fermi_da_giorni")
+                self._rispondi(200, motore("/archivio/elimina", {"segnaposto": [str(s) for s in dati.get("segnaposto") or []][:500],
+                                                                 "etichetta": str(dati.get("etichetta") or "")[:40],
+                                                                 "fermi_da_giorni": None if giorni in (None, "") else max(0.0, float(giorni)),
+                                                                 "solo_conta": bool(dati.get("solo_conta"))}))
+            elif p == "/api/inventario/analizza":
+                novita = analizza("manuale")
+                self._rispondi(200, {"novita": novita, **inventario()})
+            elif p == "/api/inventario/giudizio":
+                inventory.giudica(str(dati.get("chiave", "")), dati.get("giudizio"), dati.get("nota"))
+                self._rispondi(200, {})
+            elif p == "/api/inventario/dimentica":
+                self._rispondi(200, {"tolte": inventory.dimentica(), **inventario()})
+            elif p == "/api/inventario/svuota":
+                inventory.svuota()
+                self._rispondi(200, inventario())
+            elif p == "/api/cartella/scegli":   # la finestra di Windows per scegliere una cartella, al posto del percorso scritto a mano
+                scelta = folders.scegli(i18n.t("documenti.cartella.finestra"), str(dati.get("iniziale") or ""))
+                if scelta is None:
+                    raise Rifiuto(i18n.t("programma.finestra_gia_aperta"))
+                if scelta:
+                    CARTELLE.add(os.path.normcase(os.path.abspath(scelta)))
+                self._rispondi(200, {"percorso": scelta})
+            elif p == "/api/cartella/apri":
+                percorso = os.path.normcase(os.path.abspath(str(dati.get("percorso", ""))))
+                if percorso not in CARTELLE or not folders.apri(percorso):
+                    raise Rifiuto(i18n.t("programma.cartella_non_apribile"))
+                self._rispondi(200, {})
             elif p == "/api/archivio/svuota":
                 self._rispondi(200, motore("/archivio/svuota", {}))
             elif p == "/api/certificato":
@@ -557,6 +674,10 @@ def icona(server):
         ic.stop()
         threading.Thread(target=server.shutdown, daemon=True).start()
 
+    def con_tasti(nome):   # «Maschera gli appunti  (Ctrl+Alt+M)»: la combinazione compare solo se e' attiva
+        voce = (SCORCIATOIE.stato if SCORCIATOIE else {}).get(nome, {})
+        return i18n.t(f"icona.{nome}") + (f"  ({clipboard.scritta(voce['combinazione'])})" if voce.get("attiva") else "")
+
     def sugli_appunti(azione):
         def esegui(icona_, _):
             try:
@@ -568,8 +689,8 @@ def icona(server):
     ic = pystray.Icon("omissis", disegno(False), "Omissis", menu=pystray.Menu(
         # i testi sono funzioni: il menu segue la lingua scelta nelle Impostazioni senza riavviare il programma
         pystray.MenuItem(lambda _: i18n.t("icona.apri"), apri, default=True),
-        pystray.MenuItem(lambda _: i18n.t("icona.maschera"), sugli_appunti("maschera")),
-        pystray.MenuItem(lambda _: i18n.t("icona.ripristina"), sugli_appunti("ripristina")),
+        pystray.MenuItem(lambda _: con_tasti("maschera"), sugli_appunti("maschera")),
+        pystray.MenuItem(lambda _: con_tasti("ripristina"), sugli_appunti("ripristina")),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(lambda _: i18n.t("icona.ferma" if SUP.fase == "attiva" else "icona.avvia"), cambia),
         pystray.MenuItem(lambda _: i18n.t("icona.esci"), esci)))
@@ -595,7 +716,9 @@ def icona(server):
         except Exception:   # noqa: BLE001
             pass
 
-    clipboard.scorciatoie(motore, avvisa)
+    global SCORCIATOIE, AVVISA
+    AVVISA = avvisa
+    SCORCIATOIE = clipboard.scorciatoie(motore, avvisa, clipboard.scelte(settings.leggi()))
     return ic
 
 
@@ -640,6 +763,8 @@ def main():
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
     threading.Thread(target=updates.ciclo, daemon=True).start()
+    if not a.prova:   # nelle prove niente analisi in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
+        threading.Thread(target=sorveglia, daemon=True).start()
     if not a.non_avviare:
         SUP.avvia()
     indirizzo = f"http://127.0.0.1:{PORTA_PANNELLO}/"

@@ -123,6 +123,16 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .etichetta.errore { color: var(--errore); background: var(--errore-sfondo); border-color: transparent; }
 .etichette { display: flex; gap: 6px; flex-wrap: wrap; }
 .segnaposto { font-family: var(--carattere-fisso); font-size: 12.5px; color: var(--segnaposto); background: var(--segnaposto-sfondo); border-radius: 4px; padding: 0 4px; }
+button.segnaposto { border: 0; cursor: pointer; line-height: inherit; }
+button.segnaposto:hover { box-shadow: 0 0 0 1px var(--segnaposto); }
+button.etichetta.togli { font: inherit; font-size: 12px; cursor: pointer; }
+button.etichetta.togli:hover { border-color: var(--bordo-2); color: var(--testo); }
+.correggi { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px dashed var(--bordo); }
+.correggi input[type="text"] { min-width: 200px; }
+.tasti { white-space: nowrap; color: var(--testo-2); }
+#scorciatoie .impostazione:first-child { border-top: 1px solid var(--bordo); }
+.nota-breve { display: block; width: 100%; min-width: 140px; min-height: 30px; margin-top: 6px; font-size: 12.5px; }
+.elenco.eventi { list-style: none; padding-left: 0; font-size: 13.5px; }
 .punto { width: 8px; height: 8px; border-radius: 50%; background: var(--testo-3); flex: none; }
 .punto.attiva { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-sfondo); }
 .punto.avvio, .punto.modello { background: var(--attenzione); }

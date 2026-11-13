@@ -177,6 +177,8 @@ class Rilevatore:
             spans = [m for m in spans if not ((m[2] == "ORG" and self.noti and _noti.e_noto(testo[m[0]:m[1]], self.mai))
                                               or _noti.norma(testo[m[0]:m[1]]) in self.mai)]
         certi = _regole.rileva(testo) if self.regole else []
+        if self.mai and certi:   # «non mascherare mai» vale anche per cio' che trovano le regole (es. l'email generica dell'azienda)
+            certi = [r for r in certi if _noti.norma(testo[r[0]:r[1]]) not in self.mai]
         if self.rx_sempre:
             certi += [[m.start(), m.end(), "ELENCO"] for m in self.rx_sempre.finditer(testo)]
         if certi:

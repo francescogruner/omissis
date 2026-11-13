@@ -197,7 +197,7 @@ def modelli_locali():
     for s in catalog.LOCALI:
         for porta in s["porte"]:
             if _porta_aperta(porta):
-                out.append({"nome": s["nome"], "cosa": i18n.t("rilevati.in_ascolto", porta=porta), "gb": None})
+                out.append({"nome": s["nome"], "cosa": i18n.t("rilevati.in_ascolto", porta=porta), "gb": None, "porta": porta})
     for nome, cartella in {"Modelli di Ollama": CASA / ".ollama/models", "Modelli di LM Studio": CASA / ".lmstudio/models",
                            "Modelli scaricati da Hugging Face": CASA / ".cache/huggingface/hub"}.items():
         if cartella.exists():

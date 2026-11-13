@@ -49,13 +49,14 @@ Le sezioni, senza doppioni:
 | Sezione | Cosa c'è | Per chi |
 |---|---|---|
 | Inizio | stato, avvio e arresto, numeri di oggi; in modalità avanzata lo stato dei quattro collegamenti e i grafici | tutti |
-| Testo | una casella sola: incollando, un testo normale viene mascherato e una risposta con i segnaposto ripristinata; il risultato va da solo negli appunti | tutti |
-| Documenti | file trascinati (in automatico: ripristina quelli con i segnaposto, anonimizza gli altri, e scarica il risultato) e cartelle intere | tutti |
+| Testo | una casella sola: incollando, un testo normale viene mascherato e una risposta con i segnaposto ripristinata; il risultato va da solo negli appunti e si corregge sul posto | tutti |
+| Documenti | file trascinati (in automatico: ripristina quelli con i segnaposto, anonimizza gli altri, e scarica il risultato) e cartelle intere, scelte con la finestra di Windows | tutti |
 | Guida | come si usa, in quattro passi | tutti |
-| Impostazioni | Generali: lingua, tema, modalità, aggiornamenti. Riconoscimento (avanzata): modello, difese, liste «sempre» e «mai» | tutti |
+| Impostazioni | Generali: lingua, tema, modalità, scorciatoie da tastiera, aggiornamenti. Riconoscimento (avanzata): modello, difese, liste «sempre» e «mai» | tutti |
 | Collegamenti | Browser (estensione), App desktop, Terminale (gateway), Proxy (porta, certificato, finestra di prova) | tecnico |
-| Servizi AI | Regole (cosa fare per ogni servizio) e Rilevati su questo PC (gli strumenti AI trovati) | tecnico |
-| Attività, Archivio | il registro delle richieste e la corrispondenza tra segnaposto e valori | tecnico |
+| Servizi AI | Regole (cosa fare per ogni servizio) e Rilevati su questo PC (l'inventario degli strumenti AI, tenuto nel tempo) | tecnico |
+| Attività | il registro delle richieste | tecnico |
+| Archivio | la corrispondenza tra segnaposto e valori: ricerca, eliminazioni mirate, pulizia | tecnico |
 
 **Lingue.** Italiano e inglese. Ogni frase che l'utente vede (pagina, menu dell'icona, notifiche,
 messaggi d'errore) sta in `panel\locales\it.json` e `en.json`, con le stesse chiavi; il codice
@@ -131,14 +132,53 @@ di una piattaforma generale (bloccare `google.com` per fermare un suo servizio f
 Funziona con ogni app e ogni abbonamento, perché non legge il traffico di nessuno. Richiede solo
 la protezione attiva.
 
-- **Testo**: nella sezione Testo si incolla ciò che si vuole dare all'AI, si copia la versione
-  mascherata, e a risposta ricevuta la si incolla lì per riavere i valori veri.
-- **Appunti** (con il programma aperto): `Ctrl+Alt+M` sostituisce il testo copiato con la versione
-  mascherata, pronta da incollare; `Ctrl+Alt+R` rimette i valori veri in una risposta copiata.
+- **Testo selezionato, sul posto** (con il programma aperto): si seleziona un testo in qualsiasi
+  programma e si preme `Ctrl+Alt+S`. Omissis lo copia, lo maschera e lo incolla al posto
+  dell'originale; una notifica dice quanti dati ha sostituito. Se non trova nulla di sensibile, o
+  se la protezione non risponde, il testo resta com'era.
+- **Appunti**: `Ctrl+Alt+M` sostituisce il testo copiato con la versione mascherata, pronta da
+  incollare; `Ctrl+Alt+R` rimette i valori veri in una risposta copiata. Le stesse due azioni sono
+  nel menu dell'icona vicino all'orologio.
+- **Testo**: nella sezione Testo si incolla ciò che si vuole dare all'AI: viene mascherato e
+  copiato da solo; a risposta ricevuta la si incolla lì per riavere i valori veri.
 - **Documenti**: nella sezione Documenti si trascinano i file (Word, Excel, PowerPoint, testo, PDF
-  con testo) oppure si indica una cartella intera. Per Cowork e simili: si anonimizza la cartella
-  (`Pratica` → `Pratica.anon`), si fa lavorare l'AI sulla copia, poi si ripristina
-  (`Pratica.anon` → `Pratica.ripristinato`). Da terminale: `documents.py anonimizza <percorso>`.
+  con testo) oppure si sceglie una cartella intera con «Sfoglia». Per Cowork e simili: si
+  anonimizza la cartella (`Pratica` → `Pratica.anon`), si fa lavorare l'AI sulla copia, poi si
+  ripristina (`Pratica.anon` → `Pratica.ripristinato`). «Apri la cartella» mostra il risultato in
+  Esplora file. Da terminale: `documents.py anonimizza <percorso>`.
+
+**Correggere il risultato.** Nessun riconoscimento è perfetto, quindi nella sezione Testo il
+risultato si sistema senza ricominciare:
+
+- un segnaposto di troppo: lo si preme e si sceglie «Lascia in chiaro» (solo per questo testo)
+  oppure «Non mascherare mai» (finisce nell'elenco `never.txt`, e vale anche per ciò che trovano
+  le regole: per esempio l'indirizzo email generico dell'azienda);
+- un dato sfuggito: lo si seleziona nel risultato (o lo si scrive), si sceglie che cos'è e si preme
+  «Maschera anche questo»; con «sempre» finisce nell'elenco `always.txt`.
+
+A ogni correzione il testo viene rifatto e ricopiato. Le correzioni «per questo testo» si vedono
+sotto il risultato e si tolgono con un clic. Un testo oltre 200.000 caratteri viene rifiutato con
+un messaggio, mai tagliato in silenzio: per quelli si usa un file in Documenti.
+
+**Scorciatoie.** Le tre combinazioni si cambiano (la lettera da premere con `Ctrl+Alt`) o si
+spengono in Impostazioni → Generali; nel file delle impostazioni (`scorciatoie`) si può scrivere
+qualunque combinazione, anche con `shift` o un tasto funzione. Sono registrate con la funzione di
+Windows per le scorciatoie globali: Windows consegna al programma **solo quelle combinazioni**,
+gli altri tasti premuti non li vede (prima si usava una libreria che ascoltava tutta la tastiera:
+è stata tolta). Se un altro programma ha già preso la stessa combinazione, il pannello lo dice e
+se ne sceglie un'altra. Cose da sapere:
+
+- una scorciatoia registrata vince sul programma in primo piano: se `Ctrl+Alt+S` serve già in un
+  programma che usate, cambiate lettera;
+- sulle tastiere dove `AltGr` più una lettera scrive un carattere (`AltGr` equivale a `Ctrl+Alt`),
+  evitate quella lettera;
+- la sostituzione sul posto preme `Ctrl+C` e `Ctrl+V` per conto dell'utente: per questo **non
+  lavora nelle finestre del terminale**, dove `Ctrl+C` interrompe il programma in corso (lì si
+  copia e si usa `Ctrl+Alt+M`). Nel terminale dentro un editor non può accorgersene: selezionare
+  sempre prima il testo;
+- negli appunti, dopo, resta il testo mascherato; il testo originale passa dagli appunti per un
+  istante, e chi tiene la cronologia degli appunti di Windows lo ritrova lì;
+- non lavora nelle finestre aperte come amministratore, se Omissis non lo è.
 
 Nei file Office la formattazione resta e vengono trattati anche intestazioni, piè di pagina, note,
 commenti, testo eliminato con le revisioni; autore, azienda e autori di revisioni e commenti vengono
@@ -149,6 +189,49 @@ Limiti: le immagini inserite dentro i documenti non sono coperte (nelle cartelle
 vengono saltati, non copiati); da PDF e immagini esce un file di testo; nei
 fogli Excel ogni cella è valutata da sola, senza l'intestazione della colonna, quindi il modello
 può sbagliare di più; i nomi dei file e dei fogli restano come sono.
+
+## Archivio
+
+`data\vault.sqlite` tiene la corrispondenza tra ogni valore e il suo segnaposto, cifrata con la
+protezione dei dati di Windows legata all'utente. La sezione Archivio serve a tenerlo in ordine:
+
+- **cercare** un segnaposto o un valore vero: la ricerca guarda i valori anche quando restano
+  nascosti (si vede `G•••••••••••`), così si controlla se un nome è in archivio senza mostrarli tutti;
+- filtrare per tipo, ordinare per data di creazione o di **ultimo uso** (aggiornato ogni volta che
+  il valore ricompare in un testo o viene ripristinato);
+- **eliminare** le voci scelte, oppure tutte quelle non usate da 30, 90, 180 o 365 giorni (anche
+  di un solo tipo): prima dice quante sono e chiede conferma;
+- **pulizia automatica**: ogni giorno toglie da sola le voci non usate da più del tempo scelto
+  (spenta finché non la si accende);
+- svuotare tutto.
+
+Ciò che si elimina non si può più ripristinare nei testi e nei documenti vecchi. **Un numero non
+viene mai riusato**, nemmeno dopo aver svuotato l'archivio: `[PERSONA_7]`, una volta eliminato,
+non indicherà mai un'altra persona, quindi un documento vecchio non può essere «ripristinato» con
+il valore sbagliato.
+
+## Inventario degli strumenti AI (Shadow AI)
+
+`scan.py` fotografa il PC: programmi e app installati, estensioni del browser e dell'editor di
+codice, comandi da terminale, modelli in locale, programmi AI aperti, servizi AI contattati di
+recente. `inventory.py` salva ogni fotografia in `data\inventory.sqlite` e la confronta con la
+precedente. In Servizi AI → Rilevati si vede:
+
+- quando è stata fatta l'ultima analisi e quando sarà la prossima: si ripete da sola **ogni
+  settimana** (oppure ogni giorno, oppure mai); «Analizza ora» ne fa una subito;
+- le **novità**: cosa è comparso e cosa non c'è più. Se un'analisi automatica trova strumenti
+  nuovi compare una notifica di Windows;
+- l'inventario: per ogni voce da quando c'è, l'ultima volta che è stata vista, la scelta fatta
+  nelle Regole per il servizio a cui appartiene, se un'estensione legge tutti i siti;
+- un **giudizio** per ogni voce (da valutare, approvato, da rimuovere) e una nota: restano anche
+  quando la voce sparisce;
+- l'esportazione in CSV (si apre con Excel) e «Dimentica ciò che non c'è più».
+
+La prima analisi fa da punto di partenza: non segnala nulla come nuovo. Ciò che va e viene da solo
+(un programma aperto o chiuso, un sito contattato) viene annotato quando compare, ma non quando
+sparisce. Nel file ci sono nomi di programmi ed estensioni, versioni e date: nessun contenuto e
+nessuna cronologia di navigazione. Tutto resta sul PC: non esiste (ancora) una raccolta centrale
+per chi gestisce molti PC, e l'esportazione serve anche a quello.
 
 ## Estensione del browser (Chrome ed Edge)
 
@@ -461,11 +544,19 @@ Usa un browser di prova che sta in `.playwright` (740 MB, si può cancellare; si
 `set PLAYWRIGHT_BROWSERS_PATH=app\.playwright` e
 `.venv\Scripts\python.exe -m playwright install chromium`). `e2e_sites.py` apre le pagine vere
 dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'estensione attiva.
-`e2e_vault.py` prova l'archivio cifrato e non ha bisogno di nulla acceso.
-`e2e_panel.py` (23 controlli, serve la protezione attiva) apre ogni sezione del pannello in
-italiano e in inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso
-dalla tastiera, il giro completo di un testo e di un documento con dati inventati; e scatta le
-schermate che vanno nei documenti e nel sito. `check_languages.py` confronta i file delle lingue
+`e2e_vault.py` (20 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
+mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
+inventate. Nessuno dei due ha bisogno di qualcosa acceso.
+`e2e_desktop.py` (16 controlli, serve la protezione attiva) prova ciò che tocca il desktop:
+scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
+in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
+altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
+`e2e_panel.py` (46 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`OMISSIS_LISTS` per provare anche gli elenchi) apre ogni sezione del pannello in italiano e in
+inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
+tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,
+una cartella intera, ricerca ed eliminazione nell'archivio, l'inventario con analisi inventate e
+poi quella vera del PC, le scorciatoie; e scatta le schermate che vanno nei documenti e nel sito. `check_languages.py` confronta i file delle lingue
 tra loro e con il codice.
 `e2e_install.py` (22 controlli, nulla acceso) prova lo scaricamento del modello e gli
 aggiornamenti contro un servizio finto: ripresa, file manomessi, firma di un'altra chiave, foglio

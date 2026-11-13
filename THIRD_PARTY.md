@@ -17,7 +17,6 @@ a ogni aggiornamento.
 |---|---|---|
 | mitmproxy | 12.3.1 | MIT |
 | pystray | 0.19.5 | LGPL-3.0 |
-| pynput | 1.8.2 | LGPL-3.0 |
 | Pillow | 13.0.0 | MIT-CMU |
 | lxml | 6.1.3 | BSD-3-Clause |
 | pypdf | 7.0.1 | BSD-3-Clause |
@@ -50,7 +49,7 @@ Inno Setup (licenza propria, libera). I pesi del modello non sono nell'installer
 
 ## Cosa cambia se si distribuisce un pacchetto già pronto
 
-`pystray` e `pynput` sono LGPL-3.0. Usarle come dipendenze installate a parte non impone nulla al
-nostro codice. Se un giorno si distribuisce un installer che le contiene, chi lo riceve deve poterle
-sostituire con una versione modificata: con Python basta lasciarle come moduli separati e riportare
-qui la loro licenza. Nessun componente di questo progetto è AGPL: per i PDF si usa `pypdf`.
+`pystray` è LGPL-3.0. Usarla come dipendenza installata a parte non impone nulla al
+nostro codice. Se si distribuisce un installer che la contiene, chi lo riceve deve poterla
+sostituire con una versione modificata: con Python basta lasciarla come modulo separato e riportare
+qui la sua licenza. Nessun componente di questo progetto è AGPL: per i PDF si usa `pypdf`.

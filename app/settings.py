@@ -20,6 +20,10 @@ PREDEFINITE = {
     "lingua": "auto",            # auto (quella di Windows) oppure il codice di una lingua presente in panel\\lingue
     "tema": "auto",              # auto (come il sistema) | chiaro | scuro
     "vista": "semplice",         # semplice (stato, testo, documenti, guida) | avanzata (tutto, per il tecnico)
+    # scorciatoie da tastiera, valide in ogni programma; "" = spenta. sostituisci: maschera sul posto il testo selezionato
+    "scorciatoie": {"sostituisci": "ctrl+alt+s", "maschera": "ctrl+alt+m", "ripristina": "ctrl+alt+r"},
+    "analisi": "settimanale",    # analisi degli strumenti AI sul PC: settimanale | giornaliera | mai (resta quella a mano)
+    "archivio_giorni": 0,        # 0 = l'archivio tiene tutto; N = toglie da solo le voci non usate da N giorni
 }
 _cache = {"mtime": None, "dati": None}
 
@@ -42,6 +46,14 @@ def scrivi(dati):
     puliti = {k: dati.get(k, v) for k, v in PREDEFINITE.items()}
     puliti["politiche"] = {k: v for k, v in (puliti["politiche"] or {}).items()
                            if k in catalog.PER_ID and v in catalog.POLITICHE}
+    date = puliti["scorciatoie"] if isinstance(puliti["scorciatoie"], dict) else {}
+    puliti["scorciatoie"] = {k: str(date.get(k, v)).strip().lower()[:40] for k, v in PREDEFINITE["scorciatoie"].items()}
+    if puliti["analisi"] not in ("settimanale", "giornaliera", "mai"):
+        puliti["analisi"] = PREDEFINITE["analisi"]
+    try:
+        puliti["archivio_giorni"] = min(3650, max(0, int(puliti["archivio_giorni"] or 0)))
+    except (TypeError, ValueError):
+        puliti["archivio_giorni"] = 0
     FILE.write_text(json.dumps(puliti, ensure_ascii=False, indent=1), encoding="utf-8")
     return puliti
 

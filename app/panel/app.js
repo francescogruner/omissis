@@ -35,6 +35,7 @@ async function api(percorso, dati) {
 }
 
 function avvisa(testo, errore = false) {
+  $$("#avvisi .avviso").filter(x => x.textContent === testo).forEach(x => x.remove());   // lo stesso avviso non si impila: riparte
   const a = document.createElement("div");
   a.className = "avviso" + (errore ? " errore" : "");
   if (errore) a.setAttribute("role", "alert");
@@ -261,18 +262,33 @@ const canali = prova(async () => {
 // ---- Testo
 // Una casella sola: un testo normale viene mascherato, uno che contiene segnaposto viene riportato ai valori veri.
 // Incollando parte da solo, e il risultato va da solo negli appunti (si può spegnere).
+// Il risultato si corregge sul posto: un segnaposto di troppo si lascia in chiaro, un dato sfuggito si maschera a mano.
 const RX_SEGNAPOSTO = /\[[A-Z][A-Z_]{1,22}_\d{1,7}\]/;
+const TIPI_A_MANO = ["ELENCO", "PERSONA", "ORG", "INDIRIZZO", "TELEFONO", "EMAIL", "ID_PRATICA", "SEGRETO"];
 const ricordo = (chiave, valore) => { try { if (valore === undefined) return localStorage.getItem(chiave); localStorage.setItem(chiave, valore); } catch { /* memoria del browser non disponibile */ } return null; };
 let risultato = "";
 DISEGNA.testo = el => {
+  let correzioni = {mai: [], anche: {}};   // valgono per il testo che c'è nella casella: si azzerano quando se ne incolla un altro
   el.innerHTML = scheda(`<label class="campo" for="ingresso">${esc(t("testo.ingresso"))}<span class="aiuto">${esc(t("testo.ingresso.sotto"))}</span></label>
       <textarea id="ingresso" placeholder="${esc(t("testo.esempio"))}"></textarea>
       <div class="riga"><button class="bottone primario" id="incolla">${esc(t("testo.incolla"))}</button>
         <button class="bottone" id="maschera">${esc(t("testo.maschera"))}</button><button class="bottone" id="ripristina">${esc(t("testo.ripristina"))}</button>
+        <button class="bottone" id="svuotaTesto">${esc(t("testo.svuota"))}</button>
         <span class="spazio"></span><label class="riga">${levetta("copiaDaSolo", t("testo.copia_da_solo"))}<span>${esc(t("testo.copia_da_solo"))}</span></label></div>`)
     + scheda(`<div class="riga"><h2 id="titoloRisultato">${esc(t("testo.risultato"))}</h2><span class="spazio"></span><span class="sfumato piccolo" id="notaRisultato"></span></div>
       <div class="esito" id="esito" aria-live="polite" aria-labelledby="titoloRisultato"></div>
-      <div class="etichette" id="trovati"></div>`,
+      <div class="etichette" id="trovati"></div>
+      <div class="correggi" id="correggi" hidden>
+        <p class="aiuto" id="correggiAiuto">${esc(t("testo.correggi.aiuto"))}</p>
+        <div class="riga" id="suSegnaposto" hidden></div>
+        <form class="riga" id="aggiungi">
+          <input type="text" id="daMascherare" class="spazio" maxlength="200" aria-label="${esc(t("testo.correggi.campo"))}" placeholder="${esc(t("testo.correggi.campo"))}">
+          <select id="tipoAMano" aria-label="${esc(t("testo.correggi.tipo"))}">${TIPI_A_MANO.map(k => `<option value="${k}">${esc(k === "ELENCO" ? t("testo.correggi.tipo.altro") : tipoDato(k))}</option>`).join("")}</select>
+          <label class="riga piccolo"><input type="checkbox" id="ancheSempre">${esc(t("testo.correggi.sempre"))}</label>
+          <button class="bottone" id="mascheraAnche">${esc(t("testo.correggi.maschera"))}</button>
+        </form>
+        <div class="etichette" id="correzioniFatte"></div>
+      </div>`,
       `<span id="cosaFatto">${esc(t("testo.risultato.vuoto"))}</span><span class="spazio"></span><button class="bottone" id="copiaRisultato" disabled>${esc(t("testo.copia"))}</button>`);
   const daSolo = $("#copiaDaSolo");
   daSolo.checked = ricordo("copia_da_solo") !== "no";
@@ -283,11 +299,22 @@ DISEGNA.testo = el => {
     if (daSolo.checked && risultato) { await copia(risultato, t(`testo.${cosa}.copiato`)); $("#cosaFatto").textContent = t(`testo.${cosa}.copiato`); }
     else $("#cosaFatto").textContent = t(`testo.${cosa}.fatto`);
   };
+  const fatte = () => {
+    const voce = (cosa, valore) => `<button type="button" class="etichetta togli" data-cosa="${cosa}" data-valore="${esc(valore)}" title="${esc(t("testo.correggi.togli"))}">${esc(t(`testo.correggi.fatta.${cosa}`, {valore}))} <span aria-hidden="true">×</span></button>`;
+    $("#correzioniFatte").innerHTML = correzioni.mai.map(v => voce("mai", v)).join("") + Object.keys(correzioni.anche).map(v => voce("anche", v)).join("");
+    $$("#correzioniFatte button").forEach(b => b.onclick = () => {
+      if (b.dataset.cosa === "mai") correzioni.mai = correzioni.mai.filter(v => v !== b.dataset.valore); else delete correzioni.anche[b.dataset.valore];
+      maschera();
+    });
+  };
   const maschera = prova(async () => {
-    const r = await api("/api/prova", {testo: $("#ingresso").value});
+    const r = await api("/api/prova", {testo: $("#ingresso").value, mai: correzioni.mai, anche: correzioni.anche});
     risultato = r.testi[0];
-    $("#esito").innerHTML = esc(risultato).replace(new RegExp(RX_SEGNAPOSTO, "g"), s => `<span class="segnaposto" title="${esc(r.mappa[s] ?? "")}">${s}</span>`);
+    $("#esito").innerHTML = esc(risultato).replace(new RegExp(RX_SEGNAPOSTO, "g"), s => `<button type="button" class="segnaposto" data-s="${s}" data-v="${esc(r.mappa[s] ?? "")}" title="${esc(r.mappa[s] ?? "")}">${s}</button>`);
+    $$("#esito button").forEach(b => b.onclick = () => suSegnaposto(b.dataset.s, b.dataset.v));
     $("#trovati").innerHTML = conteggi(r.conteggi) || `<span class="sfumato">${esc(t("testo.nessun_dato"))}</span>`;
+    $("#correggi").hidden = false; $("#suSegnaposto").hidden = true;
+    fatte();
     await consegna("mascherato", `${r.ms} ms`);
   });
   const ripristina = prova(async () => {
@@ -295,18 +322,59 @@ DISEGNA.testo = el => {
     risultato = r.testo;
     $("#esito").textContent = r.testo;
     $("#trovati").innerHTML = "";
+    $("#correggi").hidden = true;
     await consegna("ripristinato", t("testo.ripristinati", {n: r.ripristinati}) + (r.sconosciuti ? " " + t("testo.sconosciuti", {n: r.sconosciuti}) : ""));
   });
+  // un segnaposto premuto: cosa nasconde, e i due modi per toglierlo (solo questa volta, oppure per sempre)
+  const suSegnaposto = (segnaposto, valore) => {
+    const zona = $("#suSegnaposto");
+    zona.hidden = false;
+    zona.innerHTML = `<span>${t("testo.correggi.sta_per", {segnaposto: `<span class="segnaposto">${esc(segnaposto)}</span>`, valore: `<b>${esc(valore)}</b>`})}</span><span class="spazio"></span>
+      <button type="button" class="bottone" data-fai="chiaro">${esc(t("testo.correggi.chiaro"))}</button><button type="button" class="bottone" data-fai="mai">${esc(t("testo.correggi.mai"))}</button>
+      <button type="button" class="bottone" data-fai="chiudi" aria-label="${esc(t("generale.chiudi"))}">×</button>`;
+    $$("button", zona).forEach(b => b.onclick = prova(async () => {
+      if (b.dataset.fai === "chiudi") { zona.hidden = true; return; }
+      if (b.dataset.fai === "mai") { await api("/api/liste/aggiungi", {lista: "mai", termine: valore}); avvisa(t("testo.correggi.mai.fatto", {valore})); }
+      if (!correzioni.mai.includes(valore)) correzioni.mai.push(valore);
+      await maschera();
+    }));
+    $("button", zona).focus();
+  };
+  $("#aggiungi").onsubmit = prova(async e => {
+    e.preventDefault();
+    const termine = $("#daMascherare").value.trim();
+    if (termine.length < 2) { $("#daMascherare").focus(); return; }
+    if ($("#ancheSempre").checked) { await api("/api/liste/aggiungi", {lista: "sempre", termine}); avvisa(t("testo.correggi.sempre.fatto", {valore: termine})); }
+    correzioni.mai = correzioni.mai.filter(v => v !== termine);
+    correzioni.anche[termine] = $("#tipoAMano").value;
+    $("#daMascherare").value = ""; $("#ancheSempre").checked = false;
+    await maschera();
+  });
+  // il testo selezionato nel risultato finisce nella casella «manca qualcosa»: basta premere il pulsante
+  const selezione = () => {
+    const s = getSelection(), testo = String(s).trim();
+    if (testo.length >= 2 && testo.length <= 200 && !testo.includes("\n") && !RX_SEGNAPOSTO.test(testo) && s.anchorNode && $("#esito").contains(s.anchorNode) && !$("#correggi").hidden) $("#daMascherare").value = testo;
+  };
+  $("#esito").addEventListener("mouseup", selezione);
+  $("#esito").addEventListener("keyup", selezione);
+  const nuovo = () => { correzioni = {mai: [], anche: {}}; };
   const daSe = () => { if ($("#ingresso").value.trim()) (RX_SEGNAPOSTO.test($("#ingresso").value) ? ripristina : maschera)(); };
   $("#maschera").onclick = maschera;
   $("#ripristina").onclick = ripristina;
-  $("#ingresso").addEventListener("paste", () => setTimeout(daSe));   // il testo incollato c'è solo un attimo dopo
+  $("#ingresso").addEventListener("paste", () => { nuovo(); setTimeout(daSe); });   // il testo incollato c'è solo un attimo dopo
+  $("#ingresso").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); daSe(); } });
   $("#incolla").onclick = prova(async () => {
     let testo;
     try { testo = await navigator.clipboard.readText(); } catch { throw new Error(t("testo.incolla.negato")); }
     $("#ingresso").value = testo;
-    daSe();
+    nuovo(); daSe();
   });
+  $("#svuotaTesto").onclick = () => {
+    nuovo(); risultato = "";
+    $("#ingresso").value = ""; $("#esito").textContent = ""; $("#trovati").innerHTML = ""; $("#notaRisultato").textContent = "";
+    $("#correggi").hidden = true; $("#copiaRisultato").disabled = true; $("#cosaFatto").textContent = t("testo.risultato.vuoto");
+    $("#ingresso").focus();
+  };
   $("#copiaRisultato").onclick = () => copia(risultato);
 };
 
@@ -322,6 +390,7 @@ DISEGNA.documenti = el => {
       <div id="esitiFile" class="blocco" aria-live="polite"></div>`)
     + scheda(`<h2>${esc(t("documenti.cartella"))}</h2><p>${t("documenti.cartella.sotto")}</p>
       <div class="riga"><input type="text" id="percorsoCartella" class="spazio" aria-label="${esc(t("documenti.cartella.percorso"))}" placeholder="C:\\Lavoro\\Pratica Rossi">
+        <button class="bottone" id="sfoglia">${esc(t("documenti.cartella.sfoglia"))}</button>
         <button class="bottone primario" data-cartella="anonimizza">${esc(t("documenti.anonimizza"))}</button><button class="bottone" data-cartella="ripristina">${esc(t("documenti.ripristina"))}</button></div>
       <div id="esitoCartella" class="blocco" aria-live="polite"></div>`);
   const daSolo = $("#scaricaDaSolo");
@@ -348,16 +417,31 @@ DISEGNA.documenti = el => {
   const zona = $("#zona");
   ["dragenter", "dragover"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.add("sopra"); }));
   ["dragleave", "drop"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.remove("sopra"); }));
-  zona.addEventListener("drop", e => elabora([...e.dataTransfer.files]));
+  zona.addEventListener("drop", e => {
+    // una cartella trascinata non si può leggere da qui: si usa «Cartella intera», che lavora direttamente sul disco
+    const cartelle = [...(e.dataTransfer.items || [])].filter(x => x.webkitGetAsEntry?.()?.isDirectory).length;
+    if (cartelle) { avvisa(t("documenti.cartella_trascinata"), true); $("#sfoglia").focus(); }
+    if (cartelle < e.dataTransfer.files.length) elabora([...e.dataTransfer.files].filter((f, i) => !e.dataTransfer.items?.[i]?.webkitGetAsEntry?.()?.isDirectory));
+  });
+  $("#sfoglia").onclick = prova(async e => {
+    e.target.disabled = true;
+    try {
+      const r = await api("/api/cartella/scegli", {iniziale: $("#percorsoCartella").value});
+      if (r.percorso) $("#percorsoCartella").value = r.percorso;
+    } finally { e.target.disabled = false; e.target.focus(); }
+  });
   $$("button[data-cartella]").forEach(b => b.onclick = prova(async () => {
     const esito = $("#esitoCartella");
+    if (!$("#percorsoCartella").value.trim()) { $("#percorsoCartella").focus(); return; }
     esito.innerHTML = `<span class="sfumato">${esc(t("generale.in_lavorazione"))}</span>`;
     try {
       const r = await api("/api/documenti/percorso", {percorso: $("#percorsoCartella").value, azione: b.dataset.cartella});
-      esito.innerHTML = `<p>${t("documenti.cartella.esito", {fatti: `<b>${r.fatti.length}</b>`, saltati: `<b>${r.saltati.length}</b>`, dove: `<code>${esc(r.destinazione)}</code>`})}</p>
+      esito.innerHTML = `<div class="riga"><p class="spazio">${t("documenti.cartella.esito", {fatti: `<b>${r.fatti.length}</b>`, saltati: `<b>${r.saltati.length}</b>`, dove: `<code>${esc(r.destinazione)}</code>`})}</p>
+          <button class="bottone" id="apriCartella">${esc(t("documenti.cartella.apri"))}</button></div>
         <div class="etichette">${conteggi(r.conteggi) || etichetta(t("documenti.nessuna_sostituzione"))}</div>`
         + tabella(t("documenti.elaborati"), r.fatti, [x => esc(x.file), x => `<span class="sotto">${esc(x.uscita)}</span>`, x => `<span class="etichette">${conteggi(x.conteggi)}</span>`])
         + tabella(t("documenti.saltati"), r.saltati, [x => esc(x.file), x => etichetta(x.motivo, "attenzione")]);
+      $("#apriCartella").onclick = prova(() => api("/api/cartella/apri", {percorso: r.destinazione}));
     } catch (e) { esito.innerHTML = ""; throw e; }
   }));
 };
@@ -365,8 +449,8 @@ DISEGNA.documenti = el => {
 // ---- Guida
 DISEGNA.guida = el => {
   const passi = (chiave, n) => `<ol class="elenco">${Array.from({length: n}, (_, i) => `<li>${t(`${chiave}.${i + 1}`)}</li>`).join("")}</ol>`;
-  el.innerHTML = scheda(`<h2>${esc(t("guida.testo"))}</h2>${passi("guida.testo", 3)}`)
-    + scheda(`<h2>${esc(t("guida.tastiera"))}</h2>${passi("guida.tastiera", 3)}<p class="aiuto">${t("guida.tastiera.nota")}</p>`)
+  el.innerHTML = scheda(`<h2>${esc(t("guida.testo"))}</h2>${passi("guida.testo", 4)}`)
+    + scheda(`<h2>${esc(t("guida.tastiera"))}</h2>${passi("guida.tastiera", 4)}<p class="aiuto">${t("guida.tastiera.nota")}</p>`)
     + scheda(`<h2>${esc(t("guida.documenti"))}</h2>${passi("guida.documenti", 3)}`)
     + scheda(`<h2>${esc(t("guida.automatico"))}</h2><p>${t("guida.automatico.testo")}</p>`)
     + scheda(`<h2>${esc(t("guida.sapere"))}</h2><ul class="elenco">${[1, 2, 3, 4].map(i => `<li>${t(`guida.sapere.${i}`)}</li>`).join("")}</ul>`);
@@ -382,6 +466,10 @@ const impostazioniGenerali = prova(async el => {
       ${riga(t("impostazioni.lingua"), esc(t("impostazioni.lingua.sotto")), `<select id="lingua" aria-label="${esc(t("impostazioni.lingua"))}">${opzioni([["auto", t("impostazioni.automatica")], ...l.disponibili.map(x => [x.codice, x.nome])], l.scelta)}</select>`)}
       ${riga(t("impostazioni.tema"), "", `<select id="tema" aria-label="${esc(t("impostazioni.tema"))}">${opzioni([["auto", t("impostazioni.tema.auto")], ["chiaro", t("impostazioni.tema.chiaro")], ["scuro", t("impostazioni.tema.scuro")]], i.tema || "auto")}</select>`)}
       ${riga(t("menu.avanzata"), esc(t("impostazioni.avanzata.sotto")), levetta("avanzata2", t("menu.avanzata")))}
+    </section>
+    <section class="scheda" aria-labelledby="scTitolo">
+      <div class="dentro"><h2 id="scTitolo">${esc(t("scorciatoie.titolo"))}</h2><p>${t("scorciatoie.sotto")}</p></div>
+      <div id="scorciatoie"></div>
     </section>
     <section class="scheda" aria-labelledby="aggTitolo">
       <div class="dentro"><h2 id="aggTitolo">${esc(t("aggiornamenti.titolo"))}</h2><p id="aggNota"></p></div>
@@ -401,7 +489,33 @@ const impostazioniGenerali = prova(async el => {
       leggiStato();
     } finally { e.target.disabled = false; }
   });
+  disegnaScorciatoie();
   if (S) AGGIORNA.impostazioni(S);
+});
+// Le scorciatoie da tastiera: una riga ciascuna, con la lettera da premere insieme a Ctrl+Alt (oppure spenta) e lo stato.
+const LETTERE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const disegnaScorciatoie = prova(async () => {
+  const el = $("#scorciatoie");
+  if (!el) return;
+  const s = await api("/api/scorciatoie");
+  el.innerHTML = s.voci.map(v => {
+    const semplice = /^ctrl\+alt\+[a-z]$/.test(v.combinazione), lettera = semplice ? v.combinazione.slice(-1).toUpperCase() : "";
+    const stato = !v.combinazione ? etichetta(t("scorciatoie.spenta")) : !s.disponibili ? "" : v.attiva ? etichetta(t("scorciatoie.attiva"), "ok") : etichetta(t(`scorciatoie.errore.${v.errore === "non_valida" ? "non_valida" : "occupata"}`), "errore");
+    return riga(t(`scorciatoie.${v.nome}`), t(`scorciatoie.${v.nome}.sotto`), `${stato}<span class="tasti" aria-hidden="true"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+</span>
+      <select data-sc="${esc(v.nome)}" aria-label="${esc(t("scorciatoie.lettera_per", {nome: t(`scorciatoie.${v.nome}`)}))}">
+        <option value=""${v.combinazione ? "" : " selected"}>${esc(t("scorciatoie.spenta"))}</option>
+        ${v.combinazione && !semplice ? `<option value="${esc(v.combinazione)}" selected>${esc(v.scritta)}</option>` : ""}
+        ${LETTERE.map(l => `<option value="ctrl+alt+${l.toLowerCase()}"${l === lettera ? " selected" : ""}>${l}</option>`).join("")}</select>`);
+  }).join("") + (s.disponibili ? "" : `<div class="impostazione"><span class="aiuto">${esc(t("scorciatoie.senza_icona"))}</span></div>`);
+  $$("select[data-sc]", el).forEach(x => x.onchange = prova(async () => {
+    const scelte = Object.fromEntries(s.voci.map(v => [v.nome, v.combinazione]));
+    scelte[x.dataset.sc] = x.value;
+    await api("/api/impostazioni", {scorciatoie: scelte});
+    const dopo = (await api("/api/scorciatoie")).voci.find(v => v.nome === x.dataset.sc);
+    if (dopo.combinazione && !dopo.attiva && dopo.errore) avvisa(t(`scorciatoie.errore.${dopo.errore === "non_valida" ? "non_valida" : "occupata"}.lungo`, {tasti: dopo.scritta}), true);
+    else avvisa(t("impostazioni.salvata"));
+    disegnaScorciatoie();
+  }));
 });
 AGGIORNA.impostazioni = s => {
   const a = s.aggiornamento;
@@ -577,26 +691,83 @@ const serviziRegole = prova(async el => {
   $("#quali").onchange = disegna;
   disegna();
 });
-const scelta = p => p ? etichetta(t(`rilevati.scelta.${p}`), p === "blocca" ? "errore" : p === "proteggi" ? "" : "attenzione") : etichetta(t("rilevati.locale"));
-const serviziRilevati = el => {
+const scelta = p => p ? etichetta(t(`rilevati.scelta.${p}`), p === "blocca" ? "errore" : p === "proteggi" ? "" : "attenzione") : "";
+const CATEGORIE = ["programmi", "estensioni_browser", "estensioni_editor", "comandi", "modelli_locali", "in_ascolto", "processi", "contattati"];
+const giorno = s => s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : "";
+// L'inventario si tiene nel tempo: ogni analisi viene salvata e confrontata con la precedente (novità, da quando una cosa c'è,
+// giudizio di chi gestisce il PC). La parte «In rete adesso» resta una fotografia del momento.
+const serviziRilevati = prova(async el => {
   el.innerHTML = `<div class="nota"><span>${t("rilevati.nota")}</span></div>`
-    + scheda(`<div class="riga"><h2>${esc(t("rilevati.pc"))}</h2><span class="spazio"></span><span class="sfumato piccolo" id="pcQuando"></span><button class="bottone" id="analizzaPc">${esc(t("rilevati.analizza"))}</button></div>
-      <div id="pc" class="blocco sfumato" aria-live="polite">${esc(t("rilevati.pc.sotto"))}</div>`)
+    + `<section class="scheda"><div class="dentro">
+        <div class="riga"><div><h2>${esc(t("inventario.titolo"))}</h2><div class="sfumato piccolo" id="invQuando" aria-live="polite"></div></div><span class="spazio"></span>
+          <label class="riga piccolo" for="invOgni">${esc(t("inventario.ripeti"))}<select id="invOgni">${["settimanale", "giornaliera", "mai"].map(v => `<option value="${v}">${esc(t(`inventario.ripeti.${v}`))}</option>`).join("")}</select></label>
+          <button class="bottone primario" id="analizza">${esc(t("inventario.analizza"))}</button></div>
+        <div id="invNovita" class="blocco"></div>
+        <div class="riga"><input type="search" id="invCerca" class="spazio" placeholder="${esc(t("inventario.cerca"))}" aria-label="${esc(t("inventario.cerca"))}">
+          <select id="invQuali" aria-label="${esc(t("inventario.quali"))}">${["presenti", "tutti", "spariti", "da_valutare", "da_rimuovere"].map(v => `<option value="${v}">${esc(t(`inventario.quali.${v}`))}</option>`).join("")}</select>
+          <button class="bottone" id="invEsporta">${esc(t("inventario.esporta"))}</button><button class="bottone" id="invDimentica">${esc(t("inventario.dimentica"))}</button></div>
+      </div>
+      <div class="tabella"><table><caption class="vh">${esc(t("inventario.titolo"))}</caption><thead><tr>
+        ${["nome", "categoria", "visto", "regola", "giudizio"].map(c => `<th scope="col">${esc(t(`inventario.colonna.${c}`))}</th>`).join("")}</tr></thead><tbody id="invTabella"></tbody></table></div></section>`
     + scheda(`<div class="riga"><h2>${esc(t("rilevati.rete"))}</h2><span class="spazio"></span><span class="sfumato piccolo" id="reteQuando"></span><button class="bottone" id="analizzaRete">${esc(t("rilevati.aggiorna"))}</button></div>
       <div id="rete" class="blocco sfumato" aria-live="polite">${esc(t("rilevati.rete.sotto"))}</div>`);
   const nome = (a, b) => `<b>${esc(a)}</b><div class="sotto">${esc(b)}</div>`;
-  $("#analizzaPc").onclick = prova(async () => {
-    $("#pc").textContent = t("rilevati.in_corso");
-    const p = await api("/api/shadow/pc");
-    $("#pcQuando").textContent = `${p.quando.slice(11, 16)} · ${p.secondi} s`;
-    $("#pc").className = "blocco";
-    $("#pc").innerHTML = tabella(t("rilevati.programmi"), p.programmi, [r => nome(r.servizio.nome, `${r.nome} ${r.versione}`), r => esc(r.servizio.cosa), r => esc(r.origine), r => scelta(r.servizio.politica)])
-      + tabella(t("rilevati.processi"), p.processi, [r => nome(r.servizio.nome, r.nome), r => esc(r.servizio.cosa), r => esc(t("rilevati.n_processi", {n: r.istanze})), r => scelta(r.servizio.politica)])
-      + tabella(t("rilevati.estensioni_browser"), p.estensioni_browser, [r => nome(r.nome, r.id), r => esc(`${r.browser} · ${r.profilo}`), r => esc(r.versione), r => etichetta(t(r.accesso_a_tutti_i_siti ? "rilevati.tutti_i_siti" : "rilevati.accesso_limitato"), r.accesso_a_tutti_i_siti ? "errore" : "")])
-      + tabella(t("rilevati.estensioni_editor"), p.estensioni_editor, [r => `<b>${esc(r.nome)}</b>`, r => esc(r.editor), r => esc(r.autore), r => esc(r.versione)])
-      + tabella(t("rilevati.comandi"), p.comandi, [r => `<b>${esc(r.comando)}</b>`, r => `<span class="sotto">${esc(r.percorso)}</span>`])
-      + tabella(t("rilevati.modelli_locali"), p.locali, [r => `<b>${esc(r.nome)}</b>`, r => `<span class="sotto">${esc(r.cosa)}</span>`, r => r.gb != null ? `${r.gb} GB${r.parziale ? "+" : ""}` : ""])
-      || `<span class="sfumato">${esc(t("rilevati.pc.niente"))}</span>`;
+  let inv = await api("/api/inventario");
+  const disegna = () => {
+    const ultima = inv.analisi[0];
+    $("#invOgni").value = inv.ogni || "settimanale";
+    $("#invQuando").textContent = !ultima ? t("inventario.mai_fatta")
+      : t("inventario.ultima", {quando: `${giorno(ultima.ora)} ${ultima.ora.slice(11, 16)}`, origine: t(`inventario.origine.${ultima.origine === "automatica" ? "automatica" : "manuale"}`), n: inv.n_analisi})
+        + (inv.prossima ? " " + t("inventario.prossima", {quando: `${giorno(inv.prossima)} ${inv.prossima.slice(11, 16)}`}) : "");
+    const recenti = inv.eventi.slice(0, 12);
+    $("#invNovita").innerHTML = recenti.length ? `<h3>${esc(t("inventario.novita"))}</h3><ul class="elenco eventi">${recenti.map(e =>
+      `<li>${etichetta(t(`inventario.evento.${e.tipo}`), e.tipo === "comparso" ? "attenzione" : "")} <b>${esc(e.nome)}</b> <span class="sfumato">${esc(t(`inventario.categoria.${e.categoria}`))} · ${esc(giorno(e.ora))}</span></li>`).join("")}</ul>` : "";
+    const f = $("#invCerca").value.toLowerCase(), quali = $("#invQuali").value;
+    const visibili = inv.elementi.filter(e => quali === "tutti" || (quali === "presenti" && e.presente) || (quali === "spariti" && !e.presente)
+        || (quali === "da_valutare" && e.presente && !e.giudizio) || (quali === "da_rimuovere" && e.giudizio === "da_rimuovere"))
+      .filter(e => `${e.nome} ${e.dettaglio} ${e.nota} ${t(`inventario.categoria.${e.categoria}`)}`.toLowerCase().includes(f))
+      .sort((a, b) => CATEGORIE.indexOf(a.categoria) - CATEGORIE.indexOf(b.categoria));
+    $("#invTabella").innerHTML = visibili.length ? visibili.map(e => `<tr>
+        <td>${nome(e.nome, [e.dettaglio, e.versione].filter(Boolean).join(" · "))}</td>
+        <td>${esc(t(`inventario.categoria.${e.categoria}`))}</td>
+        <td>${e.presente ? "" : etichetta(t("inventario.non_piu"), "attenzione")}<div class="sotto">${esc(t("inventario.dal", {primo: giorno(e.primo), ultimo: giorno(e.ultimo)}))}</div></td>
+        <td><span class="etichette">${scelta(e.politica)}${e.segnale === "tutti_i_siti" ? etichetta(t("rilevati.tutti_i_siti"), "errore") : ""}</span></td>
+        <td><select data-chiave="${esc(e.chiave)}" aria-label="${esc(t("inventario.giudizio_per", {nome: e.nome}))}">${["", "approvato", "da_rimuovere"].map(g => `<option value="${g}"${g === (e.giudizio || "") ? " selected" : ""}>${esc(t(`inventario.giudizio.${g || "da_valutare"}`))}</option>`).join("")}</select>
+          <input type="text" class="nota-breve" data-nota="${esc(e.chiave)}" value="${esc(e.nota || "")}" maxlength="300" placeholder="${esc(t("inventario.nota"))}" aria-label="${esc(t("inventario.nota_per", {nome: e.nome}))}"></td></tr>`).join("")
+      : `<tr><td colspan="5" class="vuoto">${esc((inv.elementi.length ? t("inventario.nessuno_filtro") : t("inventario.vuoto")))}</td></tr>`;
+    $$("#invTabella select").forEach(x => x.onchange = prova(async () => {
+      await api("/api/inventario/giudizio", {chiave: x.dataset.chiave, giudizio: x.value});
+      inv.elementi.find(e => e.chiave === x.dataset.chiave).giudizio = x.value;
+    }));
+    $$("#invTabella input").forEach(x => x.onchange = prova(async () => {
+      await api("/api/inventario/giudizio", {chiave: x.dataset.nota, nota: x.value});
+      inv.elementi.find(e => e.chiave === x.dataset.nota).nota = x.value;
+    }));
+  };
+  $("#invCerca").oninput = disegna;
+  $("#invQuali").onchange = disegna;
+  $("#invOgni").onchange = prova(async e => { await salva({analisi: e.target.value}); inv = await api("/api/inventario"); disegna(); });
+  $("#analizza").onclick = prova(async e => {
+    e.target.disabled = true;
+    $("#invQuando").textContent = t("rilevati.in_corso");
+    try {
+      inv = await api("/api/inventario/analizza", {});
+      const n = inv.novita;
+      avvisa(n.prima ? t("inventario.prima_fatta", {n: inv.elementi.length}) : n.nuovi.length || n.spariti.length ? t("inventario.cambiato", {nuovi: n.nuovi.length, spariti: n.spariti.length}) : t("inventario.invariato"));
+    } finally { e.target.disabled = false; disegna(); }
+  });
+  $("#invEsporta").onclick = prova(async () => {
+    const r = await fetch("/api/inventario/csv", {headers: {"X-Pannello": CODICE}});
+    if (!r.ok) throw new Error(String(r.status));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await r.blob()); a.download = `omissis-inventario-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.append(a); a.click(); a.remove();
+  });
+  $("#invDimentica").onclick = prova(async () => {
+    const n = inv.elementi.filter(e => !e.presente).length;
+    if (!n) { avvisa(t("inventario.dimentica.niente")); return; }
+    if (!await conferma(t("inventario.dimentica.titolo"), t("inventario.dimentica.testo", {n}), t("inventario.dimentica"))) return;
+    inv = await api("/api/inventario/dimentica", {}); disegna();
   });
   $("#analizzaRete").onclick = prova(async () => {
     $("#rete").textContent = t("rilevati.in_corso");
@@ -604,12 +775,13 @@ const serviziRilevati = el => {
     $("#reteQuando").textContent = r.quando.slice(11, 16);
     $("#rete").className = "blocco";
     $("#rete").innerHTML = (tabella(t("rilevati.contattati"), r.proxy, [x => `<b>${esc(x.servizio)}</b>`, x => `<span class="etichette">${Object.entries(x.esiti).map(([e, n]) => etichetta(`${tSe("rilevati.esito." + e, e)} ${n}`, e === "protetto" ? "ok" : e === "bloccato" ? "errore" : "attenzione")).join("")}</span>`, x => `<span class="sotto">${esc(x.ultimo.slice(0, 16))}</span>`])
-      + tabella(t("rilevati.connessi"), r.programmi_connessi, [x => nome(x.servizio.nome, x.processo), x => esc(t("rilevati.n_connessioni", {n: x.connessioni})), x => scelta(x.servizio.politica)])
+      + tabella(t("rilevati.connessi"), r.programmi_connessi, [x => nome(x.servizio.nome, x.processo), x => esc(t("rilevati.n_connessioni", {n: x.connessioni})), x => scelta(x.servizio.politica) || etichetta(t("rilevati.locale"))])
       + tabella(t("rilevati.connessioni"), r.connessioni, [x => nome(x.servizio, x.host), x => esc(x.processo), x => esc(t("rilevati.n_connessioni", {n: x.connessioni})), x => scelta(x.politica)])
       + tabella(t("rilevati.dns"), r.dns, [x => nome(x.servizio, x.host), x => esc(x.cosa), x => scelta(x.politica)])
       || `<span class="sfumato">${esc(t("rilevati.rete.niente"))}</span>`) + (r.cache_dns_vuota ? `<p class="aiuto">${esc(t("rilevati.dns_vuoto"))}</p>` : "");
   });
-};
+  disegna();
+});
 
 // ---- Attività
 DISEGNA.attivita = el => {
@@ -635,20 +807,60 @@ const registro = prova(async () => {
 });
 
 // ---- Archivio
+// Si cerca per segnaposto o per valore vero (la ricerca guarda i valori anche quando restano nascosti), si elimina una voce,
+// un gruppo scelto o ciò che non si usa da tempo. I numeri eliminati non vengono riusati.
 DISEGNA.archivio = el => {
+  const opzioni = (voci, scelta) => voci.map(([v, n]) => `<option value="${esc(v)}"${String(v) === String(scelta) ? " selected" : ""}>${esc(n)}</option>`).join("");
   el.innerHTML = `<section class="scheda">
-      <div class="dentro"><div class="riga"><div class="etichette" id="archTipi"></div><span class="spazio"></span>
-        <label class="riga">${levetta("inChiaro", t("archivio.mostra"))}<span>${esc(t("archivio.mostra"))}</span></label>
-        <button class="bottone pericolo" id="svuota">${esc(t("archivio.svuota"))}</button></div></div>
-      <div class="tabella"><table><caption class="vh">${esc(t("archivio.titolo"))}</caption><thead><tr>${["segnaposto", "valore", "creato"].map(c => `<th scope="col">${esc(t(`archivio.colonna.${c}`))}</th>`).join("")}</tr></thead><tbody id="tabArchivio"></tbody></table></div>
+      <div class="dentro">
+        <div class="riga"><input type="search" id="archCerca" class="spazio" placeholder="${esc(t("archivio.cerca"))}" aria-label="${esc(t("archivio.cerca"))}">
+          <select id="archTipo" aria-label="${esc(t("archivio.tipo"))}"></select>
+          <select id="archOrdine" aria-label="${esc(t("archivio.ordine"))}">${opzioni(["recenti", "usati", "fermi", "tipo"].map(v => [v, t(`archivio.ordine.${v}`)]), "recenti")}</select>
+          <label class="riga">${levetta("inChiaro", t("archivio.mostra"))}<span>${esc(t("archivio.mostra"))}</span></label></div>
+        <div class="riga"><span class="sfumato piccolo" id="archConta" aria-live="polite"></span><span class="spazio"></span>
+          <button class="bottone pericolo" id="archElimina" disabled>${esc(t("archivio.elimina_scelte"))}</button></div>
+      </div>
+      <div class="tabella"><table><caption class="vh">${esc(t("archivio.titolo"))}</caption><thead><tr>
+        <th scope="col"><input type="checkbox" id="archTutte" aria-label="${esc(t("archivio.scegli_tutte"))}"></th>
+        ${["segnaposto", "valore", "creato", "usato"].map(c => `<th scope="col">${esc(t(`archivio.colonna.${c}`))}</th>`).join("")}</tr></thead><tbody id="tabArchivio"></tbody></table></div>
+    </section>
+    <section class="scheda" aria-labelledby="pulTitolo">
+      <div class="dentro"><h2 id="pulTitolo">${esc(t("archivio.pulizia"))}</h2><p>${esc(t("archivio.pulizia.sotto"))}</p></div>
+      ${riga(t("archivio.pulizia.fermi"), esc(t("archivio.pulizia.fermi.sotto")), `<select id="pulGiorni" aria-label="${esc(t("archivio.pulizia.giorni"))}">${opzioni([30, 90, 180, 365].map(g => [g, t("archivio.giorni", {n: g})]), 90)}</select><button class="bottone" id="pulFermi">${esc(t("archivio.pulizia.elimina"))}</button>`)}
+      ${riga(t("archivio.pulizia.da_sola"), esc(t("archivio.pulizia.da_sola.sotto")), `<select id="pulDaSola" aria-label="${esc(t("archivio.pulizia.da_sola"))}">${opzioni([[0, t("archivio.pulizia.mai")], ...[90, 180, 365].map(g => [g, t("archivio.pulizia.dopo", {n: g})])], 0)}</select>`)}
+      ${riga(t("archivio.svuota.titolo_breve"), esc(t("archivio.svuota.testo")), `<button class="bottone pericolo" id="svuota">${esc(t("archivio.svuota"))}</button>`)}
     </section>`;
+  let attesa;
+  const scelte = () => $$("#tabArchivio input:checked").map(x => x.value);
+  const aggiornaScelte = () => { const n = scelte().length; $("#archElimina").disabled = !n; $("#archElimina").textContent = n ? t("archivio.elimina_n", {n}) : t("archivio.elimina_scelte"); };
   const leggi = prova(async () => {
-    const a = await api("/api/archivio", {in_chiaro: $("#inChiaro").checked});
-    $("#archTipi").innerHTML = (Object.entries(a.per_tipo).sort((x, y) => y[1] - x[1]).map(([k, n]) => etichetta(`${tipoDato(k)} ${n}`)).join("") || `<span class="sfumato">${esc(t("archivio.vuoto"))}</span>`)
-      + (a.cifrato ? etichetta(t("archivio.cifrato"), "ok") : "");
-    $("#tabArchivio").innerHTML = a.voci.map(v => `<tr><td><span class="segnaposto">${esc(v.segnaposto)}</span></td><td>${esc(v.valore)}</td><td class="sotto">${esc(v.creato)}</td></tr>`).join("");
+    const a = await api("/api/archivio", {in_chiaro: $("#inChiaro").checked, cerca: $("#archCerca").value, etichetta: $("#archTipo").value, ordine: $("#archOrdine").value});
+    const tipo = $("#archTipo").value;
+    $("#archTipo").innerHTML = opzioni([["", t("archivio.tipo.tutti", {n: num(a.totale)})], ...Object.entries(a.per_tipo).sort((x, y) => y[1] - x[1]).map(([k, n]) => [k, `${tipoDato(k)} (${num(n)})`])], tipo);
+    $("#archConta").innerHTML = (a.totale ? esc(t("archivio.conta", {mostrate: num(a.voci.length), trovate: num(a.trovate), totale: num(a.totale)})) : esc(t("archivio.vuoto")))
+      + (a.cifrato ? " " + etichetta(t("archivio.cifrato"), "ok") : "");
+    $("#tabArchivio").innerHTML = a.voci.length ? a.voci.map(v => `<tr><td><input type="checkbox" value="${esc(v.segnaposto)}" aria-label="${esc(t("archivio.scegli", {segnaposto: v.segnaposto}))}"></td>
+        <td><span class="segnaposto">${esc(v.segnaposto)}</span></td><td>${esc(v.valore)}</td><td class="sotto">${esc(v.creato)}</td><td class="sotto">${esc(v.usato)}</td></tr>`).join("")
+      : `<tr><td colspan="5" class="vuoto">${esc((a.totale ? t("archivio.nessuna_trovata") : t("archivio.vuoto")))}</td></tr>`;
+    $("#archTutte").checked = false;
+    $$("#tabArchivio input").forEach(x => x.onchange = aggiornaScelte);
+    aggiornaScelte();
   });
-  $("#inChiaro").onchange = leggi;
+  $("#archCerca").oninput = () => { clearTimeout(attesa); attesa = setTimeout(leggi, 250); };
+  for (const id of ["archTipo", "archOrdine", "inChiaro"]) $(`#${id}`).onchange = leggi;
+  $("#archTutte").onchange = e => { $$("#tabArchivio input").forEach(x => { x.checked = e.target.checked; }); aggiornaScelte(); };
+  const elimina = async (dati, titolo) => {
+    const quante = (await api("/api/archivio/elimina", {...dati, solo_conta: true})).eliminate;
+    if (!quante) { avvisa(t("archivio.elimina.niente")); return; }
+    if (!await conferma(titolo, t("archivio.elimina.testo", {n: num(quante)}), t("archivio.elimina.si", {n: num(quante)}))) return;
+    const r = await api("/api/archivio/elimina", dati);
+    avvisa(t("archivio.eliminate", {n: num(r.eliminate)}));
+    leggi(); leggiStato();
+  };
+  $("#archElimina").onclick = prova(() => elimina({segnaposto: scelte()}, t("archivio.elimina.titolo")));
+  $("#pulFermi").onclick = prova(() => elimina({fermi_da_giorni: +$("#pulGiorni").value, etichetta: $("#archTipo").value}, t("archivio.pulizia.titolo", {n: $("#pulGiorni").value})));
+  api("/api/impostazioni").then(i => { $("#pulDaSola").value = String(i.archivio_giorni || 0); }).catch(() => {});
+  $("#pulDaSola").onchange = prova(e => salva({archivio_giorni: +e.target.value}));
   $("#svuota").onclick = prova(async () => {
     if (!await conferma(t("archivio.svuota.titolo"), t("archivio.svuota.testo"), t("archivio.svuota"))) return;
     await api("/api/archivio/svuota", {}); leggi(); leggiStato();
