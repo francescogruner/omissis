@@ -771,5 +771,9 @@
  "console.error.key": "Manca la chiave di collegamento.",
  "console.error.unreachable": "Console non raggiungibile",
  "console.error.refused": "Chiave non accettata",
- "console.error.answer": "La console ha risposto con un errore"
+ "console.error.answer": "La console ha risposto con un errore",
+ "service.manual": "Uso manuale",
+ "via.text": "sezione Testo",
+ "via.clipboard": "appunti e scorciatoie",
+ "via.document": "documento"
 }

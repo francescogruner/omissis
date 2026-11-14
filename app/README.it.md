@@ -636,7 +636,9 @@ una volta all'ora, un riepilogo (`central.py`):
   dell'installazione.
 
 Mai i testi, mai i valori sostituiti, mai l'archivio: il riepilogo viene dal registro delle attività, che
-contiene già solo conteggi. In Impostazioni > Console centrale (vista avanzata, o sempre se il PC è collegato)
+contiene già solo conteggi. Nel registro entra anche l'uso manuale (la sezione Testo, gli appunti e le
+scorciatoie, i documenti anonimizzati dal pannello), sotto la voce «Uso manuale»: un testo corretto a mano più
+volte conta una volta sola, un documento una volta. In Impostazioni > Console centrale (vista avanzata, o sempre se il PC è collegato)
 si vede a chi è collegato il PC, quando è partito l'ultimo riepilogo, e «Vedi che cosa parte» lo mostra per
 intero. La chiave di collegamento viaggia solo verso l'indirizzo scelto: un rinvio altrove non viene seguito, e
 un indirizzo non `https` fuori da questo PC viene rifiutato. La console che riceve i riepiloghi è un prodotto a
@@ -888,7 +890,7 @@ finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta.
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (58 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (60 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi, `OMISSIS_MANAGED_FILE` per le impostazioni imposte) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,

@@ -771,5 +771,9 @@
  "console.error.key": "The enrolment key is missing.",
  "console.error.unreachable": "Console unreachable",
  "console.error.refused": "Key not accepted",
- "console.error.answer": "The console answered with an error"
+ "console.error.answer": "The console answered with an error",
+ "service.manual": "Manual use",
+ "via.text": "Text section",
+ "via.clipboard": "clipboard and shortcuts",
+ "via.document": "document"
 }

@@ -13,6 +13,7 @@ Alla fine rimette lingua, tema e modalità com'erano. Le schermate (dati inventa
 e ai documenti.
 """
 import argparse
+import base64
 import json
 import os
 import re
@@ -218,6 +219,31 @@ def main():
                          "requires_openai_auth = true" in codex and "/openai/v1" in codex and saved and refused and cleared, f"salvato {saved} · rifiutato {refused} · tolto {cleared}")
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: terminale, righe per Codex in abbonamento e gateway proprio salvato, rifiutato se non valido, tolto", False, str(ex)[:160])
+
+                # --- l'uso manuale entra nel registro (solo conteggi): un testo conta una volta anche se corretto a mano, un documento una volta
+                try:
+                    def manual_rows():
+                        rows = [json.loads(x) for x in (paths.DATA / "activity.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
+                        return [r for r in rows if r.get("service") == "manual"]
+                    start = len(manual_rows())
+                    sample = f"Prova {language}: scrivere a Ottavio Bellandi, ottavio.bellandi@nevatek.example, cellulare 347 5550199."
+                    first = call(code, "/api/try", {"text": sample})
+                    call(code, "/api/try", {"text": sample})                                     # di nuovo lo stesso testo
+                    call(code, "/api/try", {"text": sample, "never": ["Ottavio Bellandi"]})        # una correzione a mano
+                    after_text = manual_rows()[start:]
+                    doc = call(code, "/api/documents/file", {"name": "nota.txt", "action": "anonymize",
+                                                             "content": base64.b64encode(sample.encode("utf-8")).decode("ascii")})
+                    after_doc = manual_rows()[start:]
+                    leaked = any("Bellandi" in json.dumps(r, ensure_ascii=False) or "nevatek" in json.dumps(r) for r in after_doc)
+                    summary = call(code, "/api/console", {"action": "preview"})["preview"]["days"][-1]
+                    shown = dict(call(code, "/api/status")["stats"]["services"]).get("manual", 0)
+                    mark(f"{language}: l'uso manuale entra nel registro con i soli conteggi e finisce nel riepilogo per la console",
+                         len(after_text) == 1 and after_text[0]["via"] == "text" and after_text[0]["replacements"] == first["counts"]
+                         and len(after_doc) == 2 and after_doc[1]["via"] == "document" and doc["counts"] == after_doc[1]["replacements"]
+                         and not leaked and summary["services"].get("manual", 0) >= 2 and shown >= 2,
+                         f"testo {len(after_text)} · documento {len(after_doc) - len(after_text)} · nel riepilogo {summary['services'].get('manual')}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: l'uso manuale entra nel registro", False, str(ex)[:160])
 
                 # --- impostazioni decise da chi amministra il PC: nella pagina si vedono ferme, e il programma rifiuta di cambiarle
                 try:

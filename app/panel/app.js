@@ -237,7 +237,7 @@ REFRESH.start = s => {
   const m = Math.max(1, ...st.days.map(g => g.n));
   $("#days").innerHTML = st.days.map(g => `<div><span>${g.n || ""}</span><i data-a="${Math.round(100 * g.n / m)}"></i><span>${esc(g.day.slice(8) + "/" + g.day.slice(5, 7))}</span></div>`).join("");
   measures($("#days"));
-  bars($("#byService"), st.services); bars($("#byKind"), st.kinds, dataKind);
+  bars($("#byService"), st.services, s => tSe("service." + s, s)); bars($("#byKind"), st.kinds, dataKind);
 };
 let seenNotice = "";
 function updateNotice(a) {
@@ -942,7 +942,7 @@ const log = test(async () => {
     if (v.CLEAR_VALUES) d += label(t("activity.reveal", {n: v.CLEAR_VALUES}), "error");
     if (v.ms !== undefined) d += label(`${v.ms} ms`);
     const structure = v.structure ? `<details><summary>${esc(t("activity.structure"))}</summary><code>${esc(JSON.stringify(v.structure))}</code></details>` : "";
-    return `<tr><td class="below">${esc((v.stamp || "").slice(5, 16))}</td><td>${esc(v.service || "")}</td>
+    return `<tr><td class="below">${esc((v.stamp || "").slice(5, 16))}</td><td>${esc(tSe("service." + (v.service || ""), v.service || ""))}</td>
       <td>${label(tSe("event." + ev, ev), tone)}<div class="below">${esc(v.path || "")}${v.via ? " · " + esc(tSe("via." + v.via, v.via)) : ""}</div></td>
       <td><span class="labels">${d}</span>${structure}</td></tr>`;
   }).join("") : `<tr><td colspan="4" class="empty">${esc(t("activity.empty"))}</td></tr>`;

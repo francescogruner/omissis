@@ -57,7 +57,7 @@ def signal_of(entry):
     """(servizio, via, programma, metodo, esito) se la riga di registro dice qualcosa sulla compatibilita', altrimenti None.
     esito: ok (dati sostituiti prima dell'invio) | ripristino (valori rimessi nella risposta) | non_letto (formato non riconosciuto)."""
     service, event = entry.get("service"), str(entry.get("event") or "")
-    if not service:
+    if not service or service == "manual":   # l'uso manuale non passa da nessun programma: non dice nulla sulla compatibilita'
         return None
     if event in ("masked", "attachment_masked") and sum((entry.get("replacements") or {}).values()) > 0:
         outcome = "ok"

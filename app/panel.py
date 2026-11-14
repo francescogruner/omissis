@@ -11,6 +11,7 @@ la pagina stessa): un altro sito aperto nel browser non puo' comandare il progra
 import argparse
 import base64
 import collections
+import hashlib
 import json
 import os
 import re
@@ -95,6 +96,41 @@ def engine(path, data=None, timeout=60):
                                   data=json.dumps(data).encode("utf-8") if data is not None else None)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
+
+
+_MANUAL = {"log": None, "last": ""}
+_manual_lock = threading.Lock()
+
+
+def record_manual(via, counts, text=None):
+    """L'uso manuale (sezione Testo, appunti e scorciatoie, documenti) entra nel registro come ogni altra richiesta:
+    solo i conteggi, mai il testo. Lo stesso testo mascherato piu' volte di fila (succede a ogni correzione fatta a mano)
+    conta una volta: se ne ricorda l'impronta, in memoria e basta."""
+    counts = {str(k): int(n) for k, n in (counts or {}).items() if isinstance(n, int) and n > 0}
+    if not counts:
+        return
+    with _manual_lock:
+        if text is not None:
+            mark = hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
+            if mark == _MANUAL["last"]:
+                return
+            _MANUAL["last"] = mark
+        try:
+            if _MANUAL["log"] is None:
+                _MANUAL["log"] = activity.Log()
+            _MANUAL["log"].write(service="manual", via=via, event="masked", replacements=counts)
+        except Exception:   # noqa: BLE001  (il registro non deve mai fermare il lavoro)
+            pass
+
+
+def manual(via):
+    """Il motore, per l'uso manuale: ogni mascheramento riuscito viene segnato nel registro."""
+    def call(path, data=None, timeout=60):
+        r = engine(path, data, timeout)
+        if path == "/mask":
+            record_manual(via, r.get("counts"))
+        return r
+    return call
 
 
 class Supervisor:
@@ -714,7 +750,9 @@ class Handler(BaseHTTPRequestHandler):
                 # le correzioni fatte a mano su questo testo: cosa lasciare in chiaro e cosa mascherare comunque
                 never = [str(x)[:200] for x in data.get("never") or []][:200]
                 also = {str(k)[:200]: str(v) for k, v in list((data.get("also") or {}).items())[:200]}
-                self._respond(200, engine("/mask", {"texts": [text], "never": never, "also": also}))
+                r = engine("/mask", {"texts": [text], "never": never, "also": also})
+                record_manual("text", r.get("counts"), text)
+                self._respond(200, r)
             elif p == "/api/lists/add":   # da Testo: «non mascherare mai» e «maschera sempre», senza passare dalle Impostazioni
                 list_name, term = ("never" if data.get("list_name") == "never" else "always"), str(data.get("term", "")).strip()[:200]
                 if len(term) < 2 or "\n" in term or term.startswith("#"):
@@ -733,15 +771,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, {"text": restore.restore(text, mapping.get), "restored": len(mapping),
                                      "unknown": len(found_items) - len(mapping)})
             elif p == "/api/clipboard":
-                self._respond(200, {"outcome": clipboard.transform("restore" if data.get("action") == "restore" else "mask", engine)})
+                self._respond(200, {"outcome": clipboard.transform("restore" if data.get("action") == "restore" else "mask", manual("clipboard"))})
             elif p == "/api/documents/path":
                 action = "restore" if data.get("action") == "restore" else "anonymize"
                 outcome = documents.path(str(data.get("path", "")), action)
+                if action == "anonymize":
+                    for done in outcome.get("completed") or []:
+                        record_manual("document", done.get("counts"))
                 FOLDERS.add(os.path.normcase(os.path.abspath(str(outcome.get("destination", "")))))
                 self._respond(200, outcome)
             elif p == "/api/documents/file":
                 action = data.get("action") if data.get("action") in ("anonymize", "restore") else "auto"
                 action, name, fresh, counts = documents.work_on_auto(Path(str(data.get("name", "file"))).name, base64.b64decode(data.get("content", "")), action)
+                if action == "anonymize":
+                    record_manual("document", counts)
                 self._respond(200, {"action": action, "name": name, "content": base64.b64encode(fresh).decode("ascii"), "counts": counts})
             elif p == "/api/vault":
                 self._respond(200, engine("/vault", {"limit": 500, "reveal": bool(data.get("reveal")), "search": str(data.get("search") or "")[:200],
@@ -830,7 +873,7 @@ def icon(server):
     def on_clipboard(action):
         def run(icon_, _):
             try:
-                notify(clipboard.transform(action, engine))
+                notify(clipboard.transform(action, manual("clipboard")))
             except Exception:   # noqa: BLE001
                 notify(i18n.t("program.protection_not_active"))
         return run
@@ -867,7 +910,7 @@ def icon(server):
 
     global SHORTCUTS, NOTIFY
     NOTIFY = notify
-    SHORTCUTS = clipboard.shortcuts(engine, notify)
+    SHORTCUTS = clipboard.shortcuts(manual("clipboard"), notify)
     in_use, changed = clipboard.system(SHORTCUTS, clipboard.choices(settings.read()))
     if changed:   # una combinazione era gia' di un altro programma: si tiene quella libera e lo si dice, a icona comparsa
         settings.write({**settings.read(), "shortcuts": in_use})
