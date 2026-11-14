@@ -139,6 +139,9 @@ The panel opens at `http://127.0.0.1:8766`. From there: mask a text by hand (sec
 anonymise documents (*Documenti*), load and pair the browser extension (*Browser*).
 Everything else is in [app/README.it.md](app/README.it.md).
 
+**On many PCs** (organisations, MSPs): the scripts in [`deploy/`](deploy/README.md) install Omissis silently and
+pre-configured, report its state and remove it, from an RMM tool, Intune or a logon script.
+
 ## What Omissis does not protect you from
 
 Be clear about the limits before relying on it:

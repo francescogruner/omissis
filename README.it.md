@@ -125,6 +125,9 @@ Il pannello si apre su `http://127.0.0.1:8766`. Da lì: mascherare un testo a ma
 anonimizzare documenti (Documenti), caricare e collegare l'estensione (Browser).
 Tutto il resto è in [app/README.it.md](app/README.it.md).
 
+**Su molti PC** (aziende, MSP): gli script in [`deploy/`](deploy/README.it.md) installano Omissis in silenzio e
+già configurato, ne riferiscono lo stato e lo tolgono, da un RMM, da Intune o da uno script di accesso.
+
 ## Da cosa Omissis non protegge
 
 - **È un filtro, non una garanzia.** Un modello può non riconoscere un dato. Per i termini che non può

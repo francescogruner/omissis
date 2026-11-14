@@ -1,0 +1,13 @@
+{
+ "_about": "Customer template for Install-Omissis.ps1 -Settings. Keys starting with an underscore are ignored. Only the keys written here are imposed; every other setting stays as the user has it.",
+ "model": "omissis-small",
+ "updates": "automatic",
+ "view": "simple",
+ "language": "it",
+ "policies": {
+  "deepseek": "block",
+  "copilot": "protect"
+ },
+ "groups_off": [],
+ "vault_days": 0
+}
