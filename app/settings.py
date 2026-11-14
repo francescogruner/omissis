@@ -10,7 +10,7 @@ import paths
 
 FILE = paths.DATA / "settings.json"
 DEFAULTS = {
-    "model": "omissis-base",   # omissis-base (piu' preciso) oppure omissis-small (piu' leggero)
+    "model": "omissis-small",  # omissis-small (di serie: piu' leggero e veloce) oppure omissis-base (un po' piu' preciso, piu' memoria)
     "device": "auto",            # auto | cpu | cuda
     "port": 8080,
     "restore": True,          # False: le risposte restano con i segnaposto (per vedere cosa riceve il servizio)

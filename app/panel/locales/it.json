@@ -195,8 +195,8 @@
 
  "recognition.model": "Modello",
  "recognition.model.below": "Il cambio richiede il riavvio della protezione. Se il modello non è su questo PC viene scaricato.",
- "recognition.model.base": "omissis-base · più preciso (1,2 GB)",
- "recognition.model.small": "omissis-small · più leggero (537 MB)",
+ "recognition.model.base": "omissis-base · un po' più preciso, vuole 16 GB di memoria (1,2 GB)",
+ "recognition.model.small": "omissis-small · consigliato: più leggero e veloce (537 MB)",
  "recognition.where": "Dove gira il modello",
  "recognition.where.auto": "Automatico",
  "recognition.where.cuda": "Scheda grafica",

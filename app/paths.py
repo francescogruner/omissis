@@ -22,7 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-DEFAULT_MODEL = "omissis-base"
+DEFAULT_MODEL = "omissis-small"
 ENGINE_PORT = int(os.environ.get("OMISSIS_PORT") or 8765)
 PANEL_PORT, GATEWAY_PORT = ENGINE_PORT + 1, ENGINE_PORT + 2
 _OLD_NAMES = {"v3-base": "omissis-base", "v3-small": "omissis-small"}
