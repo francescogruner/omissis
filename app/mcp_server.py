@@ -407,7 +407,9 @@ class Server:
 def command():
     """Il comando con cui un'app lancia questo server: l'interprete con la finestra di testo (serve l'uscita standard)."""
     py = Path(sys.executable)
-    if py.name.lower() == "pythonw.exe" and py.with_name("python.exe").exists():
+    # il pannello gira con un interprete senza finestra (pythonw.exe; nella copia installata si chiama Omissis.exe), che non
+    # ha ingresso e uscita standard: per il server serve quello normale, che gli sta accanto
+    if py.name.lower() != "python.exe" and py.with_name("python.exe").exists():
         py = py.with_name("python.exe")
     return str(py), [str(HERE / "mcp_server.py")]
 
