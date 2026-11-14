@@ -788,10 +788,10 @@ programma scrive, e questo cambia quattro cose:
 
 Stato al 14 novembre 2026: la cartella del pacchetto e il suo manifesto esistono
 (`costruisci_store.py`) e il programma, lanciato da lì con i comandi del manifesto, supera 9
-controlli (`prova_store.py`). **Non ancora fatto**: chiudere il file `.msix` (serve il Windows SDK),
-registrarlo e provarlo dal menu Start (serve la Modalità sviluppatore di Windows), l'invio. Mancano
-anche il nome e l'editore assegnati dal Partner Center. I passi sono in
-`pubblicazione\store\microsoft_it.md`.
+controlli (`prova_store.py`). Lo strumento di Microsoft (`makeappx`) convalida il manifesto e chiude
+il file `.msix` (82 MB), per ora con un'identità di prova. **Non ancora fatto**: registrarlo e
+provarlo dal menu Start (serve la Modalità sviluppatore di Windows), rifarlo con il nome e l'editore
+assegnati dal Partner Center, l'invio. I passi sono in `pubblicazione\store\microsoft_it.md`.
 
 ## Prove automatiche
 
