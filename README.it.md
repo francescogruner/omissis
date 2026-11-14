@@ -7,7 +7,8 @@ computer, e rimette i valori veri nella risposta. Chi scrive legge il testo vero
 soltanto segnaposto.
 
 Tutto gira in locale: il modello che riconosce i dati, l'archivio dei segnaposto, il pannello. Nulla
-viene mandato a un server di Omissis, perché non esiste.
+viene mandato a un server di Omissis, perché non esiste. (Un'organizzazione può collegare i suoi PC a una
+console propria: di serie è spento, partono solo conteggi, e il pannello mostra esattamente che cosa parte.)
 
 ![La pagina iniziale](docs/screenshots/start-it.png)
 
@@ -126,7 +127,8 @@ anonimizzare documenti (Documenti), caricare e collegare l'estensione (Browser).
 Tutto il resto è in [app/README.it.md](app/README.it.md).
 
 **Su molti PC** (aziende, MSP): gli script in [`deploy/`](deploy/README.it.md) installano Omissis in silenzio e
-già configurato, ne riferiscono lo stato e lo tolgono, da un RMM, da Intune o da uno script di accesso.
+già configurato, bloccano le impostazioni scelte dall'amministratore, ne riferiscono lo stato e lo tolgono, da
+un RMM, da Intune o da uno script di accesso.
 
 ## Da cosa Omissis non protegge
 
@@ -157,7 +159,7 @@ Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 - Firma del codice dell'installer e pubblicazione sul Microsoft Store
 - Messaggistica nativa del browser per l'estensione e pubblicazione sugli store; Firefox
 - Scansioni restituite come immagine oscurata; ripristino automatico dei file scaricati dalle chat
-- Console centrale per le organizzazioni (politiche, distribuzione, registro di conformità)
+- Console centrale per le organizzazioni (un prodotto a parte: il programma blocca già le impostazioni e manda il riepilogo)
 
 ## Licenza
 

@@ -32,6 +32,7 @@ import updates
 import clipboard
 import activity
 import catalog
+import central
 import connector
 import documents
 import folders
@@ -72,6 +73,14 @@ EVERY = {"daily": 86400, "weekly": 7 * 86400}   # ogni quanto si ripete l'analis
 
 class Refusal(Exception):
     """Una richiesta della pagina che non si puo' esaudire: il messaggio e' per l'utente, nella sua lingua."""
+
+
+def guard(*keys, changes=None):
+    """Ferma il cambio di un'impostazione imposta da chi amministra il PC (managed.py)."""
+    lock, current = settings.locked()["keys"], settings.read()
+    for k in keys:
+        if k in lock and (changes is None or changes.get(k) != current.get(k)):
+            raise Refusal(i18n.t("managed.locked"))
 
 
 def opened_port(port):
@@ -356,8 +365,8 @@ def contacts(days=30):
 
 
 def services():
-    cfg, cont = settings.read(), contacts()
-    return [{"id": s["id"], "name": s["name"], "vendor": s["vendor"], "kind": s["kind"], "domains": s["domains"],
+    cfg, cont, fixed = settings.read(), contacts(), settings.locked()["policies"]
+    return [{"id": s["id"], "name": s["name"], "vendor": s["vendor"], "kind": s["kind"], "domains": s["domains"], "locked": s["id"] in fixed,
              "reading": "radar" if s["radar"] else READING_STATUS[s["adapter"]], "radar": s["radar"], "readable": bool(s["adapter"]),
              "policy": settings.policy(s, cfg),
              "default": catalog.default_policy(s), "contacts": cont.get(s["id"], {}).get("n", 0),
@@ -532,7 +541,11 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/services":
                 self._respond(200, services())
             elif u.path == "/api/settings":
-                self._respond(200, {**settings.read(), "certificate": certificate(), "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON})
+                # la chiave di collegamento alla console non torna alla pagina: le basta sapere se c'e' (/api/console)
+                self._respond(200, {**{k: v for k, v in settings.read().items() if k != "console_key"}, "certificate": certificate(),
+                                     "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON, "managed": settings.locked()})
+            elif u.path == "/api/console":
+                self._respond(200, central.state())
             elif u.path == "/api/lists":
                 self._respond(200, read_lists())
             elif u.path == "/api/app":
@@ -598,7 +611,9 @@ class Handler(BaseHTTPRequestHandler):
                     SUP.launch()
                 self._respond(200, SUP.status())
             elif p == "/api/settings":
-                new_ones = settings.write({**settings.read(), **{k: v for k, v in data.items() if k in settings.DEFAULTS}})
+                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith("console_")}
+                guard(*changes, changes=changes)
+                new_ones = {k: v for k, v in settings.write({**settings.read(), **changes}).items() if k != "console_key"}
                 if "shortcuts" in data and SHORTCUTS is not None:
                     SHORTCUTS.configure(clipboard.choices(new_ones))
                 if "categories" in data:   # il motore rilegge quali categorie in piu' sostituire
@@ -609,6 +624,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, {**new_ones, "restart_needed": SUP.restart_needed()})
             elif p == "/api/services":
                 cfg = settings.read()
+                if str(data["id"]) in settings.locked()["policies"]:
+                    raise Refusal(i18n.t("managed.locked"))
                 policies = dict(cfg["policies"])
                 policies[str(data["id"])] = str(data["policy"])
                 settings.write({**cfg, "policies": policies})
@@ -616,6 +633,7 @@ class Handler(BaseHTTPRequestHandler):
             elif p == "/api/lists":
                 self._respond(200, write_lists(data))
             elif p == "/api/gateway":   # chi ha gia' un proprio gateway: dove inoltrare, servizio per servizio (vuoto = il servizio vero)
+                guard("gateway_upstreams")
                 wanted = {str(k): str(v).strip() for k, v in (data.get("upstreams") or {}).items() if str(v).strip()}
                 wrong = [v for k, v in wanted.items() if k not in gateway.routes() or k == "codex" or not settings.address_ok(v)]
                 if wrong:
@@ -629,12 +647,35 @@ class Handler(BaseHTTPRequestHandler):
                     except (OSError, ValueError) as ex:
                         raise Refusal(i18n.t("mcp.error.config")) from ex
                 elif action == "folders":
+                    guard("mcp_folders")
                     chosen = [str(x).strip().strip('"') for x in data.get("folders") or [] if str(x).strip()]
                     missing = [x for x in chosen if not Path(x).is_dir()]
                     if missing:
                         raise Refusal(i18n.t("mcp.error.folder", folder=missing[0]))
                     settings.write({**settings.read(), "mcp_folders": chosen})
                 self._respond(200, mcp_state())
+            elif p == "/api/console":   # la console centrale di un'organizzazione: collegare, vedere che cosa parte, inviare ora
+                action = data.get("action")
+                if action in ("connect", "disconnect"):
+                    guard("console_url", "console_key", "console_names")
+                    address, key = str(data.get("url") or "").strip().rstrip("/"), str(data.get("key") or "").strip()
+                    if action == "connect" and not settings.console_address_ok(address):
+                        raise Refusal(i18n.t("console.error.address"))
+                    if action == "connect" and not key and not settings.read().get("console_key"):
+                        raise Refusal(i18n.t("console.error.key"))
+                    cfg = settings.read()
+                    settings.write({**cfg, "console_url": address if action == "connect" else "",
+                                    "console_key": (key or cfg.get("console_key")) if action == "connect" else "",
+                                    "console_names": data.get("names", True) is not False})
+                    central.STATE.update(last="", error="")
+                    if action == "connect":
+                        central.send(SUP.phase)
+                elif action == "send":
+                    central.send(SUP.phase)
+                elif action == "preview":
+                    self._respond(200, {"preview": central.summary(SUP.phase)})
+                    return
+                self._respond(200, central.state())
             elif p == "/api/app":
                 key = str(data.get("id", ""))
                 if key not in connector.APP:
@@ -879,6 +920,7 @@ def main():
     if not a.test:   # nelle prove niente lavoro in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
         threading.Thread(target=watch, daemon=True).start()
         threading.Thread(target=watch_apps, daemon=True).start()
+        threading.Thread(target=central.loop, args=(lambda: SUP.phase,), daemon=True).start()
     if not a.do_not_launch:
         SUP.launch()
     address = f"http://127.0.0.1:{PANEL_PORT}/"

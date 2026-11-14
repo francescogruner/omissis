@@ -6,6 +6,7 @@ import urllib.parse
 from pathlib import Path
 
 import catalog
+import managed
 import paths
 
 FILE = paths.DATA / "settings.json"
@@ -30,20 +31,64 @@ DEFAULTS = {
     "mcp_folders": [],            # cartelle in piu' che il server MCP puo' usare, oltre a Documenti, Desktop e Download
     "gateway_upstreams": {},      # chi ha gia' un proprio gateway: nome usato nell'indirizzo (anthropic, openai...) -> dove inoltrare
     "groups_off": [],             # gruppi di dati che chi usa il PC ha scelto di NON sostituire (vedi GROUPS): di serie nessuno
+    # console centrale (facoltativa, per le organizzazioni): dove mandare il riepilogo di questo PC. Vuoto = non parte nulla
+    "console_url": "",            # indirizzo https della console
+    "console_key": "",            # chiave di collegamento data dalla console: dice a quale organizzazione appartiene il PC
+    "console_names": True,        # False: il riepilogo non porta il nome del computer ne' quello dell'utente
 }
-_cache = {"mtime": None, "data": None}
+# impostazioni che l'amministratore impone voce per voce: il resto della tabella resta dell'utente
+MERGED = {"policies"}
+_cache = {"mtime": None, "managed": None, "data": None}
+
+
+def _own():
+    """Le scelte dell'utente, cosi' come sono nel file."""
+    try:
+        data = json.loads(FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def imposed():
+    """Le impostazioni imposte da chi amministra il PC (managed.py), ripulite come quelle dell'utente."""
+    raw = {}
+    for k, v in managed.read().items():
+        if k not in DEFAULTS:
+            continue
+        kind = type(DEFAULTS[k])
+        if kind is bool:
+            v = v not in (False, 0, "false", "0", "")
+        elif kind is int and not isinstance(v, int):
+            continue
+        elif kind is str:
+            v = str(v)
+        elif kind in (dict, list) and not isinstance(v, kind):
+            continue   # un valore scritto male non impone nulla
+        raw[k] = v
+    if not raw:
+        return {}
+    clean = _clean({**DEFAULTS, **raw})
+    return {k: clean[k] for k in raw}
+
+
+def locked(cfg_imposed=None):
+    """Che cosa l'utente non puo' cambiare: le impostazioni imposte per intero e, per le regole, i singoli servizi."""
+    data = imposed() if cfg_imposed is None else cfg_imposed
+    return {"keys": sorted(k for k in data if k not in MERGED), "policies": sorted(data.get("policies") or {})}
 
 
 def read():
     try:
         m = FILE.stat().st_mtime
     except OSError:
-        return dict(DEFAULTS)
-    if _cache["mtime"] != m:
-        try:
-            _cache.update(mtime=m, data={**DEFAULTS, **json.loads(FILE.read_text(encoding="utf-8"))})
-        except ValueError:
-            _cache.update(mtime=m, data=dict(DEFAULTS))
+        m = None
+    source = managed.read()
+    if _cache["data"] is None or _cache["mtime"] != m or _cache["managed"] is not source:
+        data, fixed = {**DEFAULTS, **_own()}, imposed()
+        for k, v in fixed.items():
+            data[k] = {**(data[k] if isinstance(data[k], dict) else {}), **v} if k in MERGED else v
+        _cache.update(mtime=m, managed=source, data=data)
     return _cache["data"]
 
 
@@ -98,7 +143,21 @@ def address_ok(text):
 
 
 def write(data):
+    """Salva le scelte dell'utente. Cio' che e' imposto dall'amministratore non entra nel file: se un giorno il vincolo
+    viene tolto, torna la scelta che l'utente aveva. Restituisce le impostazioni in vigore."""
     FILE.parent.mkdir(parents=True, exist_ok=True)
+    clean, fixed, before = _clean(data), imposed(), _clean({**DEFAULTS, **_own()})
+    for k, v in fixed.items():
+        if k in MERGED:   # le voci imposte restano, nel file, quelle che l'utente aveva scelto prima (se ne aveva)
+            clean[k] = {**{n: x for n, x in clean[k].items() if n not in v}, **{n: x for n, x in before[k].items() if n in v}}
+        else:
+            clean[k] = before[k]
+    FILE.write_text(json.dumps(clean, ensure_ascii=False, indent=1), encoding="utf-8")
+    _cache["data"] = None
+    return read()
+
+
+def _clean(data):
     clean = {k: data.get(k, v) for k, v in DEFAULTS.items()}
     clean["policies"] = {k: v for k, v in (clean["policies"] or {}).items()
                            if k in catalog.PER_ID and v in catalog.POLICIES}
@@ -117,8 +176,19 @@ def write(data):
         clean["vault_days"] = min(3650, max(0, int(clean["vault_days"] or 0)))
     except (TypeError, ValueError):
         clean["vault_days"] = 0
-    FILE.write_text(json.dumps(clean, ensure_ascii=False, indent=1), encoding="utf-8")
+    address = str(clean["console_url"] or "").strip().rstrip("/")
+    clean["console_url"] = address if console_address_ok(address) else ""
+    clean["console_key"] = re.sub(r"[^A-Za-z0-9_.-]", "", str(clean["console_key"] or ""))[:200]
+    clean["console_names"] = clean["console_names"] not in (False, 0, "false", "0")
     return clean
+
+
+def console_address_ok(text):
+    """La console si raggiunge solo in https: il riepilogo porta la chiave di collegamento. In chiaro solo su questo PC."""
+    if not address_ok(text):
+        return False
+    u = urllib.parse.urlsplit(str(text).strip())
+    return u.scheme == "https" or u.hostname in ("127.0.0.1", "localhost")
 
 
 def policy(service, cfg=None):

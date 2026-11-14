@@ -1,0 +1,12 @@
+{
+ "_about": "Template for Set-OmissisPolicy.ps1 -Settings (run as administrator or SYSTEM). The settings written here are LOCKED for every user of the PC; keys starting with an underscore are ignored. Remove the lines you do not want to lock.",
+ "updates": "never",
+ "policies": {
+  "deepseek": "block"
+ },
+ "groups_off": [],
+ "_console": "Only if you run a central console: its https address and the enrolment key of this customer. Set console_names to false to leave computer and user names out of the summary.",
+ "console_url": "https://console.example.com",
+ "console_key": "omk_REPLACE_WITH_THE_KEY_OF_THIS_CUSTOMER",
+ "console_names": true
+}

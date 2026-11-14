@@ -55,6 +55,25 @@ if (Test-Path -LiteralPath $log) {
         }
     } catch { } finally { if ($stream) { $stream.Dispose() } }
 }
+# settings locked by the administrator (Set-OmissisPolicy.ps1) win over the user's own
+$locked = @()
+foreach ($view in 'Registry64', 'Registry32') {
+    try {
+        $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey('LocalMachine', $view)
+        $policy = $base.OpenSubKey('SOFTWARE\Policies\Omissis')
+        if ($policy) {
+            foreach ($name in $policy.GetValueNames()) {
+                if (-not $name) { continue }
+                if ($locked -notcontains $name) { $locked += $name }
+                if ($name -notin 'policies', 'console_key') { $settings[$name] = $policy.GetValue($name) }
+            }
+            $policy.Close()
+        }
+        $base.Close()
+    } catch { }
+}
+if ($settings['groups_off'] -is [string]) { try { $settings['groups_off'] = @($settings['groups_off'] | ConvertFrom-Json) } catch { $settings['groups_off'] = @() } }
+if ($settings['model']) { $model = [string]$settings['model'] }
 $on = Listening 8765
 $run = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).Omissis
 $state = [ordered]@{
@@ -63,6 +82,7 @@ $state = [ordered]@{
     model = $model; modelPresent = (Test-Path -LiteralPath (Join-Path $data ('models\' + $model + '\model.onnx')))
     updates = if ($settings['updates']) { [string]$settings['updates'] } else { 'automatic' }
     groupsOff = @($settings['groups_off'] | Where-Object { $_ })
+    locked = @($locked | Sort-Object); console = [bool]$settings['console_url']
     days = $Days; requestsWithReplacements = $requests; valuesReplaced = $values; stopped = $stopped
 }
 Write-Output ($state | ConvertTo-Json -Compress)

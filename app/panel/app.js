@@ -476,10 +476,33 @@ DRAW.guide = el => {
 // ---- Impostazioni
 const save = async (data, message = "settings.saved") => { const r = await api("/api/settings", data); notify(t(message) + (r.restart_needed ? " " + t("settings.restart_needed") : "")); readStatus(); return r; };
 DRAW.settings = (el, which) => (which === "recognition" ? recognitionSettings : generalSettings)(el);
+// Le impostazioni decise da chi amministra il PC (registro di Windows): i comandi restano visibili, ma fermi.
+const managedNote = i => ((i.managed || {}).keys || []).length || ((i.managed || {}).policies || []).length
+  ? `<div class="note block" id="managedNote"><span class="space">${esc(t("managed.note"))}</span></div>` : "";
+const lock = (i, pairs) => { for (const [selector, key] of pairs) if (((i.managed || {}).keys || []).includes(key)) $$(selector).forEach(x => { x.disabled = true; x.title = t("managed.locked"); }); };
+// La console centrale di un'organizzazione: di serie questo PC non manda nulla a nessuno.
+const drawConsole = test(async () => {
+  const el = $("#console");
+  if (!el) return;
+  const c = await api("/api/console");
+  const problem = c.error ? t(`console.error.${["address", "unreachable"].includes(c.error) ? c.error : c.error === "http_401" || c.error === "http_403" ? "refused" : "answer"}`) : "";
+  el.closest("section").classList.toggle("only-advanced", !c.configured);
+  el.innerHTML = c.configured
+    ? line(t("console.connected", {host: c.host}), esc(t(c.names ? "console.sends.names" : "console.sends")) + (c.managed ? " " + esc(t("managed.locked")) : ""),
+        label(problem || (c.last ? t("console.last", {when: c.last}) : t("console.never")), problem ? "error" : c.last ? "ok" : ""))
+      + `<div class="setting"><span class="help">${esc(t("console.what"))}</span><span class="command"><button class="button" id="conPreview">${esc(t("console.preview"))}</button><button class="button" id="conSend">${esc(t("console.send"))}</button>${c.managed ? "" : `<button class="button" id="conOff">${esc(t("console.disconnect"))}</button>`}</span></div><pre id="conData" hidden></pre>`
+    : `<div class="setting"><span class="name">${esc(t("console.none"))}</span><span class="help">${esc(t("console.none.below"))}</span></div>
+       <div class="setting"><span class="help"><input type="text" class="wide" id="conUrl" placeholder="https://" aria-label="${esc(t("console.url"))}"> <input type="text" class="wide" id="conKey" placeholder="${esc(t("console.key"))}" aria-label="${esc(t("console.key"))}" autocomplete="off"></span><span class="command"><button class="button" id="conOn">${esc(t("console.connect"))}</button></span></div>`;
+  const act = (id, f) => { if ($(id)) $(id).onclick = test(async e => { e.target.disabled = true; try { await f(); } finally { e.target.disabled = false; } }); };
+  act("#conPreview", async () => { const p = $("#conData"); p.textContent = JSON.stringify((await api("/api/console", {action: "preview"})).preview, null, 1); p.hidden = false; });
+  act("#conSend", async () => { await api("/api/console", {action: "send"}); await drawConsole(); });
+  act("#conOff", async () => { if (await confirm(t("console.disconnect"), t("console.disconnect.confirm"), t("console.disconnect"))) { await api("/api/console", {action: "disconnect"}); await drawConsole(); } });
+  act("#conOn", async () => { await api("/api/console", {action: "connect", url: $("#conUrl").value, key: $("#conKey").value}); await drawConsole(); });
+});
 const generalSettings = test(async el => {
   const [i, l] = await Promise.all([api("/api/settings"), api("/api/languages")]);
   const options = (entries, choice) => entries.map(([v, n]) => `<option value="${esc(v)}"${v === choice ? " selected" : ""}>${esc(n)}</option>`).join("");
-  el.innerHTML = `<section class="card" aria-label="${esc(t("settings.appearance"))}">
+  el.innerHTML = `${managedNote(i)}<section class="card" aria-label="${esc(t("settings.appearance"))}">
       ${line(t("settings.language"), esc(t("settings.language.below")), `<select id="language" aria-label="${esc(t("settings.language"))}">${options([["auto", t("settings.automatic")], ...l.available.map(x => [x.code, x.name])], l.choice)}</select>`)}
       ${line(t("settings.theme"), "", `<select id="theme" aria-label="${esc(t("settings.theme"))}">${options([["auto", t("settings.theme.auto")], ["light", t("settings.theme.light")], ["dark", t("settings.theme.dark")]], i.theme || "auto")}</select>`)}
       ${line(t("menu.advanced"), esc(t("settings.advanced.below")), toggle("advanced2", t("menu.advanced")))}
@@ -492,7 +515,13 @@ const generalSettings = test(async el => {
       <div class="inside"><h2 id="aggTitle">${esc(t("updates.title"))}</h2><p id="aggNote"></p></div>
       ${line(t("updates.installed"), `<span id="aggWhen"></span>`, `<b id="aggVersion">…</b>`)}
       <div id="aggChoice">${line(t("updates.new_ones"), "", `<select id="updates" aria-label="${esc(t("updates.new_ones"))}">${options(["automatic", "notify", "never"].map(v => [v, t(`updates.mode.${v}`)]), i.updates)}</select><button class="button" id="aggCheck">${esc(t("updates.check_now"))}</button>`)}</div>
+    </section>
+    <section class="card only-advanced" aria-labelledby="conTitle">
+      <div class="inside"><h2 id="conTitle">${esc(t("console.title"))}</h2><p>${esc(t("console.below"))}</p></div>
+      <div id="console"></div>
     </section>`;
+  lock(i, [["#language", "language"], ["#theme", "theme"], ["#advanced2", "view"], ["#advanced", "view"], ["#updates", "updates"]]);
+  drawConsole();
   $("#language").onchange = test(async e => { await api("/api/settings", {language: e.target.value}); location.reload(); });
   $("#theme").onchange = test(async e => { applyTheme(e.target.value); await save({theme: e.target.value}); });
   $("#advanced2").checked = view === "advanced";
@@ -550,7 +579,7 @@ const recognitionSettings = test(async el => {
   const GROUPS = {special: ["SALUTE", "RELIGIONE", "POLITICA", "ORIENTAMENTO", "ORIGINE"],
                   details: ["DATA", "ORA", "ETA", "GENERE", "TITOLO", "PROFESSIONE", "ISTRUZIONE", "LUOGO"]};
   const groups = Object.entries(GROUPS).map(([name, entries]) => [name, entries.filter(v => cat.known.includes(v))]).filter(([, entries]) => entries.length);
-  el.innerHTML = `<section class="card" aria-label="${esc(t("settings.card.recognition"))}">
+  el.innerHTML = `${managedNote(i)}<section class="card" aria-label="${esc(t("settings.card.recognition"))}">
       ${line(t("recognition.model"), esc(t("recognition.model.below")), `<select id="model" aria-label="${esc(t("recognition.model"))}"><option value="omissis-base">${esc(t("recognition.model.base"))}</option><option value="omissis-small">${esc(t("recognition.model.small"))}</option></select>`)}
       ${line(t("recognition.where"), "", `<select id="device" aria-label="${esc(t("recognition.where"))}">${["auto", "cuda", "cpu"].map(v => `<option value="${v}">${esc(t(`recognition.where.${v}`))}</option>`).join("")}</select>`)}
       ${["box", "attachments", "restore", "block_files"].map(k => line(t(`recognition.${k}`), esc(t(`recognition.${k}.below`)), toggle(k, t(`recognition.${k}`)))).join("")}
@@ -589,6 +618,8 @@ const recognitionSettings = test(async el => {
       await save({categories: enabled});
     });
   }
+  lock(i, [["#model", "model"], ["#device", "device"], ...["box", "attachments", "restore", "block_files"].map(k => [`#${k}`, k]),
+           ['[id^="grp-"]', "groups_off"], ['[id^="cat-"]', "categories"]]);
   $("#always").value = l.always.join("\n"); $("#never").value = l.never.join("\n");
   $("#saveLists").onclick = test(async () => {
     const r = await api("/api/lists", {always: $("#always").value.split("\n"), never: $("#never").value.split("\n")});
@@ -793,7 +824,7 @@ const serviceRules = test(async el => {
         .map(p => `<option value="${p}"${p === s.policy ? " selected" : ""}>${esc(t(`services.policy.${p}`))}</option>`).join("");
       return `<tr><td><b>${esc(s.name)}</b><div class="below">${esc(s.vendor)} · ${esc(s.domains.join(", "))}</div></td><td>${esc(tSe("services.kind." + s.kind, s.kind))}</td>
         <td>${label(t(`services.reading.${s.reading}`), s.reading === "tested" ? "ok" : s.readable ? "warning" : "")}</td>
-        <td><select data-id="${esc(s.id)}" aria-label="${esc(t("services.what_make_for", {name: s.name}))}">${options}</select></td>
+        <td><select data-id="${esc(s.id)}" aria-label="${esc(t("services.what_make_for", {name: s.name}))}"${s.locked ? ` disabled title="${esc(t("managed.locked"))}"` : ""}>${options}</select></td>
         <td>${s.contacts || ""}<div class="below">${esc((s.last || "").slice(0, 16))}</div></td></tr>`;
     }).join("");
     $$("#tabServices select").forEach(x => x.onchange = test(async () => { await api("/api/services", {id: x.dataset.id, policy: x.value}); servicesListing = await api("/api/services"); draw(); readStatus(); }));
@@ -1011,6 +1042,7 @@ async function launch() {
   const i = await api("/api/settings");
   await readKeystrokes();
   view = i.view === "advanced" ? "advanced" : "simple";
+  lock(i, [["#advanced", "view"]]);
   applyTheme(i.theme || "auto");
   drawMenu(); applyView();
   $("#advanced").onchange = e => changeView(e.target.checked);

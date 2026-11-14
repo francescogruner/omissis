@@ -219,6 +219,53 @@ def main():
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: terminale, righe per Codex in abbonamento e gateway proprio salvato, rifiutato se non valido, tolto", False, str(ex)[:160])
 
+                # --- impostazioni decise da chi amministra il PC: nella pagina si vedono ferme, e il programma rifiuta di cambiarle
+                try:
+                    imposed = os.environ.get("OMISSIS_MANAGED_FILE")
+                    if not imposed:
+                        print("SALTATO impostazioni imposte: senza OMISSIS_MANAGED_FILE la prova non può imporre nulla")
+                    else:
+                        Path(imposed).write_text(json.dumps({"updates": "never", "policies": {"deepseek": "block"}}), encoding="utf-8")
+                        fixed = wait_until(lambda: call(code, "/api/settings")["managed"] == {"keys": ["updates"], "policies": ["deepseek"]}, timeout=15)
+                        pag.goto(f"{PANEL}/#/settings/general")
+                        pag.wait_for_selector("#updates", state="attached", timeout=15000)
+                        shown = wait(pag, "() => document.getElementById('updates').disabled && document.getElementById('updates').value === 'never' && !!document.getElementById('managedNote')", timeout=10)
+                        refused = []
+                        for path, data in (("/api/settings", {"updates": "automatic"}), ("/api/services", {"id": "deepseek", "policy": "ignore"})):
+                            try:
+                                call(code, path, data)
+                                refused.append(False)
+                            except urllib.error.HTTPError as ex:
+                                refused.append(ex.code == 422)
+                        free = call(code, "/api/settings", {"theme": "light"})["updates"] == "never"   # il resto si cambia come sempre
+                        Path(imposed).unlink()
+                        back = wait_until(lambda: call(code, "/api/settings")["managed"] == {"keys": [], "policies": []}, timeout=15)
+                        mark(f"{language}: impostazioni imposte dall'amministratore: ferme nella pagina, rifiutate dal programma, libere quando il vincolo sparisce",
+                             fixed and shown and refused == [True, True] and free and back, f"imposte {fixed} · pagina {shown} · rifiuti {refused} · tolte {back}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: impostazioni imposte dall'amministratore", False, str(ex)[:160])
+                finally:
+                    if os.environ.get("OMISSIS_MANAGED_FILE"):
+                        Path(os.environ["OMISSIS_MANAGED_FILE"]).unlink(missing_ok=True)
+
+                # --- console centrale: di serie il PC non manda nulla; un indirizzo non https è rifiutato; si vede che cosa partirebbe
+                try:
+                    pag.goto(f"{PANEL}/#/settings/general")
+                    card = wait(pag, "() => !!document.getElementById('conUrl') && !!document.getElementById('conKey')", timeout=15)
+                    state = call(code, "/api/console")
+                    try:
+                        call(code, "/api/console", {"action": "connect", "url": "http://console.example.test", "key": "chiave-di-prova"})
+                        bad = False
+                    except urllib.error.HTTPError as ex:
+                        bad = ex.code == 422
+                    preview = call(code, "/api/console", {"action": "preview"})["preview"]
+                    hidden_key = "console_key" not in call(code, "/api/settings")
+                    mark(f"{language}: console centrale: non collegata di serie, indirizzo non https rifiutato, anteprima di ciò che partirebbe",
+                         card and not state["configured"] and bad and {"device", "days", "tools", "version"} <= set(preview) and hidden_key
+                         and not call(code, "/api/console")["configured"], f"scheda {card} · rifiuto {bad}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: console centrale", False, str(ex)[:160])
+
                 # --- gruppi di dati: spegnerne uno chiede conferma, la pagina iniziale lo ricorda, riaccenderlo toglie l'avviso
                 try:
                     off = lambda: json.loads((paths.DATA / "settings.json").read_text(encoding="utf-8")).get("groups_off")   # noqa: E731

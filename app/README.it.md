@@ -611,6 +611,40 @@ rimuove a prova finita. Poi si chiude l'app e la si riavvia facendola passare da
 possiede la chiave privata in `data\ca` può leggere il traffico HTTPS di questo utente: la cartella
 non va copiata né condivisa.
 
+## Nelle organizzazioni: impostazioni bloccate e console centrale
+
+Due cose pensate per chi gestisce molti PC. Chi usa Omissis per conto proprio non le incontra mai.
+
+**Impostazioni bloccate.** Chi amministra il PC può fissare alcune scelte scrivendole nella chiave di registro
+`HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Omissis`, che un utente normale non può modificare (`managed.py`; lo
+script `deploy\Set-OmissisPolicy.ps1` lo fa da un file JSON). Ogni valore ha il nome di un'impostazione, gli
+stessi di `settings.json`. Ciò che sta lì vince sulle scelte dell'utente: nel pannello quei comandi restano
+visibili ma fermi, e il programma rifiuta di cambiarli. `policies` blocca solo i servizi scritti; ogni altra
+impostazione è bloccata per intero. Nel file dell'utente restano le sue scelte: tolto il blocco, tornano.
+Non c'è una password di amministratore: comanda chi ha i diritti di amministratore su quel PC. E non è una
+difesa da chi manomette il programma, che è installato nel profilo dell'utente.
+
+**Console centrale.** Di serie Omissis non manda nulla a nessuno. Se nelle impostazioni ci sono `console_url`
+(un indirizzo `https://`) e `console_key` (la chiave di collegamento), il programma manda a quell'indirizzo,
+una volta all'ora, un riepilogo (`central.py`):
+
+- versione, canale e stato del programma, modello in uso, gruppi di dati spenti, impostazioni bloccate;
+- per ciascuno degli ultimi 35 giorni: quante richieste avevano dati da sostituire, quanti valori per tipo di
+  dato, verso quali servizi, quante richieste sono state fermate;
+- nomi e versioni degli strumenti AI trovati dall'inventario;
+- il nome del computer e dell'utente, a meno che `console_names` sia spento, e un identificativo a caso
+  dell'installazione.
+
+Mai i testi, mai i valori sostituiti, mai l'archivio: il riepilogo viene dal registro delle attività, che
+contiene già solo conteggi. In Impostazioni > Console centrale (vista avanzata, o sempre se il PC è collegato)
+si vede a chi è collegato il PC, quando è partito l'ultimo riepilogo, e «Vedi che cosa parte» lo mostra per
+intero. La chiave di collegamento viaggia solo verso l'indirizzo scelto: un rinvio altrove non viene seguito, e
+un indirizzo non `https` fuori da questo PC viene rifiutato. La console che riceve i riepiloghi è un prodotto a
+parte e non sta in questo repository; il protocollo è una `POST` a `<console_url>/api/v1/report`.
+
+Conteggi per singola persona possono essere un controllo a distanza dei lavoratori: un'organizzazione che
+collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serve, informare i dipendenti.
+
 ## Quanto è verificato
 
 | Servizio | Stato |
@@ -846,13 +880,16 @@ Usa un browser di prova che sta in `.playwright` (740 MB, si può cancellare; si
 dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'estensione attiva.
 `e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
-inventate. Nessuno dei due ha bisogno di qualcosa acceso.
+inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2e_central.py`
+(22 controlli): le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
+registro dell'utente, mai da quelle di sistema) e il riepilogo per la console centrale, mandato a un servizio
+finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta.
 `e2e_desktop.py` (17 controlli, serve la protezione attiva) prova ciò che tocca il desktop:
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (54 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
-`OMISSIS_LISTS` per provare anche gli elenchi) apre ogni sezione del pannello in italiano e in
+`e2e_panel.py` (58 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`OMISSIS_LISTS` per provare anche gli elenchi, `OMISSIS_MANAGED_FILE` per le impostazioni imposte) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,
 una cartella intera, ricerca ed eliminazione nell'archivio, l'inventario con analisi inventate e

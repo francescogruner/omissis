@@ -7,7 +7,8 @@ computer, and puts the real values back into the answer. You read the real text;
 ever sees placeholders.
 
 Everything runs locally: the detection model, the placeholder vault and the management panel. Nothing
-is sent to any Omissis server, because there is none.
+is sent to any Omissis server, because there is none. (An organisation can connect its PCs to a console of its
+own: that is off by default, sends counts only, and the panel shows exactly what leaves.)
 
 > **Status: beta.** The detection model is trained and measured. The connectors pass their automated
 > tests against a mock service, but **live validation is still thin**: the terminal gateway has been
@@ -140,7 +141,8 @@ anonymise documents (*Documenti*), load and pair the browser extension (*Browser
 Everything else is in [app/README.it.md](app/README.it.md).
 
 **On many PCs** (organisations, MSPs): the scripts in [`deploy/`](deploy/README.md) install Omissis silently and
-pre-configured, report its state and remove it, from an RMM tool, Intune or a logon script.
+pre-configured, lock the settings the administrator chooses, report its state and remove it, from an RMM tool,
+Intune or a logon script.
 
 ## What Omissis does not protect you from
 
@@ -173,7 +175,7 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 - Native messaging instead of the local HTTP bridge for the extension; store publication
 - Firefox
 - Redacted image output for scans; automatic restore of files downloaded from chats
-- Central console for organisations (policies, deployment, compliance log)
+- Central console for organisations (a separate product: the program already locks settings and sends the summary)
 
 ## Licence
 
