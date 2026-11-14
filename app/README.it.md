@@ -571,23 +571,30 @@ di server, indirizzi IP). I tempi sono la mediana di una richiesta al motore, ar
 |---|---|---|---|---|---|
 | `omissis-base`, scheda video | 42 ms | 61 ms | 0,2 s | 1,1 s | 1,4 GB, più 1,7 GB sulla scheda |
 | `omissis-small`, scheda video | 40 ms | 53 ms | 0,2 s | 0,9 s | 1,4 GB, più 0,9 GB sulla scheda |
-| `omissis-base`, solo processore (copia installata) | 66 ms | 1,6 s | 7,5 s | 30 s | 1,8 GB, fino a 2,1 dopo testi lunghi |
-| `omissis-small`, solo processore (copia installata) | 48 ms | 0,7 s | 3,6 s | 15 s | 1,2 GB, fino a 1,4 dopo testi lunghi |
+| `omissis-base`, solo processore (copia installata) | 59 ms | 0,8 s | 3,7 s | 15 s | 1,8 GB, fino a 2,0 dopo testi lunghi |
+| `omissis-small`, solo processore (copia installata) | 44 ms | 0,4 s | 1,7 s | 7 s | 1,2 GB, fino a 1,3 dopo testi lunghi |
 
 - **A riposo** il programma non consuma processore (meno dello 0,5 % di un core) e, oltre al motore,
   occupa circa 120 MB (pannello e proxy). Il motore è pronto in circa 5 secondi dall'avvio.
 - **Un messaggio normale** (qualche riga) costa da 40 a 70 ms: non si nota. Su un PC senza scheda
-  video si nota invece un documento lungo: circa 4.000 caratteri al secondo con `omissis-base`,
-  8.000 con `omissis-small`. Per chi lavora spesso su testi lunghi senza scheda video conviene il
+  video si nota invece un documento lungo: circa 8.000 caratteri al secondo con `omissis-base`,
+  16.000 con `omissis-small`. Per chi lavora spesso su testi lunghi senza scheda video conviene il
   modello piccolo.
-- **Gateway per gli strumenti da terminale**: a un messaggio corto aggiunge da 30 a 75 ms. La prima
+- **Gateway per gli strumenti da terminale**: a un messaggio corto aggiunge da 30 a 70 ms. La prima
   richiesta vera di Claude Code (101 KB, quasi tutta contesto) passa in 0,2 s con la scheda video,
-  in 2,3 s (`small`) o 4,6 s (`base`) sul solo processore; i turni successivi in circa un decimo di
+  in 1,2 s (`small`) o 2,6 s (`base`) sul solo processore; i turni successivi in circa un decimo di
   secondo, perché il testo già visto non viene riesaminato.
 - **Più richieste insieme** (8 per volta, messaggi da 300 caratteri): 56 al secondo con la scheda
-  video, 20 (`base`) o 37 (`small`) sul solo processore, senza errori. Il motore esamina un testo
+  video, 25 (`base`) o 41 (`small`) sul solo processore, senza errori. Il motore esamina un testo
   per volta: sul solo processore un messaggio corto arrivato mentre gira un testo di 30.000
-  caratteri aspetta che finisca (fino a 7 secondi con `omissis-base`).
+  caratteri aspetta che finisca (fino a 4 secondi con `omissis-base`).
+- **Il modello per il solo processore è stato snellito** (`export_onnx.py`, funzione `snellisci`):
+  l'esportazione lasciava in ogni strato dei controlli sulla maschera di attenzione che prendevano
+  più del 40 % del tempo. Tolti quelli, va circa il doppio più veloce e dà le stesse identiche
+  uscite: nessun token cambia classe su 57.000 di controllo, e 405 testi su 405 restano identici
+  al motore PyTorch. La variante con i pesi a 8 bit è stata provata e scartata: fino a 1,8 volte
+  più veloce ancora, ma dallo 0,3 allo 0,7 % dei token cambia classe e il risultato dipende dal
+  processore.
 - **Archivio**: 5.700 voci occupano 3,2 MB e non rallentano nulla.
 - **Tenuta sui testi lunghi**: nei testi di queste misure sono stati messi circa 30.000 dati
   inventati, in testi da 60 a 120.000 caratteri; nessuno è rimasto in chiaro, con nessuno dei due

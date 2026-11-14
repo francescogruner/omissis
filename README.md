@@ -68,8 +68,8 @@ that are already public in the decisions.
 
 | | Parameters | Size | CPU latency* |
 |---|---|---|---|
-| `omissis-base` | 307.8 M | 1.2 GB | ~63 ms |
-| `omissis-small` | 140.9 M | 537 MB | ~34 ms |
+| `omissis-base` | 307.8 M | 1.2 GB | ~61 ms |
+| `omissis-small` | 140.9 M | 537 MB | ~26 ms |
 
 \* per short text on a desktop CPU, single thread of work.
 

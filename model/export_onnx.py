@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """Esporta un modello nel formato ONNX, che gira senza PyTorch (basta onnxruntime: decine di MB invece di GB).
 
-  python export_onnx.py models\\omissis-small [--int8]
+  python export_onnx.py models\\omissis-small [--int8] [--solo-snellire]
 
-Scrive model.onnx nella cartella del modello (e, con --int8, model.int8.onnx: pesi a 8 bit, un quarto
-delle dimensioni e piu' veloce sul processore, da usare solo se il confronto regge). Poi confronta le
-uscite con quelle di PyTorch su testi di controllo: l'esportazione vale solo se coincidono.
+Scrive model.onnx nella cartella del modello, snellito (vedi snellisci: circa il doppio piu' veloce sul processore,
+stesse uscite), e, con --int8, model.int8.onnx: pesi a 8 bit, piu' veloce ma con risultati diversi (misurato il
+14/11/2026 su omissis-base: fino a 1,8 volte piu' veloce, ma dallo 0,3 allo 0,7% dei token cambia classe e il
+risultato dipende dal processore: non adottato). Poi confronta le uscite con quelle di PyTorch su testi di
+controllo: l'esportazione vale solo se coincidono.
 """
 import argparse
 import json
@@ -29,6 +31,70 @@ class Involucro(torch.nn.Module):
         return self.modello(input_ids=input_ids, attention_mask=attention_mask).logits
 
 
+def snellisci(percorso):
+    """Toglie dal grafo esportato il lavoro inutile attorno alla maschera di attenzione. Non cambia i risultati.
+
+    L'esportazione dell'attenzione lascia in OGNI strato, su una matrice [lotto, teste, token, token]:
+      Where(maschera, 0, -inf)   la maschera vero/falso tradotta in numeri: la stessa in tutti gli strati che usano
+                                 la stessa maschera (ce ne sono due: attenzione globale e locale)
+      IsNaN + Where              dopo la Softmax: rimette 0 nelle righe che non possono guardare nessun token (quelle
+                                 del riempitivo, quando nel gruppo ci sono testi piu' corti), dove -inf su tutta la
+                                 riga darebbe un valore non valido che poi si propagherebbe a tutto il testo
+    Misurato sul processore: queste operazioni prendevano piu' del 40% del tempo. Qui la maschera numerica si calcola
+    una volta per tipo e al posto di -inf si usa il numero piu' negativo che esiste: per i token veri non cambia nulla
+    (il peso di un token mascherato resta esattamente 0), mentre una riga tutta mascherata da' pesi uguali invece di
+    un valore non valido, quindi il controllo dopo la Softmax non serve piu'. Cambiano solo le uscite nelle posizioni
+    di riempitivo, che nessuno legge. Restituisce (controlli tolti, maschere riunite)."""
+    import onnx
+    from onnx import numpy_helper
+    modello = onnx.load(str(percorso))
+    g = modello.graph
+    produce = {u: n for n in g.node for u in n.output}
+    costanti = {n.output[0]: numpy_helper.to_array(n.attribute[0].t) for n in g.node
+                if n.op_type == "Constant" and n.attribute and n.attribute[0].name == "value"}
+    sostituisci, via, viste, guardie = {}, set(), {}, []
+    for n in g.node:
+        if n.op_type != "Where":
+            continue
+        condizione = produce.get(n.input[0])
+        if condizione is not None and condizione.op_type == "IsNaN" and produce.get(condizione.input[0]) is not None \
+                and produce[condizione.input[0]].op_type == "Softmax" and n.input[2] == condizione.input[0]:
+            guardie.append((n, condizione))
+        elif n.input[1] in costanti and n.input[2] in costanti and costanti[n.input[1]].dtype == np.float32 \
+                and any(np.isneginf(costanti[i]).all() for i in n.input[1:3]):
+            chiave = (n.input[0], costanti[n.input[1]].tobytes(), costanti[n.input[2]].tobytes())
+            if chiave in viste:
+                sostituisci[n.output[0]] = viste[chiave]   # stessa maschera, stessi valori: basta la prima
+                via.add(n.name)
+            else:
+                viste[chiave] = n.output[0]
+                if "omissis_meno_grande" not in {i.name for i in g.initializer}:
+                    g.initializer.append(numpy_helper.from_array(np.array(np.finfo(np.float32).min, dtype=np.float32), "omissis_meno_grande"))
+                for k in (1, 2):
+                    if np.isneginf(costanti[n.input[k]]).all():
+                        n.input[k] = "omissis_meno_grande"
+    riunite = len(via)
+    if viste:   # senza la maschera resa finita il controllo dopo la Softmax serve ancora
+        for n, condizione in guardie:
+            sostituisci[n.output[0]] = n.input[2]          # chi leggeva il risultato corretto legge la Softmax
+            via.update({n.name, condizione.name})
+    tolti = (len(via) - riunite) // 2
+    if not via:
+        return 0, 0
+    nodi = [n for n in g.node if n.name not in via]
+    for n in nodi:
+        for k, ingresso in enumerate(n.input):
+            if ingresso in sostituisci:
+                n.input[k] = sostituisci[ingresso]
+    usati = {i for n in nodi for i in n.input} | {u.name for u in g.output}
+    nodi = [n for n in nodi if n.op_type != "Constant" or n.output[0] in usati]   # le costanti rimaste senza lettori
+    del g.node[:]
+    g.node.extend(nodi)
+    onnx.checker.check_model(modello)
+    onnx.save(modello, str(percorso))
+    return tolti, riunite
+
+
 def testi_di_controllo(n):
     f = QUI / "data" / "dev.jsonl"
     if f.exists():
@@ -41,9 +107,13 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("cartella")
     ap.add_argument("--int8", action="store_true")
+    ap.add_argument("--solo-snellire", action="store_true", help="non riesporta: snellisce il model.onnx che c'e' gia' (vedi snellisci)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     cartella = Path(a.cartella)
+    if a.solo_snellire:
+        print("snellito model.onnx: controlli tolti {}, maschere riunite {}".format(*snellisci(cartella / "model.onnx")))
+        sys.exit()
     tok = AutoTokenizer.from_pretrained(cartella)
     try:   # l'attenzione "semplice" e' quella che si esporta senza sorprese
         mod = AutoModelForTokenClassification.from_pretrained(cartella, attn_implementation="eager", reference_compile=False).eval()
@@ -56,6 +126,7 @@ if __name__ == "__main__":
                       output_names=["logits"], dynamic_axes={"input_ids": {0: "lotto", 1: "lunghezza"}, "attention_mask": {0: "lotto", 1: "lunghezza"},
                                                              "logits": {0: "lotto", 1: "lunghezza"}}, opset_version=17, dynamo=False)
     print(f"esportato {uscita.name}: {uscita.stat().st_size / 1e6:.0f} MB in {time.perf_counter() - t0:.0f} s")
+    print("snellito: controlli tolti {}, maschere riunite {}".format(*snellisci(uscita)))
 
     import onnxruntime as ort
     file = [uscita]

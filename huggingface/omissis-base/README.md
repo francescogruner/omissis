@@ -207,7 +207,7 @@ in general, well-known products) the model masks 2.9% of the text; the previous 
 
 The folder also contains `model.onnx` (1.2 GB): the same model in ONNX format, to run it on CPU with
 `onnxruntime` alone. On 405 check texts it gives exactly the same results as the PyTorch version.
-On CPU, for a text of average length: about 76 ms with PyTorch, 90 ms with ONNX.
+On CPU, for a text of average length: about 79 ms with PyTorch, 61 ms with ONNX.
 
 ## Limits
 
@@ -382,8 +382,8 @@ l'11,6%. In 24 frasi di controllo con dati privati maschera tutti e 24 i valori.
 
 Nella cartella c'è anche `model.onnx` (1,2 GB): lo stesso modello in formato ONNX, per farlo
 girare sul processore con il solo `onnxruntime`. Su 405 testi di controllo dà esattamente gli stessi
-risultati della versione PyTorch. Sul processore, per un testo di media lunghezza: circa 76 ms
-con PyTorch, 90 ms con ONNX.
+risultati della versione PyTorch. Sul processore, per un testo di media lunghezza: circa 79 ms
+con PyTorch, 61 ms con ONNX.
 
 ## Limiti
 

@@ -51,8 +51,8 @@ nomi già pubblici negli atti.
 
 | | Parametri | Dimensione | Tempo su processore* |
 |---|---|---|---|
-| `omissis-base` | 307,8 M | 1,2 GB | circa 63 ms |
-| `omissis-small` | 140,9 M | 537 MB | circa 34 ms |
+| `omissis-base` | 307,8 M | 1,2 GB | circa 61 ms |
+| `omissis-small` | 140,9 M | 537 MB | circa 26 ms |
 
 \* per un testo breve, su un processore da scrivania.
 

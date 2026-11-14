@@ -21,8 +21,8 @@
      "sha256": "9c01df9c0d5d46a0968e2719c687247dcef7aa7ffe1b12df6911b6ff9581caed"
     },
     "model.onnx": {
-     "byte": 1231055840,
-     "sha256": "c87812e4784a7c195656f6504fb0a11911bf8c46a9c79b955fd6e3842773e584"
+     "byte": 1231034493,
+     "sha256": "98b5bd86b70d87012e922f322dc14109644e0be2635820330d8a67ba318c233a"
     }
    }
   },
@@ -46,8 +46,8 @@
      "sha256": "9c01df9c0d5d46a0968e2719c687247dcef7aa7ffe1b12df6911b6ff9581caed"
     },
     "model.onnx": {
-     "byte": 563302746,
-     "sha256": "844bde97843274e0fd02207ea3db03808e8ff0ca65212737055f23d9740273ab"
+     "byte": 563281399,
+     "sha256": "0a0ef4e0fdc06373c12b85bb82428adaae4983c188ac594d19f4f40f221a1944"
     }
    }
   }
