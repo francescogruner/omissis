@@ -6,6 +6,8 @@ servizio finto. Non prova le app vere: quelle vanno chiuse e riaperte dal pannel
 Prima:  panel.py --test --no-tray --no-browser      e      mock_service.py
 """
 import json
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -63,6 +65,76 @@ class Guide:
         if "exceptionDetails" in r:
             raise RuntimeError(r["exceptionDetails"].get("exception", {}).get("description", "errore nella pagina")[:160])
         return r["result"].get("value")
+
+
+def shut(con):
+    try:
+        con.cdp.send("Browser.close", timeout=5)
+    except Exception:   # noqa: BLE001
+        pass
+    con.close()
+
+
+def already_open():
+    """L'app e' gia' aperta senza la porta: il connettore non la deve toccare da solo; a richiesta la chiude e la riapre
+    protetta. Poi: riaggancio a un'app rimasta aperta, e app con un profilo suo."""
+    here = (CHROME.name.lower(), re.escape(str(CHROME)) + "$")
+    common = ["--headless=new", "--no-first-run", "--no-default-browser-check", "about:blank"]
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profile:
+        connector.APP["finta"] = {"name": "App finta", "commands": [str(CHROME)], "process": here, "port": 9563, "site": "localhost",
+                                  "service": "claude", "arguments": [f"--user-data-dir={profile}", *common]}
+        without = subprocess.Popen([str(CHROME), f"--user-data-dir={profile}", *common], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        con = None
+        try:
+            for _ in range(40):
+                if connector.processes(here):
+                    break
+                time.sleep(0.25)
+            time.sleep(1)
+            mark("app aperta senza protezione: riconosciuta", connector.open_unprotected("finta"), f"{len(connector.processes(here))} processi")
+            try:
+                con = connector.launch_app("finta", timeout=5)
+                mark("app già aperta: non viene toccata senza una richiesta", False, "è stata avviata lo stesso")
+            except connector.AlreadyOpen:
+                mark("app già aperta: non viene toccata senza una richiesta", without.poll() is None and not connector.opened_port(9563))
+            if con is None:
+                con = connector.launch_app("finta", timeout=30, close_first=True)
+                time.sleep(1)
+                mark("a richiesta: chiusa e riaperta protetta", con.alive and without.poll() is not None and not connector.open_unprotected("finta")
+                      and con.counts["pages"] >= 1, f"finestre seguite {con.counts['pages']} · {'; '.join(con.errors)}")
+                con.close()   # come se Omissis si fosse spento con l'app ancora aperta
+                time.sleep(0.5)
+                con = connector.attach("finta")
+                time.sleep(1)
+                mark("riaggancio a un'app rimasta aperta", con is not None and con.alive and con.counts["pages"] >= 1 and not con.errors)
+        except Exception as ex:   # noqa: BLE001
+            mark("app già aperta senza protezione", False, f"{type(ex).__name__}: {ex}"[:160])
+        finally:
+            if con is not None:
+                shut(con)
+            without.terminate()
+            connector.close_app("finta", grace=1)
+            connector.APP.pop("finta", None)
+    # --- un'app che e' un browser vero (Copilot): parte con un profilo suo, tenuto nei dati del programma
+    folder = paths.DATA / "app_profiles" / "finta2"
+    connector.APP["finta2"] = {"name": "App con profilo suo", "commands": [str(CHROME)], "process": here, "port": 9564, "site": "localhost",
+                               "service": "claude", "own_profile": True, "arguments": common}
+    con = None
+    try:
+        con = connector.launch_app("finta2", timeout=30)
+        time.sleep(1)
+        owners = connector._profile_owners(folder)
+        mark("app con profilo suo: avviata con il profilo tenuto dal programma", con.alive and folder.is_dir() and len(owners) >= 1
+              and not connector.open_unprotected("finta2"), f"{len(owners)} processi sul profilo")
+    except Exception as ex:   # noqa: BLE001
+        mark("app con profilo suo", False, f"{type(ex).__name__}: {ex}"[:160])
+    finally:
+        if con is not None:
+            shut(con)
+        time.sleep(1)
+        connector.close_app("finta2", grace=1)
+        connector.APP.pop("finta2", None)
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def main():
@@ -278,6 +350,7 @@ def main():
                 mark("connettore staccato: nulla esce in chiaro", json.dumps(seen()) == before)
         finally:
             app.terminate()
+    already_open()
     new_ones = [json.loads(r) for r in log.read_text(encoding="utf-8").splitlines()[lines_before:]]
     my = [v for v in new_ones if v.get("via") == "app desktop"]
     mark("registro: righe «via app desktop» senza testi", len([v for v in my if v.get("event") == "masked"]) >= 9

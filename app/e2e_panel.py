@@ -26,6 +26,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 import catalog
+import connector
 import inventory
 import paths
 
@@ -148,6 +149,18 @@ def main():
                 pag.keyboard.press("ArrowRight")
                 sweep = wait(pag, "() => location.hash.endsWith('/app') && document.getElementById('linguetta-app')?.getAttribute('aria-selected') === 'true'", timeout=5)
                 mark(f"{language}: si usa dalla tastiera (salto al contenuto, linguette con le frecce)", jump == "skip" and sweep, f"primo Tab su «{jump}» · freccia {sweep}")
+
+                # --- app desktop: l'app di prova si avvia protetta dal pannello e si stacca; il suo servizio è su «Proteggi», quindi nessun avviso
+                try:
+                    pag.wait_for_selector("[data-app-line=test] button[data-action=launch]", timeout=15000)
+                    pag.click("[data-app-line=test] button[data-action=launch]")
+                    on = wait(pag, "() => !!document.querySelector('[data-app-line=test] button[data-action=detach]')", timeout=45)
+                    state = pag.evaluate("(() => { const r = document.querySelector('[data-app-line=test]'); return r.dataset.outcome + '|' + r.dataset.open + '|' + document.querySelectorAll('[data-app-line=test] + [data-app-note]').length; })()")
+                    pag.click("[data-app-line=test] button[data-action=detach]")
+                    off = wait(pag, "() => !!document.querySelector('[data-app-line=test] button[data-action=launch]')", timeout=15)
+                    mark(f"{language}: app desktop avviata protetta e staccata dal pannello", on and off and state == "waiting||0", state)
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: app desktop avviata protetta e staccata dal pannello", False, str(ex)[:160])
 
                 # --- testo: incolla -> mascherato e copiato; incolla di nuovo -> valori veri
                 pag.goto(f"{PANEL}/#/text")
@@ -338,6 +351,12 @@ def main():
             call(code, "/api/settings", {k: before[k] for k in ("language", "theme", "view", "shortcuts") if k in before})
             inventory.clear()
             br.close()
+            try:   # l'app di prova avviata dal pannello resta accesa dopo «Stacca»: la si chiude qui
+                app = connector.Cdp(connector.APP.get("test", {}).get("port", 9560), lambda m: None)
+                app.send("Browser.close", timeout=5)
+                app.close()
+            except Exception:   # noqa: BLE001  (non era stata avviata)
+                pass
 
     print(f"\n{sum(outcomes)}/{len(outcomes)} controlli superati · schermate in {photo}")
     sys.exit(0 if all(outcomes) else 1)

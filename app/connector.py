@@ -13,18 +13,21 @@ verso un servizio protetto prima che parta e lo controlla di nuovo: serve per le
 pagina fa nei primissimi istanti, quando il codice al suo interno puo' non essere ancora attivo, e
 per quelle che non passano da fetch o XMLHttpRequest.
 
-  .venv\\Scripts\\python.exe connector.py --avvia claude        avvia l'app con la porta e si collega
+  .venv\\Scripts\\python.exe connector.py --start claude        avvia l'app con la porta e si collega
+  .venv\\Scripts\\python.exe connector.py --start claude --close   se e' gia' aperta la chiude e la riapre protetta
   .venv\\Scripts\\python.exe connector.py --port 9551          si collega a un'app gia' avviata cosi'
 
 SPERIMENTALE. Da sapere:
-  - l'app va chiusa del tutto e riaperta da qui;
+  - l'app va chiusa del tutto e riaperta da qui (lo puo' fare il connettore, se glielo si chiede);
   - finche' e' aperta in questo modo, qualunque programma di questo PC puo' comandarla dalla porta;
   - il produttore puo' disattivare funzioni quando vede la porta di debug, o togliere la possibilita'.
 """
 import argparse
 import base64
+import ctypes
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -32,6 +35,7 @@ import threading
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from ctypes import wintypes
 from pathlib import Path
 
 import websocket
@@ -45,10 +49,26 @@ HERE = Path(__file__).resolve().parent
 DATA, EST = paths.DATA, HERE / "extension"
 ENGINE_PORT = paths.ENGINE_PORT
 WORLD, CALL = "msp_pii", "__msp_bridge"
+_STORE = r"%LOCALAPPDATA%\Microsoft\WindowsApps" "\\"
+# Le app che sappiamo avviare con la porta di debug.
+#   commands     dove puo' trovarsi il programma: vale il primo che esiste
+#   process      nome del programma e, per non confonderlo con altri dallo stesso nome (il Claude da terminale si chiama
+#                anche lui claude.exe), un'espressione che il suo percorso completo deve soddisfare
+#   service      il servizio del catalogo a cui l'app parla: la sua politica decide se i messaggi vengono mascherati
+#   own_profile  l'app e' un browser Chromium vero e proprio (Copilot e' un Edge): dalla versione 136 Chromium ignora la porta
+#                di debug sul profilo predefinito, quindi l'app protetta gira con un profilo suo, tenuto nei dati di Omissis.
+#                Vuol dire rifare l'accesso la prima volta; la copia normale dell'app puo' restare aperta, e NON e' protetta.
 APP = {
-    "claude": {"name": "Claude", "command": r"%LOCALAPPDATA%\Microsoft\WindowsApps\claude-desktop.exe", "port": 9551, "site": "claude.ai"},
-    "chatgpt": {"name": "ChatGPT / Codex", "command": r"%LOCALAPPDATA%\Microsoft\WindowsApps\chatgpt-desktop.exe", "port": 9552,
-                "site": "chatgpt.com"},
+    "claude": {"name": "Claude", "commands": [_STORE + "claude-desktop.exe", _STORE + "claude-desktop-msstore.exe"],
+               "process": ("claude.exe", r"\\app\\claude\.exe$"), "port": 9551, "site": "claude.ai", "service": "claude"},
+    "chatgpt": {"name": "ChatGPT / Codex", "commands": [_STORE + "chatgpt-desktop.exe"],
+                "process": ("chatgpt.exe", r"\\app\\chatgpt\.exe$"), "port": 9552, "site": "chatgpt.com", "service": "chatgpt"},
+    "kimi": {"name": "Kimi", "commands": [r"%LOCALAPPDATA%\Programs\Kimi\Kimi.exe"],
+             "process": ("kimi.exe", r"\\kimi\\kimi\.exe$"), "port": 9553, "site": "kimi.com", "service": "kimi"},
+    "copilot": {"name": "Microsoft Copilot", "commands": [r"%ProgramFiles(x86)%\Microsoft\Copilot\Application\mscopilot.exe",
+                                                           r"%ProgramFiles%\Microsoft\Copilot\Application\mscopilot.exe"],
+                "process": ("mscopilot.exe", r"\\copilot\\application\\mscopilot\.exe$"), "port": 9554, "site": "copilot.microsoft.com",
+                "service": "copilot", "own_profile": True},
 }
 
 
@@ -56,10 +76,126 @@ class Error(Exception):
     pass
 
 
+class AlreadyOpen(Error):
+    """L'app e' aperta senza la porta di debug: va chiusa, e a deciderlo e' chi la sta usando."""
+
+
 def opened_port(port):
     with socket.socket() as s:
         s.settimeout(0.3)
         return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+# ------------------------------------------------------------------ i processi delle app (Windows)
+
+class _Entry(ctypes.Structure):
+    _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD), ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.c_size_t), ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
+                ("szExeFile", ctypes.c_wchar * 260)]
+
+
+_k32, _u32 = ctypes.WinDLL("kernel32", use_last_error=True), ctypes.WinDLL("user32", use_last_error=True)
+_k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+_k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+_k32.Process32FirstW.argtypes = _k32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_Entry)]
+_k32.OpenProcess.restype = wintypes.HANDLE
+_k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+_k32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+_k32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+_k32.CloseHandle.argtypes = [wintypes.HANDLE]
+_WINDOWS = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+_u32.EnumWindows.argtypes = [_WINDOWS, wintypes.LPARAM]
+_u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+_u32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+_u32.IsWindowVisible.argtypes = [wintypes.HWND]
+
+
+def processes(process):
+    """I numeri dei processi di un'app: process = (nome del programma, espressione per il percorso completo)."""
+    if not process:
+        return []
+    name, path = process[0].lower(), re.compile(process[1], re.I)
+    snapshot = _k32.CreateToolhelp32Snapshot(0x2, 0)
+    if snapshot in (None, wintypes.HANDLE(-1).value):
+        return []
+    found, entry = [], _Entry()
+    entry.dwSize = ctypes.sizeof(_Entry)
+    try:
+        more = _k32.Process32FirstW(snapshot, ctypes.byref(entry))
+        while more:
+            if entry.szExeFile.lower() == name:
+                h = _k32.OpenProcess(0x1000, False, entry.th32ProcessID)   # solo il diritto di leggerne il percorso
+                if h:
+                    try:
+                        text, n = ctypes.create_unicode_buffer(1024), wintypes.DWORD(1024)
+                        if _k32.QueryFullProcessImageNameW(h, 0, text, ctypes.byref(n)) and path.search(text.value):
+                            found.append(entry.th32ProcessID)
+                    finally:
+                        _k32.CloseHandle(h)
+            more = _k32.Process32NextW(snapshot, ctypes.byref(entry))
+    finally:
+        _k32.CloseHandle(snapshot)
+    return found
+
+
+def find_command(app):
+    for c in app.get("commands", []):
+        c = os.path.expandvars(c)
+        if Path(c).exists():
+            return c
+    return None
+
+
+def open_unprotected(key):
+    """L'app e' aperta ma non l'abbiamo avviata noi: dentro non c'e' nessuna protezione."""
+    app = APP[key]
+    return not app.get("own_profile") and not opened_port(app["port"]) and bool(processes(app.get("process")))
+
+
+def close_app(key, grace=8):
+    """Chiude l'app: prima chiede alle sue finestre di chiudersi, poi ferma cio' che resta (molte app, chiusa la finestra,
+    restano accese vicino all'orologio, e finche' sono accese non si possono riavviare con la porta). Va chiamata solo quando
+    chi usa il PC lo ha chiesto: quello che nell'app non era stato inviato o salvato si perde."""
+    process = APP[key].get("process")
+    mine = set(processes(process))
+    if not mine:
+        return True
+
+    def ask(window, _):
+        pid = wintypes.DWORD()
+        _u32.GetWindowThreadProcessId(window, ctypes.byref(pid))
+        if pid.value in mine and _u32.IsWindowVisible(window):
+            _u32.PostMessageW(window, 0x0010, 0, 0)   # WM_CLOSE
+        return True
+
+    _u32.EnumWindows(_WINDOWS(ask), 0)
+    for _ in range(grace * 4):
+        if not processes(process):
+            return True
+        time.sleep(0.25)
+    for pid in processes(process):
+        h = _k32.OpenProcess(0x0001, False, pid)   # PROCESS_TERMINATE
+        if h:
+            _k32.TerminateProcess(h, 0)
+            _k32.CloseHandle(h)
+    for _ in range(20):
+        if not processes(process):
+            return True
+        time.sleep(0.25)
+    return False
+
+
+def _profile_owners(folder):
+    """I processi che tengono aperto il profilo che diamo a un'app con profilo suo (li abbiamo avviati noi)."""
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                              "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*' + $env:OMISSIS_PROFILE + '*' } | "
+                              "ForEach-Object { $_.ProcessId }"], capture_output=True, timeout=30, creationflags=0x08000000,
+                             env={**os.environ, "OMISSIS_PROFILE": str(folder)}).stdout
+        return [int(x) for x in out.decode("ascii", errors="replace").split() if x.isdigit() and int(x) != os.getpid()]
+    except Exception:   # noqa: BLE001
+        return []
 
 
 class Cdp:
@@ -248,7 +384,7 @@ class Connector:
         # Nelle pagine web conta il sito; le finestre proprie dell'app (app://, file://) si prendono tutte:
         # li' e' l'indirizzo di destinazione di ogni richiesta a dire se va protetta.
         filt = ("const __h = location.hostname, __web = /^https?:$/.test(location.protocol),\n"
-                  "  __internal = (!__web && !/^(about|chrome|devtools|chrome-extension|chrome-untrusted|data|blob):$/.test(location.protocol))"
+                  "  __internal = (!__web && !/^(about|chrome|edge|devtools|chrome-extension|chrome-untrusted|data|blob):$/.test(location.protocol))"
                   f" || {json.dumps(self.internals)}.includes(location.origin),\n"
                   "  __in = l => __internal || (__web && l.some(d => __h === d || __h.endsWith('.' + d)));\n")
         # nelle finestre interne il codice va inserito sempre: dove mandano le richieste lo decide poi page.js
@@ -441,21 +577,59 @@ class Connector:
         return {}
 
 
-def launch_app(key, timeout=40):
-    """Avvia l'app con la porta di debug e ci si collega. L'app deve essere chiusa."""
+def _connect(app, wait=6):
+    """Si collega e aspetta un momento che la prima finestra sia agganciata: subito dopo il collegamento il conto delle
+    finestre e' ancora a zero, e chi guarda lo stato leggerebbe «non protetta» per un'app che lo sta per diventare."""
+    c = Connector(app["port"], app["name"], site=app.get("site", ""))
+    for _ in range(wait * 10):
+        if c.counts["pages"] or c.errors or not c.alive:
+            break
+        time.sleep(0.1)
+    return c
+
+
+def attach(key):
+    """Si collega a un'app che ha gia' la porta aperta (avviata da qui in precedenza): None se non c'e'."""
     app = APP[key]
-    command = os.path.expandvars(app["command"])
-    if not Path(command).exists():
+    if not opened_port(app["port"]):
+        return None
+    return _connect(app)
+
+
+def launch_app(key, timeout=40, close_first=False):
+    """Avvia l'app con la porta di debug e ci si collega. Se l'app e' gia' aperta senza porta non la tocca e lo dice
+    (AlreadyOpen), a meno che close_first non dica che chi la usa ha chiesto di chiuderla e riaprirla."""
+    app = APP[key]
+    command = find_command(app)
+    if command is None:
         raise Error(i18n.t("connector.error.not_installed", name=app["name"]))
     if opened_port(app["port"]):
-        return Connector(app["port"], app["name"], site=app.get("site", ""))
-    subprocess.Popen([command, f"--remote-debugging-port={app['port']}", *app.get("arguments", [])],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return _connect(app)
+    arguments = [f"--remote-debugging-port={app['port']}", *app.get("arguments", [])]
+    if app.get("own_profile"):
+        folder = DATA / "app_profiles" / key
+        folder.mkdir(parents=True, exist_ok=True)
+        # una copia rimasta accesa in sottofondo con questo profilo (senza porta) prenderebbe lei la finestra nuova,
+        # che sarebbe senza protezione: e' roba nostra, la fermiamo prima
+        for pid in _profile_owners(folder):
+            h = _k32.OpenProcess(0x0001, False, pid)
+            if h:
+                _k32.TerminateProcess(h, 0)
+                _k32.CloseHandle(h)
+        arguments.append(f"--user-data-dir={folder}")
+    elif processes(app.get("process")):
+        # avviarla ora porterebbe solo in primo piano la finestra che c'e' gia', senza protezione
+        if not close_first:
+            raise AlreadyOpen(i18n.t("connector.error.already_open", name=app["name"]))
+        if not close_app(key):
+            raise Error(i18n.t("connector.error.not_closed", name=app["name"]))
+        time.sleep(1)   # il tempo che l'app lasci andare i suoi file
+    subprocess.Popen([command, *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(timeout * 2):
         if opened_port(app["port"]):
             for _ in range(20):   # la porta risponde un attimo prima del servizio di debug
                 try:
-                    return Connector(app["port"], app["name"], site=app.get("site", ""))
+                    return _connect(app)
                 except Exception:   # noqa: BLE001
                     time.sleep(0.5)
         time.sleep(0.5)
@@ -465,11 +639,12 @@ def launch_app(key, timeout=40):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", dest="launch", choices=sorted(APP))
+    ap.add_argument("--close", dest="close_first", action="store_true", help="se l'app è già aperta la chiude e la riapre protetta")
     ap.add_argument("--port", dest="port", type=int)
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
     try:
-        c = launch_app(a.launch) if a.launch else Connector(a.port or 9551)
+        c = launch_app(a.launch, close_first=a.close_first) if a.launch else Connector(a.port or 9551)
     except Error as ex:
         sys.exit(str(ex))
     print(f"collegato a {c.name} ({c.cdp.product}) sulla porta {c.port}. Ctrl+C per staccare: nell'app i messaggi verso i servizi protetti restano bloccati finché non la si riavvia.")

@@ -226,6 +226,39 @@ def turn_off(after=1.5):
     threading.Thread(target=run, daemon=True).start()
 
 
+APP_LOCK = threading.Lock()   # un solo avvio o aggancio alla volta: due collegamenti alla stessa app si pesterebbero i piedi
+DETACHED = set()              # le app staccate a mano con «Stacca»: non vanno riagganciate da sole
+
+
+def reattach():
+    """Un'app avviata protetta e rimasta aperta mentre Omissis era spento (un aggiornamento, un riavvio del programma) ha
+    ancora la porta aperta ma nessuno dall'altra parte: al suo interno i messaggi restano bloccati. Qui la si riaggancia."""
+    if SUP is None or SUP.phase != "active":
+        return
+    for key in list(connector.APP):
+        c = CONNECTORS.get(key)
+        if key in DETACHED or (c is not None and c.alive):
+            continue
+        with APP_LOCK:
+            if CONNECTORS.get(key) is not None and CONNECTORS[key].alive:
+                continue
+            try:
+                fresh = connector.attach(key)
+            except Exception:   # noqa: BLE001  (porta aperta da qualcos'altro, o app che si sta chiudendo)
+                fresh = None
+            if fresh is not None:
+                CONNECTORS[key] = fresh
+
+
+def watch_apps():
+    while True:
+        time.sleep(10)
+        try:
+            reattach()
+        except Exception:   # noqa: BLE001
+            pass
+
+
 def app_desktop():
     out = []
     for key, a in connector.APP.items():
@@ -233,9 +266,16 @@ def app_desktop():
         if c is not None and not c.alive:   # l'app e' stata chiusa
             CONNECTORS.pop(key, None)
             c = None
-        out.append({"id": key, "name": a["name"], "installed": Path(os.path.expandvars(a["command"])).exists(),
+        service = catalog.PER_ID.get(a.get("service", ""))
+        out.append({"id": key, "name": a["name"], "installed": connector.find_command(a) is not None,
                     "connected": c is not None, "outcome": c.outcome if c else None, "counts": dict(c.counts) if c else None,
-                    "errors": (c.notices + c.errors)[-3:] if c else []})
+                    "errors": (c.notices + c.errors)[-3:] if c else [],
+                    # aperta ma non da qui: dentro non c'e' nessuna protezione
+                    # (nelle prove no: pagina e schermate non devono dipendere da cio' che e' aperto su questo PC)
+                    "open_unprotected": c is None and not SUP.test and connector.open_unprotected(key),
+                    "own_profile": bool(a.get("own_profile")),
+                    # la politica del servizio decide se i messaggi vengono mascherati: con «registra» l'app si collega e basta
+                    "service": service["name"] if service else "", "policy": settings.policy(service) if service else "protect"})
     return out
 
 
@@ -545,13 +585,17 @@ class Handler(BaseHTTPRequestHandler):
                 key = str(data.get("id", ""))
                 if key not in connector.APP:
                     raise Refusal(i18n.t("program.app_unknown"))
-                old = CONNECTORS.pop(key, None)
-                if old is not None:
-                    old.close()
-                if data.get("action") == "launch":
-                    if SUP.phase != "active":
-                        raise Refusal(i18n.t("program.app_needs_protection"))
-                    CONNECTORS[key] = connector.launch_app(key)
+                action = data.get("action")
+                if action in ("launch", "relaunch") and SUP.phase != "active":
+                    raise Refusal(i18n.t("program.app_needs_protection"))
+                with APP_LOCK:
+                    old = CONNECTORS.pop(key, None)
+                    if old is not None:
+                        old.close()
+                    DETACHED.add(key) if action == "detach" else DETACHED.discard(key)
+                    if action in ("launch", "relaunch"):
+                        # "relaunch": chi usa il PC ha chiesto di chiudere l'app aperta senza protezione e riaprirla protetta
+                        CONNECTORS[key] = connector.launch_app(key, close_first=action == "relaunch")
                 self._respond(200, app_desktop())
             elif p == "/api/updates":
                 action = data.get("action")
@@ -763,7 +807,7 @@ def main():
         chrome = paths.test_browser()
         if chrome:
             os.environ["OMISSIS_TEST"] = "1"
-            connector.APP["test"] = {"name": "App di prova", "command": str(chrome), "port": 9560,
+            connector.APP["test"] = {"name": "App di prova", "commands": [str(chrome)], "port": 9560, "service": "claude",
                                        "arguments": ["--headless=new", "--no-first-run", f"--user-data-dir={DATA / 'test_app'}",
                                                      "about:blank"]}
     class Service(ThreadingHTTPServer):
@@ -778,8 +822,9 @@ def main():
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
     threading.Thread(target=updates.loop, daemon=True).start()
-    if not a.test:   # nelle prove niente analisi in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
+    if not a.test:   # nelle prove niente lavoro in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
         threading.Thread(target=watch, daemon=True).start()
+        threading.Thread(target=watch_apps, daemon=True).start()
     if not a.do_not_launch:
         SUP.launch()
     address = f"http://127.0.0.1:{PANEL_PORT}/"

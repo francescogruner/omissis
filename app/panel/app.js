@@ -257,10 +257,11 @@ const channels = test(async () => {
   if (!el || view !== "advanced") return;
   const [app, gw] = await Promise.all([api("/api/app"), api("/api/gateway")]);
   if (!$("#channels")) return;
-  const connected_ones = app.filter(a => a.connected).length;
+  const connected_ones = app.filter(a => a.connected).length, unprotected_ones = app.filter(a => a.installed && a.open_unprotected).length;
   const entry = (id, status, kind) => `<a class="channel" href="#/connections/${id}">${icon(id)}<b>${esc(t(`connections.card.${id}`))}</b>${label(status, kind)}<span class="below">${esc(t(`start.channel.${id}`))}</span></a>`;
   el.innerHTML = entry("browser", !extension ? t("browser.status.absent") : extension.connected && extension.ok ? t("browser.status.connected") : t("browser.status.to_connect"), extension && extension.connected && extension.ok ? "ok" : "")
-    + entry("app", connected_ones ? t("app.connected_ones", {n: connected_ones}) : t("app.no_connected"), connected_ones ? "ok" : "")
+    + entry("app", unprotected_ones ? t("app.unprotected_ones", {n: unprotected_ones}) : connected_ones ? t("app.connected_ones", {n: connected_ones}) : t("app.no_connected"),
+            unprotected_ones ? "warning" : connected_ones ? "ok" : "")
     + entry("terminal", gw.is_active ? t("terminal.is_active", {port: gw.port}) : (gw.error || t("terminal.stopped")), gw.is_active ? "ok" : gw.error ? "error" : "")
     + entry("proxy", S && S.phase === "active" ? t("proxy.is_active", {port: S.port}) : t("proxy.stopped"), S && S.phase === "active" ? "ok" : "");
 });
@@ -601,26 +602,42 @@ const connectBrowser = test(async el => {
   $("#estFolder").textContent = (await api("/api/extension")).folder;
 });
 
-function drawApp(listing) {
+function drawApp(listing, even_if_same = true) {
   const el = $("#appListing");
   if (!el) return;
+  // l'elenco si rilegge da solo ogni pochi secondi: se nulla e' cambiato non lo si ridisegna (chi e' su un pulsante con la tastiera ci resta)
+  const now = JSON.stringify(listing);
+  if (!even_if_same && el.dataset.drawn === now) return;
+  el.dataset.drawn = now;
   el.innerHTML = listing.map(a => {
     const c = a.counts;
-    const status = !a.installed ? label(t("app.status.not_installed")) : !a.connected ? label(t("app.status.not_connected"))
+    const status = !a.installed ? label(t("app.status.not_installed"))
+      : !a.connected ? (a.open_unprotected ? label(t("app.status.open_unprotected"), "error") : label(t("app.status.not_connected")))
       : a.outcome === "yes" ? label(t("app.status.yes"), "ok") : a.outcome === "waiting" ? label(t("app.status.waiting"), "warning") : label(t("app.status.no"), "error");
     const numbers = c ? `<span class="help">${esc(t("app.numbers", {pages: c.pages, messages: c.messages, checked_count: c.checked_count, replacements: c.replacements, blocked: c.blocked}))}</span>` : "";
     const button = !a.installed ? "" : a.connected ? `<button class="button" data-app="${esc(a.id)}" data-action="detach">${esc(t("app.detach"))}</button>`
+      : a.open_unprotected ? `<button class="button primary" data-app="${esc(a.id)}" data-name="${esc(a.name)}" data-action="relaunch">${esc(t("app.relaunch"))}</button>`
       : `<button class="button primary" data-app="${esc(a.id)}" data-action="launch">${esc(t("app.launch"))}</button>`;
     const errors = (a.errors || []).map(e => `<div class="note error">${esc(e)}</div>`).join("");
-    return `<div class="setting" data-app-line="${esc(a.id)}" data-outcome="${esc(a.connected ? a.outcome || "no" : "")}"><span class="name">${esc(a.name)} ${status}</span>${numbers}<span class="command">${button}</span></div>${errors}`;
+    // cio' che conviene sapere prima di fidarsi: un servizio non impostato su «Proteggi», un profilo separato
+    const notes = !a.installed ? "" : (a.policy !== "protect" ? `<div class="note warning" data-app-note="policy">${esc(t("app.note.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}))}</div>` : "")
+      + (a.own_profile ? `<div class="note" data-app-note="profile">${esc(t("app.note.own_profile", {name: a.name}))}</div>` : "");
+    return `<div class="setting" data-app-line="${esc(a.id)}" data-outcome="${esc(a.connected ? a.outcome || "no" : "")}" data-open="${a.open_unprotected ? "unprotected" : ""}"><span class="name">${esc(a.name)} ${status}</span>${numbers}<span class="command">${button}</span></div>${notes}${errors}`;
   }).join("");
   $$("button[data-app]", el).forEach(b => b.onclick = test(async () => {
+    if (b.dataset.action === "relaunch" && !await confirm(t("app.relaunch.title", {name: b.dataset.name}), t("app.relaunch.text", {name: b.dataset.name}), t("app.relaunch"))) return;
     b.disabled = true;
     b.textContent = b.dataset.action === "launch" ? t("app.startup_pending") : "…";
     try { drawApp(await api("/api/app", {id: b.dataset.app, action: b.dataset.action})); } catch (e) { appListing(); throw e; }
   }));
 }
 const appListing = test(async () => drawApp(await api("/api/app")));
+/** Lo stato delle app cambia senza che nessuno tocchi la pagina (una finestra agganciata, un'app chiusa): lo si rilegge da soli. */
+const appListingQuiet = async () => {
+  const el = $("#appListing");
+  if (!el || $("button:disabled", el) || document.querySelector("dialog[open]")) return;   // non durante un avvio o una conferma
+  try { drawApp(await api("/api/app"), false); } catch (e) { /* al prossimo giro */ }
+};
 const connectApp = el => {
   el.innerHTML = `<section class="card" aria-label="${esc(t("connections.card.app"))}" id="appListing"><div class="empty">…</div></section>`
     + card(`<h2>${esc(t("app.know"))}</h2><ul class="listing faded">${[1, 2, 3, 4, 5].map(i => `<li>${t(`app.know.${i}`)}</li>`).join("")}</ul>`);
@@ -930,6 +947,6 @@ async function launch() {
   show(false);
   window.postMessage({msp_pii: "ci sei?"}, location.origin);
   await readStatus();
-  setInterval(() => { readStatus(); if (opened.id === "start") channels(); }, 3000);
+  setInterval(() => { readStatus(); if (opened.id === "start") channels(); appListingQuiet(); }, 3000);
 }
 launch().catch(e => { $("#content").textContent = "Omissis: " + e.message; });

@@ -31,7 +31,7 @@ aggiunge le sezioni per chi lo gestisce. Tutte le sezioni:
 | Guida | come si usa, in quattro passi |
 | Browser | installare e collegare l'estensione per Chrome ed Edge |
 | Terminale | collegare Claude Code, Codex e gli altri strumenti da terminale (gateway) |
-| App desktop | avviare Claude e ChatGPT per Windows con la protezione dentro la finestra (sperimentale) |
+| App desktop | avviare Claude, ChatGPT, Kimi e Copilot per Windows con la protezione dentro la finestra (sperimentale) |
 | Liste | termini da mascherare sempre / da non mascherare mai |
 | Archivio | corrispondenza segnaposto ↔ valore reale (resta su questo PC) |
 | Impostazioni | modello, porta, file, finestra di prova, certificato |
@@ -358,18 +358,50 @@ ma un contesto molto mascherato, che può confondere il modello. I nomi degli st
 nella richiesta non vengono mai sostituiti. Il formato OpenAI è provato solo con il servizio finto; Codex con accesso
 ChatGPT (non con chiave) parla con un indirizzo diverso e non è coperto.
 
-## App desktop: Claude e ChatGPT per Windows (sperimentale)
+## App desktop: Claude, ChatGPT, Kimi e Copilot per Windows (sperimentale)
 
-Le due app installate su questo PC sono, sotto, un browser Chromium con dentro il sito del servizio
-(Claude: Electron 45; ChatGPT/Codex di OpenAI: un Chromium 157 proprio). Avviate con la porta di
-debug, `connector.py` ci si collega e porta dentro la finestra **lo stesso codice dell'estensione**:
-il testo viene sostituito prima di essere cifrato, quindi niente certificato, niente proxy, e non
-conta se l'app controlla i certificati. Chi usa l'app tiene il proprio abbonamento e tutte le
-funzioni dell'app.
+Queste app sono, sotto, un browser Chromium con dentro il sito del servizio (Claude e Kimi: Electron;
+ChatGPT/Codex di OpenAI: un Chromium 157 proprio; Microsoft Copilot: un Edge vero e proprio). Avviate
+con la porta di debug, `connector.py` ci si collega e porta dentro la finestra **lo stesso codice
+dell'estensione**: il testo viene sostituito prima di essere cifrato, quindi niente certificato,
+niente proxy, e non conta se l'app controlla i certificati. Chi usa l'app tiene il proprio
+abbonamento e tutte le funzioni dell'app.
 
-Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere attiva e l'app
-**chiusa del tutto**, anche dall'icona vicino all'orologio). Da terminale:
-`.venv\Scripts\python.exe connector.py --avvia claude` (oppure `chatgpt`).
+Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere attiva). Da terminale:
+`.venv\Scripts\python.exe connector.py --start claude` (oppure `chatgpt`, `kimi`, `copilot`).
+
+| App | Come parte protetta | Verificata dal vivo |
+|---|---|---|
+| ChatGPT / Codex | stessa app, riavviata con la porta | sì, un messaggio con dati inventati (12/11/2026) |
+| Claude | stessa app, riavviata con la porta | no |
+| Kimi | stessa app, riavviata con la porta | no |
+| Microsoft Copilot | con un **profilo separato**, tenuto in `data\app_profiles\copilot` | solo l'aggancio: 5 finestre seguite, nessun errore, nessun messaggio inviato (14/11/2026) |
+| Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere | — |
+
+**App già aperta.** Un'app aperta dal menu Start non ha la porta, e avviarla di nuovo porterebbe solo
+in primo piano la finestra che c'è già, senza protezione. Il pannello se ne accorge (legge l'elenco
+dei processi: per Claude distingue l'app dal Claude da terminale, che ha lo stesso nome) e al posto di
+«Avvia protetta» mostra **«Chiudi e riapri protetta»**: chiede conferma, chiede alle finestre dell'app
+di chiudersi, aspetta 8 secondi, ferma ciò che resta acceso vicino all'orologio e la riavvia con la
+porta. Le conversazioni restano; ciò che non era stato inviato si perde. Senza quella conferma il
+connettore non chiude nulla (`connector.AlreadyOpen`). In Inizio la casella «App desktop» diventa
+gialla finché c'è un'app aperta senza protezione.
+
+**Riaggancio.** Se Omissis si chiude o si aggiorna mentre un'app protetta è aperta, al riavvio la
+ritrova dalla porta e si ricollega da solo (controllo ogni 10 secondi, solo a protezione attiva).
+Dopo «Stacca», invece, l'app resta staccata finché non la si riavvia da qui.
+
+**Profilo separato (Copilot).** Dalla versione 136 Chromium ignora la porta di debug sul profilo
+predefinito (provato: con il profilo normale Copilot parte e la porta resta chiusa). Per questo la
+Copilot protetta gira con un profilo suo: la prima volta va rifatto l'accesso, e la finestra normale
+di Copilot — quella del menu Start o del tasto Copilot — **non è protetta**. Chiusa la finestra,
+Copilot resta acceso in sottofondo senza porta: prima di ogni avvio il connettore ferma le copie
+rimaste sul suo profilo, altrimenti la finestra nuova la aprirebbero loro, senza protezione.
+
+**La politica del servizio conta.** Il connettore maschera solo verso i servizi impostati su
+«Proteggi». Kimi e Copilot partono su «Registra» (formato riconosciuto dal nome dei campi, da
+verificare): finché restano così l'app si collega ma i messaggi non vengono toccati, e il pannello lo
+scrive sotto il nome dell'app.
 
 Le barriere sono due. Quella **dentro la pagina** sostituisce i dati e riscrive le risposte mentre
 arrivano. Quella **a livello di rete** ferma ogni invio verso un servizio protetto prima che parta e
@@ -404,7 +436,7 @@ Da sapere:
   stessa strada dell'estensione, provata sull'app di prova e non ancora su quella vera.
   Lo stato nel pannello ha tre livelli: non protetta, collegata ma non verificata, verificata dopo
   il primo messaggio passato dalla protezione. Su Claude Desktop non è mai stato provato. Sull'app
-  di prova: `e2e_connector.py`, 32 controlli;
+  di prova: `e2e_connector.py`, 37 controlli;
 - finché l'app è aperta così, qualunque programma di questo PC può comandarla dalla porta;
 - nel codice di Claude Desktop la porta di debug è in un elenco di opzioni a cui l'app reagisce
   (risulta che spenga il collegamento locale e il gestore delle password): l'app potrebbe anche
@@ -453,7 +485,7 @@ non va copiata né condivisa.
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 19 controlli) e **Claude Code dal vivo** con un messaggio di dati inventati |
-| Connettore per le app desktop | app di prova (`e2e_connector.py`, 32 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
+| Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
 | Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
@@ -583,7 +615,7 @@ inventate. Nessuno dei due ha bisogno di qualcosa acceso.
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (46 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (48 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,
