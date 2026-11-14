@@ -169,7 +169,10 @@ di avvio o collegamento nel menu Start.
 Sempre il 14 novembre 2026: `Set-OmissisPolicy.ps1` provato su una chiave di prova dell'utente (scrive, il
 programma rilegge i valori nella forma giusta, un file ridotto libera le impostazioni tolte, `-Remove` toglie
 tutto) e, senza diritti di amministratore, sulla chiave vera, dove si rifiuta senza scrivere nulla. Blocco e
-invio del riepilogo sono coperti dalle prove automatiche del programma (`app/e2e_central.py`).
+invio del riepilogo sono coperti dalle prove automatiche del programma (`app/e2e_central.py`). In più, con
+l'installer che contiene queste novità: installazione in silenzio in 9 secondi; la copia installata, accesa con
+impostazioni imposte da un file di prova, le mostra bloccate, rifiuta di cambiarle e manda il riepilogo a una
+console di prova sullo stesso PC; disinstallazione senza resti.
 
 **Non ancora provato**: `Set-OmissisPolicy.ps1` lanciato davvero come amministratore su un PC con Omissis
 installato, e la riga `locked` di `Get-OmissisStatus.ps1`; il lancio da un RMM o da Intune veri, un PC con più utenti, un PC con restrizioni
