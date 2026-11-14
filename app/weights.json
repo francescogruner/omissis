@@ -17,8 +17,8 @@
      "sha256": "25a88ff2d2e2034feca4cd0b4d04fc1df03a730b32a642ff30cb5ff56835a94a"
     },
     "omissis.json": {
-     "byte": 292,
-     "sha256": "9c01df9c0d5d46a0968e2719c687247dcef7aa7ffe1b12df6911b6ff9581caed"
+     "byte": 285,
+     "sha256": "e16517ac7c1bda4d5b37dd0fc6b8baa8bcb4b33d2a57b916dc1152c2ea95e251"
     },
     "model.onnx": {
      "byte": 1231034493,
@@ -42,8 +42,8 @@
      "sha256": "25a88ff2d2e2034feca4cd0b4d04fc1df03a730b32a642ff30cb5ff56835a94a"
     },
     "omissis.json": {
-     "byte": 292,
-     "sha256": "9c01df9c0d5d46a0968e2719c687247dcef7aa7ffe1b12df6911b6ff9581caed"
+     "byte": 285,
+     "sha256": "e16517ac7c1bda4d5b37dd0fc6b8baa8bcb4b33d2a57b916dc1152c2ea95e251"
     },
     "model.onnx": {
      "byte": 563281399,

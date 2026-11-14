@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tassonomia di msp-pii (v0): unica fonte per etichette, strati e azione predefinita.
+"""Tassonomia di Omissis (v0): unica fonte per etichette, strati e azione predefinita.
 
 Per ogni etichetta:
   strati   chi la rileva: "modello" (rete neurale), "regole" (regex + checksum),
@@ -27,7 +27,7 @@ Regole di confine (valgono per dati di addestramento e benchmark):
 """
 
 #  etichetta            descrizione                                             strati                               azione      fase
-TASSONOMIA = [
+TAXONOMY = [
     ("PERSONA",        "nome e cognome, anche solo cognome, iniziali puntate",   ("modello", "dizionario"),           "maschera", 0),
     ("EMAIL",          "indirizzo email o PEC, anche dettato",                   ("regole", "modello"),               "maschera", 0),
     ("TELEFONO",       "fisso, cellulare, interno, anche a parole",              ("modello", "regole"),               "maschera", 0),
@@ -74,12 +74,12 @@ TASSONOMIA = [
     ("IMPORTO",        "somme di denaro",                                        (),                                  "lascia",   2),
 ]
 
-ETICHETTE = [t[0] for t in TASSONOMIA if t[4] == 0]          # quelle che il modello riconosce
-SPENTE = [t[0] for t in TASSONOMIA if t[4] == 0 and t[3] == "profilo"]   # riconosciute ma non sostituite, salvo richiesta
-CLASSI = ["O"] + [f"{p}-{e}" for e in ETICHETTE for p in ("B", "I")]
-ID_CLASSE = {c: i for i, c in enumerate(CLASSI)}
+LABELS = [t[0] for t in TAXONOMY if t[4] == 0]          # quelle che il modello riconosce
+OFF = [t[0] for t in TAXONOMY if t[4] == 0 and t[3] == "profilo"]   # riconosciute ma non sostituite, salvo richiesta
+CLASSES = ["O"] + [f"{p}-{e}" for e in LABELS for p in ("B", "I")]
+CLASS_ID = {c: i for i, c in enumerate(CLASSES)}
 
 if __name__ == "__main__":
-    print(f"{len(ETICHETTE)} etichette nel modello ({len(SPENTE)} spente di serie), {len(CLASSI)} classi BIO")
-    for e, d, s, a, f in TASSONOMIA:
+    print(f"{len(LABELS)} etichette nel modello ({len(OFF)} spente di serie), {len(CLASSES)} classi BIO")
+    for e, d, s, a, f in TAXONOMY:
         print(f"{e:17} fase {f}  {a:9} {'+'.join(s) or '-':22} {d}")

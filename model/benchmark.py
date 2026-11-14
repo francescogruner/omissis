@@ -40,7 +40,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from inference import Rilevatore
+from inference import Detector
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data" / "benchmarks"
@@ -120,17 +120,17 @@ def main():
     ap.add_argument("--save", action="store_true", help="write the scores to data/benchmarks/results/<model>-<mode>.json")
     a = ap.parse_args()
     fetch()
-    extra = {} if a.profile == "standard" else {"spente": []}
+    extra = {} if a.profile == "standard" else {"off": []}
     if a.mode == "other":
         from other_models import Other
         detector = Other(a.model)
     elif a.mode == "model":
-        detector = Rilevatore(a.model, regole=False, soglia=None, noti=False, mai=[], sempre=[], **extra)
+        detector = Detector(a.model, rules=False, threshold=None, well_known=False, never=[], always=[], **extra)
     else:
-        detector = Rilevatore(a.model, mai=[], sempre=[], **extra)
+        detector = Detector(a.model, never=[], always=[], **extra)
 
     def predict(texts):
-        t0, out = time.time(), detector.molti(texts, completo=a.mode == "full")
+        t0, out = time.time(), detector.many(texts, complete=a.mode == "full")
         return [[(s, e) for s, e, _ in spans] for spans in out], time.time() - t0
 
     groups, seconds, sentences = collections.defaultdict(Score), 0.0, 0

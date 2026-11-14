@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Strato a regole di msp-pii: formati certi (regex + checksum) e segreti.
+"""Strato a regole di Omissis: formati certi (regex + checksum) e segreti.
 
 rileva(testo) -> [[inizio, fine, etichetta], ...]
 Le regole coprono cio' che ha una forma riconoscibile; il resto lo fa il modello.
@@ -30,12 +30,12 @@ def _iban_ok(c):
         return False
 
 
-def _sembra_segreto(v):
+def _looks_secret(v):
     return bool(re.search(r"\d|[^\w\s]", v)) or (v != v.lower() and v != v.upper() and v != v.capitalize())
 
 
 # (etichetta, regex, gruppo, verifica)
-REGOLE = [
+RULES = [
     ("SEGRETO", r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", 0, None),
     ("SEGRETO", r"\beyJ[\w-]{10,}\.eyJ[\w-]{10,}\.[\w-]{10,}", 0, None),
     ("SEGRETO", r"\b(?:ghp_|gh[ousr]_|github_pat_|glpat-|npm_|hf_|dop_v1_|AIza|sk-proj-|sk-|xox[baprs]-|(?:pk|sk|rk)_(?:live|test)_)[\w-]{16,}", 0, None),
@@ -51,7 +51,7 @@ REGOLE = [
     ("SEGRETO", r"\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}|\$6\$[./\w]+\$[./\w]{86}", 0, None),
     ("SEGRETO", rf"\b[{_HEX}]{{32}}:[{_HEX}]{{32}}\b", 0, None),
     ("SEGRETO", r"(?i)\b(?:password|passwd|pwd|psw|passphrase|psksecret|psk|client_secret|secret|token|api[_-]?key|"
-                r"access[_-]?key|AccountKey|wpa_passphrase|chiave api)\b[\"']?\s*(?:[:=]|\bè\b)\s*[\"']?([^\s\"';,]{4,})", 1, _sembra_segreto),
+                r"access[_-]?key|AccountKey|wpa_passphrase|chiave api)\b[\"']?\s*(?:[:=]|\bè\b)\s*[\"']?([^\s\"';,]{4,})", 1, _looks_secret),
     ("ID_DISPOSITIVO", r"(?i)(?:\bs/n|\bsn|\bs\.n\.|\bserial(?:e|i| number| no)?|\bnumero di serie|\bmatricola|\bmatr\.?|\bservice tag|\bimei|\biccid)"
                        r"\s*(?:n\.|n°|nr\.?)?\s*[:#=.]?\s*([A-Za-z0-9][A-Za-z0-9-]{5,29})(?![A-Za-z0-9])", 1,
      lambda v: sum(ch.isdigit() for ch in v) >= 2),
@@ -76,20 +76,20 @@ REGOLE = [
      lambda v: 13 <= len(re.sub(r"\D", "", v)) <= 19 and re.sub(r"\D", "", v)[0] in "3456" and _luhn(re.sub(r"\D", "", v))),
     ("TARGA", r"(?<![A-Z0-9])[A-HJ-NPR-TV-Z]{2}[ -]?\d{3}[ -]?[A-HJ-NPR-TV-Z]{2}(?![A-Za-z0-9])", 0, None),
 ]
-_COMP = [(e, re.compile(rx, re.S), g, v) for e, rx, g, v in REGOLE]
+_COMP = [(e, re.compile(rx, re.S), g, v) for e, rx, g, v in RULES]
 
 
-def rileva(testo):
-    trovati = []
-    for eti, rx, gruppo, verifica in _COMP:
-        for m in rx.finditer(testo):
-            s, e = m.span(gruppo)
-            if e > s and (verifica is None or verifica(testo[s:e])):
-                trovati.append([s, e, eti])
+def detect(text):
+    found_items = []
+    for eti, rx, group, verify in _COMP:
+        for m in rx.finditer(text):
+            s, e = m.span(group)
+            if e > s and (verify is None or verify(text[s:e])):
+                found_items.append([s, e, eti])
     # tiene gli span piu' lunghi, scarta quelli contenuti in un altro
-    trovati.sort(key=lambda x: (x[0], -(x[1] - x[0])))
+    found_items.sort(key=lambda x: (x[0], -(x[1] - x[0])))
     out = []
-    for s, e, l in trovati:
+    for s, e, l in found_items:
         if out and s < out[-1][1] and e <= out[-1][1]:
             continue
         out.append([s, e, l])

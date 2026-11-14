@@ -27,7 +27,7 @@ class Other:
         self.window, self.stride, self.batch = min(window, limit - 2), stride, batch
         self.name = os.path.basename(str(name).rstrip("/\\")) if os.path.isdir(str(name)) else str(name)
 
-    def molti(self, texts, completo=False):
+    def many(self, texts, complete=False):
         """[[start, end, label], ...] for every text. `completo` is accepted and ignored: there is nothing but the network."""
         torch, out = self.torch, [None] * len(texts)
         order = sorted(range(len(texts)), key=lambda i: len(texts[i]))        # similar lengths together: less padding

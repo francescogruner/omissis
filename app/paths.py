@@ -58,7 +58,7 @@ def lists():
 
 def model_folder():
     """La cartella con inference.py, le liste e i pesi."""
-    for name in ("model", "msp-pii"):
+    for name in ("model",):
         if (ROOT / name / "inference.py").exists():
             return ROOT / name
     return ROOT / "model"

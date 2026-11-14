@@ -9,7 +9,7 @@ i file lists/never.txt (da non mascherare) e lists/always.txt (da mascherare sem
 import re
 from pathlib import Path
 
-_TESTO = """
+_TEXT = """
 microsoft; google; apple; amazon; aws; azure; meta; facebook; instagram; linkedin; youtube; twitter; tiktok; whatsapp; telegram;
 openai; anthropic; chatgpt; claude; gemini; copilot; mistral; perplexity;
 office; office 365; microsoft 365; m365; o365; outlook; teams; onedrive; sharepoint; excel; word; powerpoint; visio;
@@ -71,13 +71,13 @@ air france; british airways; emirates; costa crociere; hilton; marriott;
 parlamento europeo; consiglio europeo; corte di giustizia; corte di cassazione; corte costituzionale; consiglio di stato; corte dei conti;
 senato; camera dei deputati; governo; ministero della salute; ministero dell'interno; ministero dell'economia; protezione civile;
 """
-NOTI = {x.strip() for x in _TESTO.replace("\n", " ").split(";") if x.strip()}
+WELL_KNOWN = {x.strip() for x in _TEXT.replace("\n", " ").split(";") if x.strip()}
 # Indirizzi tecnici che non dicono nulla di nessuno: l'indirizzo della macchina stessa, i DNS pubblici, le maschere di rete,
 # i siti di produttori, enti e documentazione. Un indirizzo privato (192.168..., il sito di un cliente) non e' tra questi.
-IP_PUBBLICI = {"127.0.0.1", "::1", "0.0.0.0", "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112", "208.67.222.222",
+PUBLIC_IPS = {"127.0.0.1", "::1", "0.0.0.0", "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112", "208.67.222.222",
                "208.67.220.220", "255.255.255.255", "255.255.255.0", "255.255.0.0", "255.0.0.0", "255.255.255.128", "255.255.255.192",
                "255.255.255.224", "255.255.255.240", "255.255.255.248", "255.255.255.252", "255.255.254.0", "255.255.252.0", "255.255.248.0"}
-DOMINI_PUBBLICI = {x.strip() for x in """
+PUBLIC_DOMAINS = {x.strip() for x in """
 example.com; example.org; example.net; localhost; microsoft.com; office.com; live.com; windows.com; windowsupdate.com; azure.com; msn.com;
 google.com; google.it; youtube.com; gstatic.com; android.com; apple.com; icloud.com; amazon.com; amazon.it; aws.amazon.com; github.com;
 gitlab.com; stackoverflow.com; wikipedia.org; wikimedia.org; mozilla.org; python.org; pypi.org; npmjs.com; docker.com; kubernetes.io;
@@ -90,59 +90,59 @@ w3.org; ietf.org; iso.org; mitre.org; nist.gov; owasp.org
 _RX_HOST = re.compile(r"^(?:[a-z][a-z0-9+.-]*://)?(?:www\.)?([a-z0-9.-]+\.[a-z]{2,}|localhost)(?::\d+)?(/[^?#\s]*)?$", re.I)
 
 
-def tecnico_pubblico(valore, etichetta):
+def public_technical(value, label):
     """True se un indirizzo IP, un dominio o un indirizzo web e' di dominio pubblico (vedi sopra). Un indirizzo web con
     parametri (?...) non lo e' mai: li' possono stare codici e nomi."""
-    v = valore.strip().strip(".,;:()[]<>\"'").lower()
-    if etichetta == "IP":
-        return v.split("/")[0] in IP_PUBBLICI
-    if etichetta in ("URL", "DOMINIO", "HOSTNAME"):
+    v = value.strip().strip(".,;:()[]<>\"'").lower()
+    if label == "IP":
+        return v.split("/")[0] in PUBLIC_IPS
+    if label in ("URL", "DOMINIO", "HOSTNAME"):
         m = _RX_HOST.match(v)
         if not m:
             return False
         host = m.group(1)
-        return any(host == d or host.endswith("." + d) for d in DOMINI_PUBBLICI)
+        return any(host == d or host.endswith("." + d) for d in PUBLIC_DOMAINS)
     return False
-_FORMA_G = re.compile(r"(?i)\b(s\.?r\.?l\.?s?|s\.?p\.?a|s\.?n\.?c|s\.?a\.?s|s\.?c\.?a\.?r\.?l|soc\.? ?coop\w*|onlus|studio|& ?c)\b")
+_LEGAL_FORM = re.compile(r"(?i)\b(s\.?r\.?l\.?s?|s\.?p\.?a|s\.?n\.?c|s\.?a\.?s|s\.?c\.?a\.?r\.?l|soc\.? ?coop\w*|onlus|studio|& ?c)\b")
 
 
-def norma(s):
+def norm(s):
     return re.sub(r"\s+", " ", re.sub(r"[^\w&.'+-]+", " ", s.lower())).strip(" .-'")
 
 
-def leggi_elenco(percorso):
+def read_listing(path):
     """Un termine per riga; righe vuote e righe che iniziano con # ignorate."""
-    p = Path(percorso)
+    p = Path(path)
     if not p.exists():
         return []
     return [r.strip() for r in p.read_text(encoding="utf-8").splitlines() if r.strip() and not r.lstrip().startswith("#")]
 
 
-_GENERICHE = set("pro business standard premium enterprise online cloud backup server desktop mobile italia support supporto "
+_GENERIC = set("pro business standard premium enterprise online cloud backup server desktop mobile italia support supporto "
                  "assistenza basic plus essentials professional home edition client agent app suite for per di".split())
 
 
-def e_noto(valore, extra=frozenset()):
+def is_known(value, extra=frozenset()):
     """True se lo span e' un nome noto, anche seguito da un modello o da un'edizione
     ("HP EliteBook 840 G9", "Microsoft 365 Business"). Mai se contiene una forma giuridica."""
-    v = norma(valore)
+    v = norm(value)
     if not v:
         return False
-    if v in NOTI or v in extra:
+    if v in WELL_KNOWN or v in extra:
         return True
-    if _FORMA_G.search(v):
+    if _LEGAL_FORM.search(v):
         return False
-    parole, i, trovato = v.split(" "), 0, False
-    if len(parole) > 6:
+    words, i, found = v.split(" "), 0, False
+    if len(words) > 6:
         return False
-    while i < len(parole):
+    while i < len(words):
         for k in (3, 2, 1):
-            frase = " ".join(parole[i:i + k])
-            if i + k <= len(parole) and (frase in NOTI or frase in extra):
-                i, trovato = i + k, True
+            phrase = " ".join(words[i:i + k])
+            if i + k <= len(words) and (phrase in WELL_KNOWN or phrase in extra):
+                i, found = i + k, True
                 break
         else:
-            if not (any(ch.isdigit() for ch in parole[i]) or parole[i] in _GENERICHE):
+            if not (any(ch.isdigit() for ch in words[i]) or words[i] in _GENERIC):
                 return False
             i += 1
-    return trovato
+    return found

@@ -9,22 +9,22 @@ un'etichetta. Sono tre strati, applicati insieme da `inference.py`:
    solo insieme ad altro o categorie particolari (date, orari, età, genere, titoli, professione,
    istruzione, origine, luoghi, salute, religione, politica, orientamento): il modello le riconosce,
    ma di serie non le restituisce, perché toglierle cambia il senso del testo. L'elenco di quelle
-   spente è in `omissis.json`; `Rilevatore(..., spente=[])` le accende tutte;
+   spente è in `omissis.json` (`off`); `Detector(..., off=[])` le accende tutte;
 2. **le regole** (`rules.py`): espressioni con controllo delle cifre per ciò che ha una forma certa
    (codice fiscale, partita IVA, IBAN, carte, indirizzi IP, chiavi);
 3. **gli elenchi**: `known.py` (nomi noti da lasciare in chiaro: produttori, prodotti),
    `lists\never.txt` e `lists\always.txt` (personalizzabili dal pannello).
 
 ```python
-from inference import Rilevatore
-ril = Rilevatore("models/omissis-small")
-for inizio, fine, etichetta in ril.analizza("Scrivi a Giulia Ferraresi, giulia.ferraresi@example.com"):
-    print(inizio, fine, etichetta)
+from inference import Detector
+det = Detector("models/omissis-small")
+for start, end, label in det.analyze("Scrivi a Giulia Ferraresi, giulia.ferraresi@example.com"):
+    print(start, end, label)
 ```
 
 Le **soglie di decisione** stanno in `omissis.json` dentro la cartella dei pesi: una parola resta
-"non sensibile" solo se il modello ne è sicuro almeno a quel livello (`soglia`). Alzarla maschera di
-più, abbassarla di meno. Alcune etichette hanno una soglia propria (`soglie`): più alta dove sbagliare
+"non sensibile" solo se il modello ne è sicuro almeno a quel livello (`threshold`). Alzarla maschera di
+più, abbassarla di meno. Alcune etichette hanno una soglia propria (`thresholds`): più alta dove sbagliare
 costa di più (il nome di un cliente), più bassa dove il modello vede l'etichetta troppo facilmente
 (un dominio in mezzo a un testo inglese). `calibrate.py` scrive le stesse soglie anche dentro i pesi,
 così chi usa il modello senza questo codice ottiene lo stesso comportamento.
@@ -39,8 +39,15 @@ così chi usa il modello senza questo codice ottiene lo stesso comportamento.
 Senza PyTorch installato si usa ONNX da solo; con la variabile `OMISSIS_ENGINE=onnx` lo si sceglie
 comunque. `python compare_engines.py models\omissis-small` confronta i due motori sugli stessi
 testi: sui 405 testi di controllo trovano esattamente gli stessi dati. Sul processore, per un testo di
-media lunghezza: circa 34 ms con PyTorch e 44 ms con ONNX per il modello piccolo, 76 e 90 ms per
-quello grande. La versione con i pesi a 8 bit è stata scartata: cambiava l'esito sull'1% delle parole.
+media lunghezza: circa 36 ms con PyTorch e 26 ms con ONNX per il modello piccolo, 79 e 61 ms per
+quello grande (misura del 14 novembre 2026, dopo aver tolto dal file ONNX i passaggi inutili: vedi
+`slim` in `export_onnx.py`). La versione con i pesi a 8 bit è stata scartata: cambiava l'esito su
+una parte delle parole (dallo 0,3 allo 0,7%) e il risultato dipendeva dal processore.
+
+I nomi nel codice sono in inglese. Fanno eccezione `values.py` e `fragments.py`, che sono il
+vocabolario italiano dei testi sintetici: lì i nomi dei metodi sono i segnaposto delle frasi modello
+(`{p.citta}`, `{a.piva}`) e restano com'erano, come le chiavi dei dati di addestramento (`testo`,
+`spans`, `forma`).
 
 ## Misure su benchmark pubblici
 
@@ -93,7 +100,7 @@ python generate_data.py 200000 2000          # data\train.jsonl e data\dev.jsonl
 python external_data.py download             # circa 1,5 GB in data\external\raw
 python external_data.py convert
 python build_train.py --first-pass <modello di un primo giro> --teacher <modello addestrato solo sui nostri>
-python train.py <cartella di mmBERT> models\mio-modello --epoche 1 --gettoni 8000 --ema 0.999 --llrd 0.95 --maschera 0.08
+python train.py <cartella di mmBERT> models\mio-modello --epochs 1 --tokens 8000 --ema 0.999 --llrd 0.95 --mask 0.08
 python calibrate.py models\mio-modello --threshold 0.93 --label ORG=0.98 DOMINIO=0.4
 python export_onnx.py models\mio-modello
 ```
@@ -112,8 +119,8 @@ regole, raccolta per raccolta). Le più importanti:
 - una raccolta etichettata da un modello linguistico (i documenti finanziari) viene creduta solo dove
   anche un modello nostro vede qualcosa.
 
-Il modello piccolo si ottiene da quello grande (`train.py ... --insegnante models\mio-modello --temp 2
---alfa 0.5`). Serve una scheda grafica: su una RTX 4080 SUPER il modello grande richiede circa un'ora
+Il modello piccolo si ottiene da quello grande (`train.py ... --teacher models\mio-modello --temp 2
+--alpha 0.5`). Serve una scheda grafica: su una RTX 4080 SUPER il modello grande richiede circa un'ora
 e mezza. Un solo lavoro per volta sulla scheda.
 
 `public_probe.py` misura quanto viene mascherato in frasi che contengono solo cose pubbliche

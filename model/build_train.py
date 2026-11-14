@@ -36,8 +36,8 @@ import re
 import sys
 from pathlib import Path
 
-from inference import Rilevatore
-from taxonomy import ETICHETTE, SPENTE
+from inference import Detector
+from taxonomy import LABELS, OFF
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
@@ -119,16 +119,16 @@ def main():
         if fresh:
             (DATA / f"ours_{name}.jsonl").write_bytes((DATA / f"{name}.jsonl").read_bytes())
     ours, dev = read(DATA / "ours_train.jsonl"), read(DATA / "ours_dev.jsonl")
-    schema = {"ours": list(ETICHETTE)}
+    schema = {"ours": list(LABELS)}
     held = [{"testo": d["testo"], "spans": d["spans"], "dom": "ours"} for d in dev if d.get("dom", "ours") == "ours"]
     rows, opened = [], 0
-    guesses = Rilevatore(a.first, mai=[], sempre=[], regole=False, noti=False, spente=[]).molti([d["testo"] for d in ours]) if a.first else [[]] * len(ours)
+    guesses = Detector(a.first, never=[], always=[], rules=False, well_known=False, off=[]).many([d["testo"] for d in ours]) if a.first else [[]] * len(ours)
     for d, guess in zip(ours, guesses):
-        maybe = [[s, e, l] for s, e, l in guess if l in SPENTE and not any(s < e2 and s2 < e for s2, e2, _ in d["spans"])]
+        maybe = [[s, e, l] for s, e, l in guess if l in OFF and not any(s < e2 and s2 < e for s2, e2, _ in d["spans"])]
         opened += len(maybe)
         rows.append({"testo": d["testo"], "spans": d["spans"], "dom": "ours", **({"forse": maybe} if maybe else {})})
-    print(f"ours: {len(ours):,} texts, closed for all {len(ETICHETTE)} labels; {opened:,} places left open where a new label is written as plain words")
-    teacher = Rilevatore(a.teacher, mai=[], sempre=[]) if a.teacher else None
+    print(f"ours: {len(ours):,} texts, closed for all {len(LABELS)} labels; {opened:,} places left open where a new label is written as plain words")
+    teacher = Detector(a.teacher, never=[], always=[]) if a.teacher else None
     for name in EXTERNAL:
         docs = read(DATA / "external" / f"{name}.jsonl")
         r.shuffle(docs)
@@ -159,7 +159,7 @@ def main():
                 single = one_sentence(r, d["testo"], marked)
                 if single:
                     parts.append((False, *single))
-        seen = teacher.molti([t for _, t, _ in parts], completo=True) if teacher is not None else [[]] * len(parts)
+        seen = teacher.many([t for _, t, _ in parts], complete=True) if teacher is not None else [[]] * len(parts)
         companies = doubted = shaped = 0
         checked, trusted = CHECKED.get(name, set()), TRUSTED.get(name, set()) | {"ORG"}
         for (is_dev, text, sp), guess in zip(parts, seen):
@@ -186,7 +186,7 @@ def main():
             else:
                 rows += [row] * REPEAT.get(name, 1)
         print(f"{name}: {len(docs):,} documents -> {len(parts):,} texts; closed for {len(schema[name])} labels, open for the other "
-              f"{len(ETICHETTE) - len(schema[name])}; {companies:,} places left open where the model of version 1 sees a company"
+              f"{len(LABELS) - len(schema[name])}; {companies:,} places left open where the model of version 1 sees a company"
               + (" or one of the labels it is trusted for" if name in TRUSTED else "")
               + f", {shaped:,} more for a capitalised name in the middle of a sentence"
               + (f"; {doubted:,} people and companies of the source not believed" if doubted else ""))

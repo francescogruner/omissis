@@ -9,7 +9,7 @@ The sentences are written for this test and are not in the training data.
 import collections
 import sys
 
-from inference import Rilevatore
+from inference import Detector
 
 PUBLIC = {
     "institutions": [
@@ -133,7 +133,7 @@ PRIVATE = [
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
-    detector = Rilevatore(sys.argv[1], mai=[], sempre=[])
+    detector = Detector(sys.argv[1], never=[], always=[])
     show = "--show" in sys.argv
     total_chars = total_masked = 0
     by_label = collections.Counter()
@@ -142,7 +142,7 @@ def main():
     if "--unseen" in sys.argv:
         groups.update(UNSEEN)
     for group, sentences in groups.items():
-        found = detector.molti(sentences, completo=True)
+        found = detector.many(sentences, complete=True)
         chars = sum(len(s) for s in sentences)
         masked = sum(e - s for spans in found for s, e, _ in spans)
         touched = sum(bool(spans) for spans in found)
@@ -155,7 +155,7 @@ def main():
                     print(f"      {label:12} {sentence[s:e]}")
     print(f"\n  overall: {total_masked / total_chars:.1%} of the text masked · by label: {dict(by_label.most_common())}")
     if "--unseen" in sys.argv:   # and what must be masked: private sentences, namesakes of famous people included
-        found = detector.molti([s for s, _ in PRIVATE], completo=True)
+        found = detector.many([s for s, _ in PRIVATE], complete=True)
         missed, total = [], 0
         for (sentence, values), spans in zip(PRIVATE, found):
             covered = bytearray(len(sentence))

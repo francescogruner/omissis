@@ -292,13 +292,13 @@ def read_mapa():
                 skipped += 1
                 continue
             entities, position, current = [], 0, None
-            for token, coarse, fine in zip(r["tokens"], r["coarse_grained"], r["fine_grained"]):
+            for token, coarse, end in zip(r["tokens"], r["coarse_grained"], r["fine_grained"]):
                 at = text.find(token, position)
                 if at < 0:
                     current = None
                     continue
                 position = at + len(token)
-                tag = coarse if coarse[2:] in ("DATE", "TIME") else fine
+                tag = coarse if coarse[2:] in ("DATE", "TIME") else end
                 if tag == "O":
                     current = None
                 elif tag.startswith("I-") and current and current[2] == tag[2:]:

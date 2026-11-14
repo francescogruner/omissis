@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Valori inventati per i dati di addestramento di msp-pii.
+"""Valori inventati per i dati di addestramento di Omissis.
 
 Indipendente dal benchmark: non importa nulla dal benchmark, ha elenchi e
 formati propri. Ogni classe espone metodi senza argomenti; ETI dice quale etichetta ha il
@@ -12,7 +12,9 @@ import unicodedata
 from faker.providers.address.it_IT import Provider as _A
 from faker.providers.person.it_IT import Provider as _P
 
-NOMI_M, NOMI_F, COGNOMI, COMUNI, PROV = _P.first_names_male, _P.first_names_female, _P.last_names, _A.cities, _A.states_abbr
+# I comuni vanno ordinati: la libreria li ricava da un insieme, che a ogni avvio di Python esce in un ordine diverso,
+# e con l'ordine cambiavano i dati generati dallo stesso seme.
+NOMI_M, NOMI_F, COGNOMI, COMUNI, PROV = _P.first_names_male, _P.first_names_female, _P.last_names, sorted(_A.cities), _A.states_abbr
 STRANIERI_N, STRANIERI_C = [], []
 for _loc in ("en_US", "de_DE", "es_ES", "fr_FR", "ro_RO", "tr_TR", "pt_BR"):
     _m = importlib.import_module(f"faker.providers.person.{_loc}").Provider
