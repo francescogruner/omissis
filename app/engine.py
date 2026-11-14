@@ -320,6 +320,8 @@ class Engine:
         # i gruppi di dati che chi usa il PC ha spento nelle impostazioni valgono per ogni strada (browser, app, terminale,
         # documenti, MCP): tutte passano da qui. Cio' che e' stato scelto a mano («anche», liste personali) resta comunque.
         exclude = set(exclude) | settings.labels_off()
+        # la casella generica di un'azienda (info@...) e' un dato dell'azienda: resta in chiaro solo se quel gruppo e' spento
+        company_mail_clear = "ORG" in exclude and "organizations" in (settings.read().get("groups_off") or [])
         never = {str(x).strip(EDGES).casefold() for x in never}   # stessa pulizia dei bordi usata sotto: «Nevatek S.r.l.» finisce con un punto
         also = {str(v).strip(): (str(l) if RX_LABEL.fullmatch(str(l)) else "ELENCO") for v, l in (also or {}).items() if str(v).strip()}
         t0 = time.perf_counter()
@@ -329,7 +331,8 @@ class Engine:
 
         def free(spans, i):
             return [sp for sp in spans if sp[2] not in exclude and not any(sp[0] < e and s < sp[1] for s, e in busy[i])
-                    and (not never or texts[i][sp[0]:sp[1]].strip(EDGES).casefold() not in never)]
+                    and (not never or texts[i][sp[0]:sp[1]].strip(EDGES).casefold() not in never)
+                    and not (company_mail_clear and sp[2] == "EMAIL" and settings.role_mailbox(texts[i][sp[0]:sp[1]]))]
         by_text = [free(self._merge(sp), i) for i, sp in enumerate(self._span(texts))]
         # un valore riconosciuto in un testo va coperto anche dove ricompare negli altri (es. nella
         # cronologia), anche se li' il modello non lo ha segnalato

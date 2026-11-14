@@ -204,7 +204,7 @@ dati può spegnerne il gruppo in Impostazioni → Riconoscimento → Cosa sostit
 | Persone, contatti e documenti d'identità | nomi, e-mail, telefoni, indirizzi, CAP, città, data di nascita, codice fiscale, documenti | no |
 | Password, chiavi e altri segreti | password, token, chiavi, stringhe di connessione | no |
 | Conti e pagamenti | IBAN, carte, partita IVA | sì |
-| Aziende e organizzazioni | nomi di aziende, studi, clienti | sì |
+| Aziende e organizzazioni | nomi di aziende, studi, clienti; caselle generiche (info@, amministrazione@…) | sì |
 | Dati informatici | indirizzi IP e MAC, nomi di PC e server, domini, indirizzi web, account, identificativi cloud e di dispositivo | sì |
 | Pratiche, utenze e veicoli | polizze, protocolli, matricole, dati catastali, codici di fornitura, targhe, telai | sì |
 
@@ -215,6 +215,15 @@ terminale, documenti, MCP). Per questo il pannello chiede conferma e la pagina i
 ogni volta, con il collegamento per cambiare idea. Ciò che si è scelto a mano resta sostituito
 comunque: i termini della lista «sostituisci sempre» e le correzioni fatte nella sezione Testo
 vincono sui gruppi spenti. L'impostazione è `groups_off` in `settings.json`; l'effetto è immediato.
+
+**Le caselle di posta.** Un indirizzo con il nome di una persona (`mario.rossi@…`) è sempre
+sostituito. Una casella generica di un'organizzazione (`info@`, `amministrazione@`,
+`ufficio.acquisti@`…) è un dato dell'azienda e segue il suo gruppo: sostituita finché «Aziende e
+organizzazioni» è acceso, perché il dominio dice chi è l'azienda; in chiaro quando lo si spegne.
+Fa eccezione la casella generica presso un servizio di posta per privati (`info@gmail.com`): lì
+dietro c'è quasi sempre una persona o una ditta individuale, quindi resta protetta. Il criterio è
+il nome prima della chiocciola: un elenco di parole d'ufficio in italiano e in inglese, in
+`settings.py`.
 
 ## Categorie in più
 
@@ -386,7 +395,7 @@ Su questo PC Codex da terminale e OpenCode usano l'accesso con l'account ChatGPT
 sono coperti**. Codex 0.164 ha un'impostazione per cambiare indirizzo (`openai_base_url`) e comprime
 le richieste con zstd: la strada c'è, ma va provata dal vivo con l'account prima di dichiararla.
 
-Verificato: `e2e_gateway.py` (32 controlli contro un servizio finto) e **due prove dal vivo con
+Verificato: `e2e_gateway.py` (33 controlli contro un servizio finto) e **due prove dal vivo con
 Claude Code** e accesso in abbonamento, con dati inventati. Nella prima un messaggio semplice: 0
 valori in chiaro verso il servizio, risposta tornata con i valori veri. Nella seconda un'azione:
 Claude Code ha scritto un file, sul disco ci sono i valori veri e il servizio ha visto solo
@@ -611,7 +620,7 @@ non va copiata né condivisa.
 | Gemini | **sperimentale**: formato scritto a memoria, provato solo su un'imitazione |
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
-| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 32 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
+| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
 | Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |

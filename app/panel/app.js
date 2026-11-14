@@ -558,7 +558,7 @@ const recognitionSettings = test(async el => {
     <section class="card" aria-labelledby="grpTitle">
       <div class="inside"><h2 id="grpTitle">${esc(t("groups.title"))}</h2><p>${esc(t("groups.below"))}</p></div>
       ${Object.entries(i.groups_always).map(([name, entries]) => line(t(`groups.${name}`), esc(entries.map(dataKind).join(", ")), label(t("groups.always"), "ok"))).join("")}
-      ${Object.entries(i.groups).map(([name, entries]) => line(t(`groups.${name}`), esc(entries.map(dataKind).join(", ")), toggle(`grp-${name}`, t(`groups.${name}`)))).join("")}
+      ${Object.entries(i.groups).map(([name, entries]) => line(t(`groups.${name}`), esc(entries.map(dataKind).concat(tSe(`groups.${name}.more`, "") || []).join(", ")), toggle(`grp-${name}`, t(`groups.${name}`)))).join("")}
     </section>
     ${groups.length ? `<section class="card" aria-labelledby="catTitle">
       <div class="inside"><h2 id="catTitle">${esc(t("categories.title"))}</h2><p>${esc(t("categories.below"))}</p></div>

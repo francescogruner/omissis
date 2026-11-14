@@ -217,6 +217,7 @@
  "groups.secrets": "Password, chiavi e altri segreti",
  "groups.payments": "Conti e pagamenti",
  "groups.organizations": "Aziende e organizzazioni",
+ "groups.organizations.more": "caselle generiche (info@, amministrazione@…)",
  "groups.it": "Dati informatici",
  "groups.records": "Pratiche, utenze e veicoli",
  "groups.always": "sempre",

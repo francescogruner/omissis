@@ -326,6 +326,21 @@ def main():
     mark("gruppo «dati informatici» spento: indirizzi e nomi di server partono, persone e contatti restano sostituiti", status == 200
           and "10.20.30.40" not in with_all and "10.20.30.40" in reduced and "SRV-ALPI-04" in reduced and reveal(SEEN["body"]) == 0 and "[PERSONA_" in reduced
           and chosen == ["it", "records"], f"spenti {chosen}")
+    # --- le caselle generiche (info@...) sono un dato dell'azienda: seguono il gruppo «aziende», le caselle personali mai
+    mails = TEXT + " Per i preventivi scrivere a info@nevatek.example o ad amministrazione.vendite@nevatek.example; privato: info@gmail.com."
+    ask = lambda: call("/anthropic/v1/messages", {"model": "x", "max_tokens": 100, "messages": [{"role": "user", "content": mails}]}, {"x-api-key": "chiave-di-prova"})   # noqa: E731
+    settings.write({**settings.read(), "groups_off": []})
+    ask()
+    with_all = json.dumps(SEEN["body"], ensure_ascii=False)
+    settings.write({**settings.read(), "groups_off": ["organizations"]})
+    status, raw = ask()
+    reduced = json.dumps(SEEN["body"], ensure_ascii=False)
+    mark("gruppo «aziende» spento: nome dell'azienda e caselle generiche in chiaro; caselle personali e di servizi per privati sempre sostituite",
+          status == 200 and "info@nevatek.example" not in with_all and "amministrazione.vendite@nevatek.example" not in with_all
+          and "info@nevatek.example" in reduced and "amministrazione.vendite@nevatek.example" in reduced and "Nevatek" in reduced
+          and "giulia.ferraresi@nevatek.example" not in reduced and "info@gmail.com" not in reduced and "Giulia Ferraresi" not in reduced
+          and settings.role_mailbox("Ufficio.Acquisti2@azienda.example") and not settings.role_mailbox("mario.rossi@azienda.example")
+          and not settings.role_mailbox("info.rossi@azienda.example") and not settings.role_mailbox("info@libero.it"))
     if before is None:
         settings.FILE.unlink()
     else:

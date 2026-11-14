@@ -57,6 +57,31 @@ GROUPS = {"payments": ["IBAN", "CARTA", "CARTA_SEC", "PIVA"],
 ALWAYS_ON = {"people": ["PERSONA", "EMAIL", "TELEFONO", "INDIRIZZO", "CAP", "CITTA", "DATA_NASCITA", "CF", "DOC_ID"], "secrets": ["SEGRETO"]}
 
 
+# Le caselle generiche di un'azienda (info@, amministrazione@...) sono un dato dell'azienda, non di una persona: seguono il
+# gruppo «organizations». Finche' e' acceso restano sostituite (il dominio dice chi e' l'azienda); spento, restano in chiaro.
+# Le caselle con il nome di una persona sono sempre protette.
+ROLE_WORDS = set(
+    "info informazioni amministrazione admin segreteria ufficio uffici commerciale commerciali acquisti vendite sales contabilita "
+    "fatturazione fatture billing ordini orders supporto support assistenza helpdesk service servizio servizi clienti customer help "
+    "customercare care marketing hr personale risorse umane direzione noreply no reply donotreply postmaster webmaster office "
+    "contact contatti contatto hello ciao privacy dpo legal legale pec logistica magazzino tecnico tecnica it sistemi ced press stampa "
+    "jobs lavora con noi careers newsletter booking prenotazioni reception protocollo urp comunicazione qualita sicurezza abuse "
+    "security mail posta general generale staff team".split())
+# qui dietro a «info@» c'e' quasi sempre una persona o una ditta individuale: resta protetta
+CONSUMER_DOMAINS = set(
+    "gmail.com googlemail.com libero.it hotmail.it hotmail.com outlook.com outlook.it live.it live.com yahoo.it yahoo.com alice.it "
+    "tiscali.it virgilio.it icloud.com me.com fastwebnet.it tim.it tin.it email.it proton.me protonmail.com msn.com inwind.it "
+    "iol.it aruba.it pec.it legalmail.it arubapec.it postecert.it pec.libero.it".split())
+
+
+def role_mailbox(address):
+    """La casella generica di un'organizzazione: tutte le parole prima della chiocciola sono nomi di ufficio o di funzione
+    (info, ufficio.acquisti, amministrazione2) e il dominio non e' quello di un servizio di posta per privati."""
+    local, _, domain = str(address).strip().strip("<>.,;:").lower().partition("@")
+    words = [w for w in re.split(r"[^a-z]+", local) if w]
+    return bool(domain) and bool(words) and domain not in CONSUMER_DOMAINS and all(w in ROLE_WORDS for w in words)
+
+
 def labels_off(cfg=None):
     """Le etichette che, per scelta di chi usa il PC, non vanno sostituite."""
     chosen = (cfg or read()).get("groups_off") or []
