@@ -55,6 +55,7 @@ _STORE = r"%LOCALAPPDATA%\Microsoft\WindowsApps" "\\"
 #   process      nome del programma e, per non confonderlo con altri dallo stesso nome (il Claude da terminale si chiama
 #                anche lui claude.exe), un'espressione che il suo percorso completo deve soddisfare
 #   service      il servizio del catalogo a cui l'app parla: la sua politica decide se i messaggi vengono mascherati
+#   refuses      l'app si chiude da sola se avviata con la porta di debug: qui non si puo' proteggere, e il pannello lo dice
 #   own_profile  l'app e' un browser Chromium vero e proprio (Copilot e' un Edge): dalla versione 136 Chromium ignora la porta
 #                di debug sul profilo predefinito, quindi l'app protetta gira con un profilo suo, tenuto nei dati di Omissis.
 #                Vuol dire rifare l'accesso la prima volta; la copia normale dell'app puo' restare aperta, e NON e' protetta.
@@ -64,7 +65,9 @@ APP = {
     "chatgpt": {"name": "ChatGPT / Codex", "commands": [_STORE + "chatgpt-desktop.exe"],
                 "process": ("chatgpt.exe", r"\\app\\chatgpt\.exe$"), "port": 9552, "site": "chatgpt.com", "service": "chatgpt"},
     "kimi": {"name": "Kimi", "commands": [r"%LOCALAPPDATA%\Programs\Kimi\Kimi.exe"],
-             "process": ("kimi.exe", r"\\kimi\\kimi\.exe$"), "port": 9553, "site": "kimi.com", "service": "kimi"},
+             "process": ("kimi.exe", r"\\kimi\\kimi\.exe$"), "port": 9553, "site": "kimi.com", "service": "kimi",
+             # provato il 14/11/2026 sulla 3.2.24: avviata con la porta di debug (anche 0) esce da sola in un secondo, codice 1
+             "refuses": True},
     "copilot": {"name": "Microsoft Copilot", "commands": [r"%ProgramFiles(x86)%\Microsoft\Copilot\Application\mscopilot.exe",
                                                            r"%ProgramFiles%\Microsoft\Copilot\Application\mscopilot.exe"],
                 "process": ("mscopilot.exe", r"\\copilot\\application\\mscopilot\.exe$"), "port": 9554, "site": "copilot.microsoft.com",
@@ -603,6 +606,8 @@ def launch_app(key, timeout=40, close_first=False):
     command = find_command(app)
     if command is None:
         raise Error(i18n.t("connector.error.not_installed", name=app["name"]))
+    if app.get("refuses"):   # provato: chiuderla per riaprirla cosi' lascerebbe solo chi la usa senza l'app
+        raise Error(i18n.t("connector.error.refuses", name=app["name"]))
     if opened_port(app["port"]):
         return _connect(app)
     arguments = [f"--remote-debugging-port={app['port']}", *app.get("arguments", [])]
@@ -624,14 +629,19 @@ def launch_app(key, timeout=40, close_first=False):
         if not close_app(key):
             raise Error(i18n.t("connector.error.not_closed", name=app["name"]))
         time.sleep(1)   # il tempo che l'app lasci andare i suoi file
-    subprocess.Popen([command, *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(timeout * 2):
+    started = subprocess.Popen([command, *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for i in range(timeout * 2):
         if opened_port(app["port"]):
             for _ in range(20):   # la porta risponde un attimo prima del servizio di debug
                 try:
                     return _connect(app)
                 except Exception:   # noqa: BLE001
                     time.sleep(0.5)
+        # un'app che non vuole la porta di debug si chiude da sola appena la vede (lo fa Kimi): inutile aspettare, e chi
+        # la usava deve sapere che ora e' chiusa. Il programma avviato puo' essere solo un lanciatore (le app dello Store):
+        # conta che dopo qualche secondo non ci sia piu' nessun processo dell'app.
+        if i >= 10 and app.get("process") and started.poll() is not None and not processes(app["process"]) and not opened_port(app["port"]):
+            raise Error(i18n.t("connector.error.refused_now", name=app["name"]))
         time.sleep(0.5)
     raise Error(i18n.t("connector.error.port", name=app["name"]))
 

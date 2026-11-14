@@ -16,6 +16,7 @@ Se il motore non risponde la richiesta viene fermata (503), mai inoltrata in chi
   .venv\\Scripts\\python.exe gateway.py [--port 8767]         (richiede la protezione attiva)
 """
 import argparse
+import gzip
 import http.client
 import json
 import sys
@@ -23,6 +24,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -40,6 +42,27 @@ JUMP = {"host", "content-length", "connection", "keep-alive", "proxy-connection"
 JUMP_RESPONSE = {"content-length", "connection", "keep-alive", "transfer-encoding", "content-encoding"}
 # modelli che girano su questo PC: i dati non escono, ma si possono far passare lo stesso dal gateway
 LOCAL = {"ollama": ("http://127.0.0.1:11434", "openai", "Ollama"), "lmstudio": ("http://127.0.0.1:1234", "openai", "LM Studio")}
+
+
+def unpack(body, encoding):
+    """Il corpo di una richiesta compressa, aperto; None se il modo non e' tra quelli che si sanno leggere."""
+    try:
+        for step in reversed([e.strip().lower() for e in encoding.split(",") if e.strip()]):
+            if step == "gzip":
+                body = gzip.decompress(body)
+            elif step == "deflate":
+                body = zlib.decompress(body)
+            elif step == "zstd":
+                import zstandard   # c'e' solo se installato: senza, la richiesta viene fermata
+                body = zstandard.ZstdDecompressor().decompressobj().decompress(body)
+            elif step == "br":
+                import brotli
+                body = brotli.decompress(body)
+            elif step != "identity":
+                return None
+        return body
+    except Exception:   # noqa: BLE001  (modulo che manca, dati rovinati)
+        return None
 
 
 def routes():
@@ -170,11 +193,21 @@ class Gateway:
             return h._error(413, "richiesta troppo grande per essere controllata")
         body = h.rfile.read(length) if length else b""
         kind = h.headers.get("Content-Type", "")
+        packed = h.headers.get("Content-Encoding", "").strip().lower() not in ("", "identity")
         ad, entry = None, {"service": who, "via": "gateway", "method": h.command, "path": activity.clean_path(path), "byte": len(body),
                           "client": activity.client_from_ua(h.headers.get("User-Agent", ""))}
 
         if policy == "protect" and h.command in ("POST", "PUT", "PATCH") and body:
             ad = agents.CLASSES[adapter]()
+            if packed:
+                # Uno strumento puo' mandare la richiesta compressa (Codex lo fa con zstd): letta cosi' sembrerebbe "senza
+                # testo" e partirebbe in chiaro. La si apre; se non si riesce, non parte.
+                plain = unpack(body, h.headers.get("Content-Encoding", ""))
+                if plain is None:
+                    self.reg.write(**entry, event="body_not_read", error="content-encoding " + h.headers.get("Content-Encoding", "")[:20])
+                    self.counts["blocked"] += 1
+                    return h._error(415, "richiesta compressa in un modo che non so leggere: fermata per non inviare dati in chiaro")
+                body = plain   # al servizio va aperta: dopo le sostituzioni non sarebbe comunque piu' quella di prima
             if "multipart/" in kind or "octet-stream" in kind:
                 if settings.read()["block_files"]:
                     self.reg.write(**entry, event="file_blocked")
@@ -192,11 +225,11 @@ class Gateway:
                         groups = [[i for i, (c, k) in enumerate(ref) if ((id(c), k) in technical) == t] for t in (False, True)]
                         outcome = {"texts": list(originals), "mapping": {}, "counts": {}, "ms": 0}
                         try:
-                            for indexes, exclude in zip(groups, ([], agents.TECHNICAL)):
+                            for indexes, exclude, trade_words in zip(groups, ([], agents.TECHNICAL), ([], agents.KNOWN)):
                                 if not indexes:
                                     continue
                                 part = self.engine("/mask", {"texts": [originals[i] for i in indexes], "exclude": exclude,
-                                                                 "never": agents.vocabulary(parsed)})
+                                                                 "never": agents.vocabulary(parsed) + trade_words})
                                 for i, fresh in zip(indexes, part["texts"]):
                                     outcome["texts"][i] = fresh
                                 outcome["mapping"].update(part["mapping"])
@@ -224,7 +257,7 @@ class Gateway:
         u = urllib.parse.urlsplit(self.upstream or address)
         Cls = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
         conn = Cls(u.hostname, u.port, timeout=900)
-        headers = {k: v for k, v in h.headers.items() if k.lower() not in JUMP}
+        headers = {k: v for k, v in h.headers.items() if k.lower() not in JUMP and not (ad is not None and packed and k.lower() == "content-encoding")}
         headers["Accept-Encoding"] = "identity"   # la risposta va letta e riscritta mentre arriva
         try:
             conn.request(h.command, u.path.rstrip("/") + path, body=body or None, headers=headers)

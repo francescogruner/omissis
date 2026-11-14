@@ -22,6 +22,14 @@ MINIMUM_SYSTEM = 200   # i blocchi di sistema piu' corti (la riga che identifica
 # dati personali: nomi di strumenti, identificativi e percorsi servono al modello cosi' come sono, e il rilevatore
 # li scambierebbe spesso per segreti o account.
 TECHNICAL = ["SEGRETO", "ACCOUNT", "HOSTNAME", "DOMINIO", "URL", "IP", "MAC", "ID_CLOUD", "ID_DISPOSITIVO", "ID_PRATICA"]
+# Parole del mestiere che nel contesto tecnico tornano di continuo e che il rilevatore prende per persone o aziende
+# («Claude» e' anche un nome di battesimo). Misurato su una richiesta vera di Claude Code (14/11/2026): senza questo
+# elenco, in 23.000 caratteri di istruzioni venivano sostituite una quarantina di parole che non sono dati di nessuno.
+# Vale SOLO per il contesto tecnico: nel testo scritto dall'utente un signor Claude resta una persona.
+KNOWN = ["Claude", "claude", "Claude Code", "Claude Agent SDK", "Anthropic", "anthropic", "OpenAI", "openai", "Codex", "codex", "ChatGPT",
+         "Gemini", "Google", "Microsoft", "GitHub", "Git", "git", "JetBrains", "VS Code", "Visual Studio Code", "Bash", "PowerShell", "Windows",
+         "Linux", "macOS", "Python", "Node", "npm", "Docker", "Markdown", "MCP", "Jupyter", "Fable", "Opus", "Sonnet", "Haiku", "Mythos",
+         "Tool", "Tools", "Agent", "Skill", "Send", "address", "llama", "Ollama"]
 
 
 def vocabulary(body):
@@ -77,11 +85,16 @@ class AnthropicAgent(R.Adapter):
             if not isinstance(m, dict):
                 continue
             c = m.get("content")
+            before = len(out)
             if isinstance(c, str):
                 out.append((m, "content"))
             elif isinstance(c, list):
                 for b in c:
                     self._block(b, out)
+            # le istruzioni che lo strumento inserisce a meta' conversazione (ambiente, elenco degli strumenti: Claude Code
+            # ne manda una da 12.000 caratteri) sono contesto tecnico come il blocco di sistema, non testo dell'utente
+            if m.get("role") in ("system", "developer"):
+                self.technical += [x for x in out[before:] if x not in self.technical]
         return out
 
     def _block(self, b, out):

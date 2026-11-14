@@ -273,7 +273,7 @@ def app_desktop():
                     # aperta ma non da qui: dentro non c'e' nessuna protezione
                     # (nelle prove no: pagina e schermate non devono dipendere da cio' che e' aperto su questo PC)
                     "open_unprotected": c is None and not SUP.test and connector.open_unprotected(key),
-                    "own_profile": bool(a.get("own_profile")),
+                    "own_profile": bool(a.get("own_profile")), "refuses": bool(a.get("refuses")),
                     # la politica del servizio decide se i messaggi vengono mascherati: con «registra» l'app si collega e basta
                     "service": service["name"] if service else "", "policy": settings.policy(service) if service else "protect"})
     return out

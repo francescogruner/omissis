@@ -346,9 +346,24 @@ i loro risultati; per questo gli adattatori sono diversi da quelli delle chat (`
   strumento scriverebbe file o eseguirebbe comandi con dentro i segnaposto;
 - i ragionamenti firmati non si toccano, né all'andata né al ritorno;
 - nel contesto tecnico che lo strumento aggiunge da sé (istruzioni di sistema, promemoria) si
-  sostituiscono solo i dati personali, non nomi di strumenti, identificativi e percorsi.
+  sostituiscono solo i dati personali, non nomi di strumenti, identificativi e percorsi. Fanno parte
+  del contesto tecnico anche i messaggi con ruolo `system` messi a metà conversazione (Claude Code ne
+  manda uno da 12.000 caratteri con l'ambiente e l'elenco degli strumenti), e lì non si toccano le
+  parole del mestiere (`agents.KNOWN`: Claude, Anthropic, GitHub, Tool…), che il rilevatore prendeva
+  per persone e aziende. Misurato il 14/11/2026 su una richiesta vera di Claude Code 2.1.325: su
+  23.700 caratteri di contesto le sostituzioni scendono da circa 75 a 5 (il nome utente dentro un
+  percorso, l'indirizzo email dell'account e tre falsi positivi), e i dati del messaggio restano
+  tutti sostituiti. Nel testo scritto dall'utente l'elenco non vale: un signor Claude resta una persona;
+- una richiesta compressa (`Content-Encoding`: gzip, deflate; zstd e brotli se i moduli ci sono)
+  viene aperta prima di essere controllata e inoltrata non compressa. Se non si riesce ad aprirla
+  **non parte** (415): letta così com'è sarebbe sembrata «senza testo» e sarebbe uscita in chiaro.
 
-Verificato: `e2e_gateway.py` (19 controlli contro un servizio finto) e **due prove dal vivo con
+Su questo PC Codex da terminale e OpenCode usano l'accesso con l'account ChatGPT: parlano con
+`chatgpt.com/backend-api/codex` e non con `api.openai.com`, quindi **non passano dal gateway e non
+sono coperti**. Codex 0.164 ha un'impostazione per cambiare indirizzo (`openai_base_url`) e comprime
+le richieste con zstd: la strada c'è, ma va provata dal vivo con l'account prima di dichiararla.
+
+Verificato: `e2e_gateway.py` (22 controlli contro un servizio finto) e **due prove dal vivo con
 Claude Code** e accesso in abbonamento, con dati inventati. Nella prima un messaggio semplice: 0
 valori in chiaro verso il servizio, risposta tornata con i valori veri. Nella seconda un'azione:
 Claude Code ha scritto un file, sul disco ci sono i valori veri e il servizio ha visto solo
@@ -374,9 +389,16 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 |---|---|---|
 | ChatGPT / Codex | stessa app, riavviata con la porta | sì, un messaggio con dati inventati (12/11/2026) |
 | Claude | stessa app, riavviata con la porta | no |
-| Kimi | stessa app, riavviata con la porta | no |
+| Kimi | **non si può**: avviata con la porta di collegamento si chiude da sola in un secondo (codice 1), anche con la porta 0 | provato il 14/11/2026 sulla 3.2.24; il pannello lo dice e non offre il pulsante |
 | Microsoft Copilot | con un **profilo separato**, tenuto in `data\app_profiles\copilot` | solo l'aggancio: 5 finestre seguite, nessun errore, nessun messaggio inviato (14/11/2026) |
 | Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere | — |
+| Visual Studio (GitHub Copilot) | non coperta: è un programma nativo, le richieste partono da un suo processo e non da una finestra web. Il servizio si può solo registrare o bloccare | — |
+| Editor derivati da VS Code (Antigravity, Cursor, Windsurf) | non coperti dal connettore: la chat parla con il servizio da un processo dell'editor, e la casella è un editor di codice che non si riscrive come una casella web | non installati sul PC di prova |
+| Perplexity | da provare: non era installata sul PC di prova | — |
+
+Se un'app rifiuta la porta quando la si riavvia (lo fa Kimi), il connettore se ne accorge in pochi
+secondi, non aspetta i 40 del tempo massimo e dice che l'app ora è chiusa e va riaperta normalmente.
+Per le app di cui lo si sa già (`"refuses": True` in `connector.APP`) non la chiude nemmeno.
 
 **App già aperta.** Un'app aperta dal menu Start non ha la porta, e avviarla di nuovo porterebbe solo
 in primo piano la finestra che c'è già, senza protezione. Il pannello se ne accorge (legge l'elenco
@@ -399,9 +421,9 @@ Copilot resta acceso in sottofondo senza porta: prima di ogni avvio il connettor
 rimaste sul suo profilo, altrimenti la finestra nuova la aprirebbero loro, senza protezione.
 
 **La politica del servizio conta.** Il connettore maschera solo verso i servizi impostati su
-«Proteggi». Kimi e Copilot partono su «Registra» (formato riconosciuto dal nome dei campi, da
-verificare): finché restano così l'app si collega ma i messaggi non vengono toccati, e il pannello lo
-scrive sotto il nome dell'app.
+«Proteggi». Copilot parte su «Registra» (formato riconosciuto dal nome dei campi, da verificare):
+finché resta così l'app si collega ma i messaggi non vengono toccati, e il pannello lo scrive sotto
+il nome dell'app.
 
 Le barriere sono due. Quella **dentro la pagina** sostituisce i dati e riscrive le risposte mentre
 arrivano. Quella **a livello di rete** ferma ogni invio verso un servizio protetto prima che parta e
@@ -484,7 +506,7 @@ non va copiata né condivisa.
 | Gemini | **sperimentale**: formato scritto a memoria, provato solo su un'imitazione |
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
-| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 19 controlli) e **Claude Code dal vivo** con un messaggio di dati inventati |
+| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 22 controlli) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
 | Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |
 

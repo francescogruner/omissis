@@ -8,6 +8,7 @@ Controlla che al servizio non arrivi nulla in chiaro (nemmeno negli argomenti de
 fatte e nei risultati degli strumenti), che allo strumento tornino i valori veri (anche dentro gli
 argomenti delle nuove azioni), che i ragionamenti firmati viaggino identici in entrambi i sensi.
 """
+import gzip
 import json
 import re
 import sys
@@ -249,6 +250,30 @@ def main():
     mark("errore del servizio inoltrato com'è", status == 401 and "authentication_error" in raw)
     status, raw = call("/servizio-che-non-esiste/v1/messages", {"messages": history})
     mark("indirizzo sconosciuto: rifiutato", status == 404)
+
+    # --- richiesta compressa (alcuni strumenti lo fanno): va aperta e mascherata; se non si sa aprire, non parte
+    def packed(encoding, data):
+        req = urllib.request.Request(f"http://127.0.0.1:{GW_PORT}/anthropic/v1/messages", data=data,
+                                      headers={"Content-Type": "application/json", "Content-Encoding": encoding, "x-api-key": "chiave-di-prova"})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return r.status
+        except urllib.error.HTTPError as ex:
+            return ex.code
+    message = json.dumps({"model": "x", "messages": [{"role": "user", "content": TEXT}], "max_tokens": 100}).encode("utf-8")
+    status = packed("gzip", gzip.compress(message))
+    mark("richiesta compressa (gzip): aperta e mascherata", status == 200 and reveal(SEEN["body"]) == 0 and "[PERSONA_" in json.dumps(SEEN["body"]),
+          f"stato {status} · in chiaro {reveal(SEEN['body'])}")
+    # --- le istruzioni che lo strumento inserisce a metà conversazione sono contesto tecnico: le parole del mestiere restano
+    environment = "# Environment\nYou are Claude, running inside Claude Code by Anthropic. Use the Bash tool and the Git tool when needed. " * 4
+    status, raw = call("/anthropic/v1/messages", {"model": "x", "max_tokens": 100, "messages": [{"role": "system", "content": environment},
+                                                                                              {"role": "user", "content": TEXT}]}, {"x-api-key": "chiave-di-prova"})
+    arrived = SEEN["body"]
+    mark("Anthropic: istruzioni a metà conversazione lasciate leggibili, dati dell'utente mascherati", status == 200 and arrived["messages"][0]["content"] == environment
+          and reveal(arrived) == 0 and "[PERSONA_" in json.dumps(arrived["messages"][1]), f"stato {status} · in chiaro {reveal(arrived)}")
+    n = SEEN["n"]
+    status = packed("compressione-sconosciuta", message)
+    mark("richiesta compressa in un modo sconosciuto: fermata, nulla inoltrato", status == 415 and SEEN["n"] == n, f"stato {status}")
     n = SEEN["n"]
     gw.engine_port = 1
     status, raw = call("/anthropic/v1/messages", {"messages": [{"role": "user", "content": TEXT + " Variante mai vista."}]}, {"x-api-key": "chiave-di-prova"})
