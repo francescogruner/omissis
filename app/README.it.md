@@ -673,7 +673,7 @@ Nella sezione Attività (o in `data\activity.jsonl`):
 - `no_text_field` = il servizio usa un formato che il proxy non conosce:
   la richiesta è partita **non mascherata**. La riga riporta la struttura (senza valori), che
   serve per adattarlo;
-- `VALORI_IN_CHIARO` = un dato già mascherato compare in chiaro in un'altra richiesta;
+- `VALUES_IN_CLEAR` = un dato già mascherato compare in chiaro in un'altra richiesta;
 - `file_not_masked` = è stato caricato un file.
 
 ## Quanto pesa e quanto è veloce
@@ -769,8 +769,29 @@ Provato davvero su questo PC: installazione in silenzio, scaricamento e verifica
 servizio locale, mascheratura con il motore del pacchetto, passaggio da 0.1.0 a 0.1.1 con
 riapertura automatica e dati intatti, disinstallazione pulita. **Non ancora provato**: un PC appena
 installato (senza altre librerie di sistema), lo scaricamento dalla pagina vera del modello, un
-aggiornamento dalla pagina vera delle versioni, il pacchetto per il Microsoft Store (non esiste).
+aggiornamento dalla pagina vera delle versioni.
 Senza firma del codice, Windows mostra l'avviso di SmartScreen al primo avvio dell'installer.
+
+**La versione per il Microsoft Store.** È lo stesso programma in un pacchetto firmato dallo Store,
+quindi senza avviso di SmartScreen. Dentro quel tipo di pacchetto Windows tiene separato ciò che il
+programma scrive, e questo cambia quattro cose:
+
+- i dati (archivio, impostazioni, modello) stanno nella cartella privata del pacchetto e vengono
+  tolti con la disinstallazione;
+- gli aggiornamenti li fa lo Store, e l'avvio insieme a Windows si spegne da Gestione attività;
+- il **certificato del proxy non si può installare** per gli altri programmi: il proxy richiede la
+  versione scaricata dal sito. Estensione, app desktop, terminale e MCP non ne hanno bisogno;
+- il server MCP viene registrato con un nome fisso che Windows assegna al pacchetto
+  (`omissis-python.exe -m mcp_server`); se Claude Desktop è installato fuori dallo Store le righe
+  vanno incollate a mano, e la cartella dell'estensione da indicare al browser è una copia tenuta
+  tra i Documenti.
+
+Stato al 14 novembre 2026: la cartella del pacchetto e il suo manifesto esistono
+(`costruisci_store.py`) e il programma, lanciato da lì con i comandi del manifesto, supera 9
+controlli (`prova_store.py`). **Non ancora fatto**: chiudere il file `.msix` (serve il Windows SDK),
+registrarlo e provarlo dal menu Start (serve la Modalità sviluppatore di Windows), l'invio. Mancano
+anche il nome e l'editore assegnati dal Partner Center. I passi sono in
+`pubblicazione\store\microsoft_it.md`.
 
 ## Prove automatiche
 

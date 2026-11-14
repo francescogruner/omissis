@@ -13,7 +13,9 @@ is sent to any Omissis server, because there is none.
 > tests against a mock service, but **live validation is still thin**: the terminal gateway has been
 > verified live with Claude Code (a plain message and a file-writing action); the browser extension has not been verified with real accounts yet;
 > the desktop-app connector, after failing its first live tests, now masks messages in the real ChatGPT
-> desktop app (verified with one made-up message); Claude Desktop is untested.
+> desktop app (verified with one made-up message); Claude Desktop is untested; the MCP server has been
+> tested live once with Claude Code (a made-up report), not yet inside Claude Desktop; Codex signed in
+> with ChatGPT and a gateway of your own have only been tested against a mock service.
 > Test with made-up data first.
 > The interface is in English and Italian. The detailed documentation is in Italian: see [README.it.md](README.it.md).
 

@@ -48,7 +48,7 @@ import paths
 HERE = Path(__file__).resolve().parent
 DATA, EST = paths.DATA, HERE / "extension"
 ENGINE_PORT = paths.ENGINE_PORT
-WORLD, CALL = "msp_pii", "__msp_bridge"
+WORLD, CALL = "omissis", "__omissis_bridge"
 _STORE = r"%LOCALAPPDATA%\Microsoft\WindowsApps" "\\"
 # Le app che sappiamo avviare con la porta di debug.
 #   commands     dove puo' trovarsi il programma: vale il primo che esiste
@@ -270,8 +270,8 @@ const chrome = (() => {
   let n = 0;
   const data = {status: __STATUS__, suspended: false, notices: true};
   const call = globalThis.__CALL__;
-  globalThis.__msp_response = (k, r) => { const a = waits.get(k); if (a) { waits.delete(k); a(r); } };
-  globalThis.__msp_status = fresh => { data.status = fresh; for (const f of ascoltatori) f({status: {newValue: fresh}}, 'local'); };
+  globalThis.__omissis_response = (k, r) => { const a = waits.get(k); if (a) { waits.delete(k); a(r); } };
+  globalThis.__omissis_status = fresh => { data.status = fresh; for (const f of ascoltatori) f({status: {newValue: fresh}}, 'local'); };
   return {
     runtime: {id: 'omissis-connettore', sendMessage: m => new Promise((ok, no) => {
       const k = ++n;
@@ -374,7 +374,7 @@ class Connector:
                     self._inject(sid, at_once=False)
                     self.cdp.wait_for(self._guard(sid))
                     for ctx in list(s["contexts"]):
-                        self.cdp.send("Runtime.evaluate", {"expression": f"__msp_status({json.dumps(fresh, ensure_ascii=False)})",
+                        self.cdp.send("Runtime.evaluate", {"expression": f"__omissis_status({json.dumps(fresh, ensure_ascii=False)})",
                                                             "contextId": ctx}, sid, timeout=0)
                 except Exception:   # noqa: BLE001  (finestra chiusa nel frattempo)
                     pass
@@ -536,7 +536,7 @@ class Connector:
             self.sessions[sid]["contexts"].add(ctx)
         r = self._handle(m if isinstance(m, dict) else {})
         try:
-            self.cdp.send("Runtime.evaluate", {"expression": f"__msp_response({k}, {json.dumps(r, ensure_ascii=False)})", "contextId": ctx},
+            self.cdp.send("Runtime.evaluate", {"expression": f"__omissis_response({k}, {json.dumps(r, ensure_ascii=False)})", "contextId": ctx},
                            sid, timeout=0)
         except Exception:   # noqa: BLE001
             pass

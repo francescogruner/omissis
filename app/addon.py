@@ -56,8 +56,8 @@ class MspPii:
         extra = ", ".join(f"{k} {v}" for k, v in (entry.get("replacements") or {}).items())
         if "restored" in entry:
             extra = f"{entry['restored']} segnaposto riportati al valore originale"
-        if "VALORI_IN_CHIARO" in entry:
-            extra += f" | ATTENZIONE: {entry['VALORI_IN_CHIARO']} valori già mascherati compaiono in chiaro"
+        if "VALUES_IN_CLEAR" in entry:
+            extra += f" | ATTENZIONE: {entry['VALUES_IN_CLEAR']} valori già mascherati compaiono in chiaro"
         print(f"{entry['stamp'][11:]}  {entry.get('service', ''):14} {entry.get('event', '')}  {entry.get('path', '')[:60]}  {extra}", flush=True)
 
     def contact(self, service, host, outcome):
@@ -151,7 +151,7 @@ class MspPii:
                 outcome = await self.mask([c[k] for c, k in ref])
             except Exception as ex:   # noqa: BLE001
                 flow.response = http.Response.make(
-                    503, json.dumps({"error": {"type": "msp_pii", "message": "Omissis: motore di protezione non raggiungibile, "
+                    503, json.dumps({"error": {"type": "omissis", "message": "Omissis: motore di protezione non raggiungibile, "
                                                                            "richiesta bloccata per non inviare dati in chiaro"}}),
                     {"content-type": "application/json"})
                 self.write(**entry, event="blocked_engine_unreachable", error=type(ex).__name__)
@@ -168,7 +168,7 @@ class MspPii:
         text = rq.get_text(strict=False) or ""
         outside = sum(1 for v in self.originals if v in text)
         if outside:
-            entry["VALORI_IN_CHIARO"] = outside
+            entry["VALUES_IN_CLEAR"] = outside
             entry.setdefault("structure", shape(body))
         self.write(**entry)
 

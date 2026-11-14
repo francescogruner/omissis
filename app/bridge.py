@@ -199,7 +199,7 @@ class Bridge:
         with self.lock:
             outside = sum(1 for v in self.originals if v in body)
         if outside:
-            entry["VALORI_IN_CHIARO"] = outside
+            entry["VALUES_IN_CLEAR"] = outside
             entry.setdefault("structure", activity.shape(parsed))
         if network:
             if outcome_ext["action"] != "replace" and not outside:

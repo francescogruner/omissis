@@ -21,14 +21,14 @@ let CLIENT = '';
 
 async function engine(action, data, timeout) {
   const c = await conf();
-  if (!c.token) throw new Error('non collegata');
+  if (!c.token) throw new Error('not_paired');
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeout || 90000);
   try {
     const r = await fetch(`http://127.0.0.1:${c.port}/bridge/${action}`, {
       method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': c.token},
       body: JSON.stringify({...(data || {}), client: CLIENT}), signal: ctl.signal, cache: 'no-store'});
-    if (!r.ok) throw new Error(r.status === 403 ? 'codice non valido' : 'error ' + r.status);
+    if (!r.ok) throw new Error(r.status === 403 ? 'invalid_code' : 'error ' + r.status);
     return await r.json();
   } finally { clearTimeout(t); }
 }
@@ -121,11 +121,11 @@ async function handle(m, sender) {
     case 'request': {
       const c = await conf();
       if (c.suspended) return {action: 'passthrough'};
-      if (!c.token) return {action: 'block', reason: 'non collegata'};
+      if (!c.token) return {action: 'block', reason: 'not_paired'};
       let r;
       try { r = await engine('request', m); } catch (e) {
         refresh(true);
-        r = {action: 'block', reason: e && e.message === 'codice non valido' ? 'non collegata' : 'engine'};
+        r = {action: 'block', reason: e && e.message === 'invalid_code' ? 'not_paired' : 'engine'};
       }
       count(sender.tab, r);
       return r;
@@ -133,13 +133,13 @@ async function handle(m, sender) {
     case 'text': {   // la casella di scrittura: stesse regole di una richiesta
       const c = await conf();
       if (c.suspended) return {action: 'passthrough'};
-      if (!c.token) return {action: 'block', reason: 'non collegata'};
+      if (!c.token) return {action: 'block', reason: 'not_paired'};
       try { return await engine('text', m); } catch (e) { return {action: 'block', reason: 'engine'}; }
     }
     case 'attachment': {   // un file che sta per essere allegato: torna la copia anonimizzata
       const c = await conf();
       if (c.suspended) return {action: 'passthrough'};
-      if (!c.token) return {action: 'block', reason: 'non collegata'};
+      if (!c.token) return {action: 'block', reason: 'not_paired'};
       try {
         const r = await engine('attachment', m, 300000);
         if (r.action === 'replace') count(sender.tab, {action: 'replace', replacements: r.replacements});

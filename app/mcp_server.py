@@ -40,6 +40,7 @@ HERE = Path(__file__).resolve().parent
 NAME = "omissis"
 PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"]   # versioni di MCP che questo server parla, dalla piu' recente
 MAX_BYTES = 60_000_000
+STORE_ALIAS = "omissis-python.exe"   # il nome fisso che il pacchetto del Microsoft Store da' all'interprete (vedi costruisci_store.py)
 EMPTY = {"resources/list": "resources", "resources/templates/list": "resourceTemplates", "prompts/list": "prompts"}
 INSTRUCTIONS = (
     "Omissis keeps personal data on the user's computer. When the user asks you to work on a document that may contain "
@@ -406,6 +407,11 @@ class Server:
 
 def command():
     """Il comando con cui un'app lancia questo server: l'interprete con la finestra di testo (serve l'uscita standard)."""
+    if (paths.INSTALLED or {}).get("channel") == "store":
+        # La copia arrivata dal Microsoft Store sta in una cartella di sistema il cui nome cambia a ogni versione. Windows
+        # le da' un nome fisso da chiamare da fuori (lo dichiara il pacchetto): il programma parte dentro il pacchetto,
+        # quindi vede gli stessi dati del pannello, e il modulo si trova da solo senza scriverne il percorso.
+        return str(Path(os.environ.get("LOCALAPPDATA") or "") / "Microsoft" / "WindowsApps" / STORE_ALIAS), ["-m", "mcp_server"]
     py = Path(sys.executable)
     # il pannello gira con un interprete senza finestra (pythonw.exe; nella copia installata si chiama Omissis.exe), che non
     # ha ingresso e uscita standard: per il server serve quello normale, che gli sta accanto
@@ -428,10 +434,21 @@ def claude_desktop_file():
     """Dove Claude Desktop tiene la configurazione: nella copia arrivata dallo Store sta dentro la cartella del pacchetto."""
     local, roaming = Path(os.environ.get("LOCALAPPDATA") or ""), Path(os.environ.get("APPDATA") or "")
     packaged = sorted(local.glob("Packages/*Claude_*/LocalCache/Roaming/Claude")) if str(local) not in ("", ".") else []
-    for folder in [*packaged, roaming / "Claude"]:
+    # Una copia di Omissis arrivata dal Microsoft Store scrive nelle cartelle dei dati dell'utente solo in una copia
+    # privata: la configurazione di un Claude Desktop installato alla vecchia maniera non la raggiungerebbe (vedi by_hand).
+    usable = packaged if (paths.INSTALLED or {}).get("channel") == "store" else [*packaged, roaming / "Claude"]
+    for folder in usable:
         if folder.is_dir():
             return folder / "claude_desktop_config.json"
     return None
+
+
+def claude_desktop_by_hand():
+    """Claude Desktop c'e', ma da questa copia di Omissis (Microsoft Store) la sua configurazione non si puo' scrivere:
+    le righe vanno incollate a mano."""
+    roaming = Path(os.environ.get("APPDATA") or "")
+    return (paths.INSTALLED or {}).get("channel") == "store" and claude_desktop_file() is None and str(roaming) not in ("", ".") \
+        and (roaming / "Claude").is_dir()
 
 
 def _read_config(file):
@@ -447,13 +464,14 @@ def claude_desktop_state(file=None):
     """{"installed": l'app c'e', "registered": Omissis e' nella sua configurazione, "current": e punta a questa copia}."""
     file = file or claude_desktop_file()
     if file is None:
-        return {"installed": False, "registered": False, "current": False}
+        return {"installed": False, "registered": False, "current": False, "by_hand": claude_desktop_by_hand()}
     try:
         entry = _read_config(file).get("mcpServers", {}).get(NAME)
     except (OSError, ValueError):
         entry = None
     cmd, args = command()
-    return {"installed": True, "registered": entry is not None, "current": isinstance(entry, dict) and entry.get("command") == cmd and entry.get("args") == args}
+    return {"installed": True, "registered": entry is not None, "by_hand": False,
+            "current": isinstance(entry, dict) and entry.get("command") == cmd and entry.get("args") == args}
 
 
 def claude_desktop_install(file=None, remove=False):

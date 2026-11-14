@@ -21,7 +21,9 @@ viene mandato a un server di Omissis, perché non esiste.
 > contro un servizio finto, ma **le verifiche dal vivo sono ancora poche**: il gateway per il terminale
 > è stato verificato dal vivo con Claude Code (un messaggio semplice e un'azione che scrive un file); l'estensione del browser non è ancora stata verificata
 > con account veri; il connettore per le app desktop, dopo aver fallito le prime prove dal vivo, ora maschera i
-> messaggi nell'app vera di ChatGPT (verificato con un messaggio di dati inventati); Claude Desktop non è stato provato. Le prime prove vanno fatte con dati inventati.
+> messaggi nell'app vera di ChatGPT (verificato con un messaggio di dati inventati); Claude Desktop non è stato provato;
+> il server MCP è stato provato dal vivo una volta con Claude Code (un verbale inventato), non ancora dentro Claude Desktop;
+> Codex con l'accesso di ChatGPT e il gateway proprio sono provati solo contro un servizio finto. Le prime prove vanno fatte con dati inventati.
 
 ## Cosa c'è dentro
 

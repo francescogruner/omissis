@@ -231,7 +231,7 @@ def main():
         page.wait_for_timeout(600)
         mark("segnaposto nel testo della pagina", "[PERSONA_" not in page.inner_text("#incollato"), page.inner_text("#incollato")[:12] + "…")
         mark("casella di scrittura lasciata com'è", page.input_value("#box") == placeholder)
-        mark("avviso mostrato nella pagina", page.locator("[data-msp-pii]").count() == 1)
+        mark("avviso mostrato nella pagina", page.locator("[data-omissis]").count() == 1)
 
         # --- file
         n = seen()["file"]

@@ -325,6 +325,7 @@
  "mcp.claude": "Claude Desktop",
  "mcp.claude.below": "Adds Omissis to the MCP servers in Claude Desktop's configuration, leaving the rest untouched (a copy is kept first). Then quit Claude Desktop completely and reopen it.",
  "mcp.claude.absent": "Claude Desktop is not installed on this PC.",
+ "mcp.claude.by_hand": "This copy of Omissis comes from the Microsoft Store and cannot write to this Claude Desktop's configuration: paste the lines below yourself.",
  "mcp.install": "Register in Claude Desktop",
  "mcp.uninstall": "Remove from Claude Desktop",
  "mcp.installed": "Done. Quit Claude Desktop completely (also from the icon next to the clock) and reopen it.",
@@ -356,6 +357,7 @@
  "proxy.certificate.installed": "installed for this user",
  "proxy.certificate.not_installed": "not installed",
  "proxy.certificate.not_created": "not created yet: start protection once",
+ "proxy.certificate.store": "The copy from the Microsoft Store cannot install the certificate for other programs: the proxy needs the version downloaded from the website. Extension, desktop apps, terminal and MCP work without a certificate.",
  "proxy.win": "Test window on the web",
  "proxy.win.below": "Opens a separate Chrome or Edge window that goes through the proxy, without touching your everyday browser or the Windows settings.",
 

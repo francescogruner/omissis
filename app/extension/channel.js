@@ -13,7 +13,7 @@
         status.port = c.port1;
         ok(c.port1);
       };
-      window.postMessage({__msp_pii: 'port'}, '*', [c.port2]);
+      window.postMessage({__omissis: 'port'}, '*', [c.port2]);
       setTimeout(test, attempts === 1 ? 40 : 300);
     };
     test();

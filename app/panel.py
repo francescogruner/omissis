@@ -328,7 +328,7 @@ def stats():
             notices["unrecognized"] += 1
         elif ev == "file_not_masked":
             notices["unmasked_files"] += 1
-        if v.get("VALORI_IN_CHIARO"):
+        if v.get("VALUES_IN_CLEAR"):
             notices["clear_values"] += 1
     return {"today": {"messages": count["messages"], "replacements": count["replacements"], "blocked": count["blocked"]},
             "days": [{"day": g, "n": by_day[g]} for g in days], "kinds": kinds.most_common(), "services": services.most_common(),
@@ -435,8 +435,30 @@ def write_lists(data):
     return read_lists()
 
 
+def extension_folder():
+    """La cartella dell'estensione da indicare al browser. La copia arrivata dal Microsoft Store sta in una cartella di
+    sistema che il browser non puo' leggere: se ne tiene una copia aggiornata tra i documenti dell'utente."""
+    origin = HERE / "extension"
+    if updates.channel() != "store":
+        return origin
+    target = mcp_server._known_folders()[0] / "Omissis" / "extension"
+    try:
+        stamp = target / ".version"
+        if not stamp.exists() or stamp.read_text(encoding="utf-8") != VERSION:
+            shutil.rmtree(target, ignore_errors=True)
+            shutil.copytree(origin, target)
+            stamp.write_text(VERSION, encoding="utf-8")
+        return target
+    except OSError:
+        return origin
+
+
 def certificate(action=None):
     cer = DATA / "ca" / "mitmproxy-ca-cert.cer"
+    if action == "install" and updates.channel() == "store":
+        # un programma arrivato dallo Store scrive in una copia privata delle impostazioni di Windows: il certificato
+        # risulterebbe installato solo per Omissis stesso, e nessun altro programma si fiderebbe del proxy
+        raise Refusal(i18n.t("proxy.certificate.store"))
     if action == "install" and cer.exists():
         subprocess.run(["certutil", "-user", "-addstore", "Root", str(cer)], capture_output=True, timeout=120, creationflags=NO_WINDOW)
     elif action == "remove":
@@ -526,7 +548,7 @@ class Handler(BaseHTTPRequestHandler):
                                      "upstreams": dict(settings.read().get("gateway_upstreams") or {})})
             elif u.path == "/api/extension":
                 f = DATA / "token_extension.txt"
-                self._respond(200, {"folder": str(HERE / "extension"), "port": ENGINE_PORT,
+                self._respond(200, {"folder": str(extension_folder()), "port": ENGINE_PORT,
                                      "token": f.read_text(encoding="utf-8").strip() if f.exists() else ""})
             elif u.path == "/api/categories":   # le categorie in piu' che il modello in uso conosce, e quelle accese
                 try:

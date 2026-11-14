@@ -9,13 +9,13 @@ for (const e of document.querySelectorAll('[data-name]')) { e.setAttribute('aria
 async function show() {
   const d = await chrome.runtime.sendMessage({t: 'win'});
   const fault = !d.connected ? T('fault_not_connected')
-    : !d.health.ok ? T(d.health.reason === 'codice non valido' ? 'fault_code' : 'fault_program') : '';
+    : !d.health.ok ? T(d.health.reason === 'invalid_code' ? 'fault_code' : 'fault_program') : '';
   const status = fault ? 'not_active' : d.suspended ? 'suspended' : 'active';
   el('title').dataset.status = status;   // il codice dello stato, uguale in ogni lingua (lo leggono le prove)
   el('textTitle').textContent = T('status_' + status);
   el('fault').hidden = !fault;
   el('fault').textContent = fault;
-  el('connection').hidden = d.connected && d.health.reason !== 'codice non valido';
+  el('connection').hidden = d.connected && d.health.reason !== 'invalid_code';
   el('service').textContent = d.service ? d.service.name : d.host ? T('site_outside_catalog') : '—';
   const pol = d.service ? (d.service.policy === 'protect' && !d.service.readable ? 'record' : d.service.policy) : null;
   el('policy').textContent = !pol ? '—' : pol === 'protect' && d.suspended ? T('policy_suspended', T('policy_protect')) : T('policy_' + pol);

@@ -158,9 +158,9 @@ def main():
                 pag.wait_for_selector("[role=tab]")
                 pag.keyboard.press("Tab")
                 jump = pag.evaluate("document.activeElement.id")
-                pag.focus("#linguetta-browser")
+                pag.focus("#tab-browser")
                 pag.keyboard.press("ArrowRight")
-                sweep = wait(pag, "() => location.hash.endsWith('/app') && document.getElementById('linguetta-app')?.getAttribute('aria-selected') === 'true'", timeout=5)
+                sweep = wait(pag, "() => location.hash.endsWith('/app') && document.getElementById('tab-app')?.getAttribute('aria-selected') === 'true'", timeout=5)
                 mark(f"{language}: si usa dalla tastiera (salto al contenuto, linguette con le frecce)", jump == "skip" and sweep, f"primo Tab su «{jump}» · freccia {sweep}")
 
                 # --- app desktop: l'app di prova si avvia protetta dal pannello e si stacca; il suo servizio è su «Proteggi», quindi nessun avviso

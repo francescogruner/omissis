@@ -146,8 +146,8 @@ function show(move = true) {
   document.title = `${t(`menu.${v.id}`)} · Omissis`;
   const el = $("#content");
   el.innerHTML = head(v.id) + (allowed.length > 1 ? `<div class="cards-menu" role="tablist" aria-label="${esc(t(`menu.${v.id}`))}">${
-    allowed.map(s => `<button role="tab" id="linguetta-${s}" data-card="${s}" aria-selected="${s === card}" aria-controls="panel" tabindex="${s === card ? 0 : -1}">${esc(t(`${v.id}.card.${s}`))}</button>`).join("")}</div>` : "")
-    + `<div class="block" id="panel" ${allowed.length > 1 ? `role="tabpanel" aria-labelledby="linguetta-${card}"` : ""}></div>`;
+    allowed.map(s => `<button role="tab" id="tab-${s}" data-card="${s}" aria-selected="${s === card}" aria-controls="panel" tabindex="${s === card ? 0 : -1}">${esc(t(`${v.id}.card.${s}`))}</button>`).join("")}</div>` : "")
+    + `<div class="block" id="panel" ${allowed.length > 1 ? `role="tabpanel" aria-labelledby="tab-${card}"` : ""}></div>`;
   $$(".cards-menu button", el).forEach(b => {
     b.onclick = () => { location.hash = `#/${v.id}/${b.dataset.card}`; };
     b.onkeydown = e => {
@@ -155,7 +155,7 @@ function show(move = true) {
       if (!toward) return;
       const all_of = $$(".cards-menu button", el), upcoming = all_of[(all_of.indexOf(b) + toward + all_of.length) % all_of.length];
       location.hash = `#/${v.id}/${upcoming.dataset.card}`;
-      requestAnimationFrame(() => $(`#linguetta-${upcoming.dataset.card}`)?.focus());
+      requestAnimationFrame(() => $(`#tab-${upcoming.dataset.card}`)?.focus());
     };
   });
   DRAW[v.id]($("#panel"), card);
@@ -620,10 +620,10 @@ const connectBrowser = test(async el => {
         <li>${t("browser.installation.3")}</li><li>${t("browser.installation.4")}</li></ol>`)
     + card(`<h2>${esc(t("browser.by_hand"))}</h2><p>${esc(t("browser.by_hand.below"))}</p>`, `<button class="button" id="estCopyCode">${esc(t("browser.copy_code"))}</button>`);
   drawExtension();
-  $("#estConnect").onclick = test(async () => { const d = await extensionData(); window.postMessage({msp_pii: "connect", token: d.token, port: d.port}, location.origin); });
+  $("#estConnect").onclick = test(async () => { const d = await extensionData(); window.postMessage({omissis: "connect", token: d.token, port: d.port}, location.origin); });
   $("#estCopyFolder").onclick = () => copy($("#estFolder").textContent);
   $("#estCopyCode").onclick = test(async () => copy((await extensionData()).token));
-  window.postMessage({msp_pii: "ci sei?"}, location.origin);
+  window.postMessage({omissis: "ping"}, location.origin);
   $("#estFolder").textContent = (await api("/api/extension")).folder;
 });
 
@@ -707,7 +707,7 @@ const drawMcp = m => {
   if (!e) return;
   e.textContent = c.registered ? t(c.current ? "mcp.registered" : "mcp.registered_old") : t("mcp.not_registered");
   e.className = "label " + (c.registered ? (c.current ? "ok" : "warning") : "");
-  $("#mcpClaude").innerHTML = !c.installed ? `<span class="faded">${esc(t("mcp.claude.absent"))}</span>`
+  $("#mcpClaude").innerHTML = !c.installed ? `<span class="faded">${esc(t(c.by_hand ? "mcp.claude.by_hand" : "mcp.claude.absent"))}</span>`
     : (c.registered && c.current ? "" : `<button class="button primary" data-mcp="install">${esc(t("mcp.install"))}</button>`)
       + (c.registered ? `<button class="button" data-mcp="uninstall">${esc(t("mcp.uninstall"))}</button>` : "");
   $$("button[data-mcp]").forEach(b => b.onclick = test(async () => {
@@ -995,7 +995,7 @@ function changeView(advanced) {
 // l'estensione, se c'è in questo browser, si presenta con un messaggio alla pagina
 window.addEventListener("message", e => {
   const d = e.data;
-  if (e.source !== window || e.origin !== location.origin || !d || d.msp_pii !== "extension") return;
+  if (e.source !== window || e.origin !== location.origin || !d || d.omissis !== "extension") return;
   extension = d;
   drawExtension(); channels();
   if (d.just) notify(t(d.ok ? "browser.connected_now" : "browser.connected_no_response"), !d.ok);
@@ -1016,7 +1016,7 @@ async function launch() {
   $("#advanced").onchange = e => changeView(e.target.checked);
   addEventListener("hashchange", () => show());
   show(false);
-  window.postMessage({msp_pii: "ci sei?"}, location.origin);
+  window.postMessage({omissis: "ping"}, location.origin);
   await readStatus();
   setInterval(() => { readStatus(); if (opened.id === "start") channels(); appListingQuiet(); }, 3000);
 }

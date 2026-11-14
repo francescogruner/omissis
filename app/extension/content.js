@@ -46,7 +46,7 @@
     if (!topmost || !document.documentElement) return;
     if (host_site) host_site.remove();
     host_site = document.createElement('div');
-    host_site.setAttribute('data-msp-pii', '');
+    host_site.setAttribute('data-omissis', '');
     host_site.style.cssText = 'all:initial;position:fixed;z-index:2147483647;right:16px;bottom:16px;';
     const shadow = host_site.attachShadow({mode: 'closed'});
     const tile = document.createElement('div');
@@ -76,7 +76,7 @@
       return chrome.i18n.getMessage(key, values.map(String)) || key;
     } catch (e) { return key; }
   };
-  const REASONS = {engine: T('engine_notice'), 'non collegata': T('notice_not_connected'), file: T('file_notice'),
+  const REASONS = {engine: T('engine_notice'), 'not_paired': T('notice_not_connected'), file: T('file_notice'),
     reload: T('reload_notice'), extension: T('extension_notice')};
   const PHRASES = {one: T('one_notice'), many: T('many_notice', '\u0001'), press: T('notice_press_enter'), box: T('box_notice'),
     attachment_work: T('attachment_work'), attachment_done: T('attachment_done', '\u0001', '\u0002'), attachment_text: T('attachment_text'),
@@ -230,7 +230,7 @@
 
   function untouchable(t) {
     const p = t.parentElement;
-    return !p || p.isContentEditable || /^(SCRIPT|STYLE|TEXTAREA|NOSCRIPT|TITLE)$/.test(p.tagName) || !!p.closest('[data-msp-pii]');
+    return !p || p.isContentEditable || /^(SCRIPT|STYLE|TEXTAREA|NOSCRIPT|TITLE)$/.test(p.tagName) || !!p.closest('[data-omissis]');
   }
 
   async function clear() {
@@ -320,7 +320,7 @@
 
   function sendButton(da) {
     const b = da && da.closest ? da.closest('button, [role="button"], input[type="submit"]') : null;
-    if (!b || b.closest('[data-msp-pii]')) return null;
+    if (!b || b.closest('[data-omissis]')) return null;
     const captions = [b.getAttribute('aria-label'), b.getAttribute('data-testid'), b.getAttribute('title'), b.id, b.type === 'submit' ? 'submit' : ''].join(' ');
     return RX_SENDING.test(captions) ? b : null;
   }

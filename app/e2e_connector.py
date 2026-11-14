@@ -188,7 +188,7 @@ def main():
             mark("XMLHttpRequest: richiesta mascherata", not any(s in arrived for s in SENSITIVE) and "[PERSONA_" in arrived)
             mark("XMLHttpRequest: valori veri nel testo della pagina", all(s in shown for s in SENSITIVE) and "[PERSONA_" not in shown)
             mark("il sito non vede il canale con il programma", guide.evaluate(f"typeof window.{connector.CALL}") == "undefined"
-                  and guide.evaluate("typeof window.__msp_response") == "undefined")
+                  and guide.evaluate("typeof window.__omissis_response") == "undefined")
             mark("conteggi del connettore", con.counts["messages"] >= 9 and con.counts["replacements"] >= 36, json.dumps(con.counts))
             mark("nessun errore del connettore", not con.errors, "; ".join(con.errors)[:150])
             import activity

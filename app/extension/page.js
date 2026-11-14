@@ -15,7 +15,7 @@
   // ---- canale privato con l'estensione: arriva una volta sola, prima di ogni script del sito
   function listen(ev) {
     const d = ev.data;
-    if (ev.source !== window || !d || d.__msp_pii !== 'port' || !ev.ports || !ev.ports.length) return;
+    if (ev.source !== window || !d || d.__omissis !== 'port' || !ev.ports || !ev.ports.length) return;
     ev.stopImmediatePropagation();
     if (port) return;
     port = ev.ports[0];

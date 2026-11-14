@@ -212,7 +212,7 @@ def main():
         state = mcp_server.claude_desktop_state(cfg)
         mark("Claude Desktop: Omissis aggiunto senza toccare il resto, con una copia del file di prima", changed and data["mcpServers"]["altro"] == {"command": "x"}
              and data["preferences"] == {"tema": "scuro"} and data["mcpServers"]["omissis"]["args"] == [str(HERE / "mcp_server.py")]
-             and state == {"installed": True, "registered": True, "current": True} and cfg.with_name(cfg.name + ".omissis-backup").exists()
+             and state == {"installed": True, "registered": True, "current": True, "by_hand": False} and cfg.with_name(cfg.name + ".omissis-backup").exists()
              and not mcp_server.claude_desktop_install(cfg))
         removed = mcp_server.claude_desktop_install(cfg, remove=True)
         data = json.loads(cfg.read_text(encoding="utf-8"))
