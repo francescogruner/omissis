@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Impostazioni condivise tra pannello e proxy: data\\settings.json."""
 import json
+import re
+import urllib.parse
 from pathlib import Path
 
 import catalog
@@ -26,6 +28,7 @@ DEFAULTS = {
     "vault_days": 0,        # 0 = l'archivio tiene tutto; N = toglie da solo le voci non usate da N giorni
     "categories": [],             # categorie in piu' da sostituire (DATA, PROFESSIONE, SALUTE...): di serie restano in chiaro
     "mcp_folders": [],            # cartelle in piu' che il server MCP puo' usare, oltre a Documenti, Desktop e Download
+    "gateway_upstreams": {},      # chi ha gia' un proprio gateway: nome usato nell'indirizzo (anthropic, openai...) -> dove inoltrare
 }
 _cache = {"mtime": None, "data": None}
 
@@ -43,6 +46,15 @@ def read():
     return _cache["data"]
 
 
+def address_ok(text):
+    """Un indirizzo a cui si puo' inoltrare: http o https, con il nome del computer."""
+    try:
+        u = urllib.parse.urlsplit(str(text).strip())
+        return u.scheme in ("http", "https") and bool(u.hostname) and not u.query and not u.fragment
+    except ValueError:
+        return False
+
+
 def write(data):
     FILE.parent.mkdir(parents=True, exist_ok=True)
     clean = {k: data.get(k, v) for k, v in DEFAULTS.items()}
@@ -51,6 +63,9 @@ def write(data):
     date = clean["shortcuts"] if isinstance(clean["shortcuts"], dict) else {}
     clean["shortcuts"] = {k: str(date.get(k, v)).strip().lower()[:40] for k, v in DEFAULTS["shortcuts"].items()}
     clean["categories"] = sorted({str(x) for x in clean["categories"] or [] if str(x).isupper() and len(str(x)) <= 24})
+    own = clean["gateway_upstreams"] if isinstance(clean["gateway_upstreams"], dict) else {}
+    clean["gateway_upstreams"] = {str(k): str(v).strip().rstrip("/") for k, v in own.items()
+                                  if re.fullmatch(r"[a-z0-9-]{1,30}", str(k)) and str(k) != "codex" and address_ok(v)}
     extra = clean["mcp_folders"] if isinstance(clean["mcp_folders"], list) else []
     clean["mcp_folders"] = list(dict.fromkeys(str(x).strip().strip('"') for x in extra if str(x).strip()))[:20]
     if clean["scan"] not in ("weekly", "daily", "never"):

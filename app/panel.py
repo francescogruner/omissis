@@ -521,7 +521,8 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/gateway":
                 g = SUP.gateway
                 self._respond(200, {"is_active": g is not None, "port": paths.GATEWAY_PORT, "error": SUP.gateway_error,
-                                     "counts": dict(g.counts) if g else None, "routes": sorted(gateway.routes())})
+                                     "counts": dict(g.counts) if g else None, "routes": sorted(gateway.routes()),
+                                     "upstreams": dict(settings.read().get("gateway_upstreams") or {})})
             elif u.path == "/api/extension":
                 f = DATA / "token_extension.txt"
                 self._respond(200, {"folder": str(HERE / "extension"), "port": ENGINE_PORT,
@@ -591,6 +592,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, {"restart_needed": SUP.restart_needed()})
             elif p == "/api/lists":
                 self._respond(200, write_lists(data))
+            elif p == "/api/gateway":   # chi ha gia' un proprio gateway: dove inoltrare, servizio per servizio (vuoto = il servizio vero)
+                wanted = {str(k): str(v).strip() for k, v in (data.get("upstreams") or {}).items() if str(v).strip()}
+                wrong = [v for k, v in wanted.items() if k not in gateway.routes() or k == "codex" or not settings.address_ok(v)]
+                if wrong:
+                    raise Refusal(i18n.t("terminal.own.error", address=wrong[0]))
+                self._respond(200, {"upstreams": settings.write({**settings.read(), "gateway_upstreams": wanted})["gateway_upstreams"]})
             elif p == "/api/mcp":
                 action = data.get("action")
                 if action in ("install", "uninstall"):   # scrive (o toglie) Omissis nella configurazione di Claude Desktop

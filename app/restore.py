@@ -512,7 +512,11 @@ class SSEStream(_BaseStream):
         else:
             if self.ad.end(ev):
                 before = self._clear()
-            fresh = restore_json(loading, self._search)
+            # Un evento senza pezzi di testo ma con dei segnaposto (es. l'azione completa, che Codex legge da qui e non
+            # dai pezzi): si ripristina campo per campo, entrando anche nelle stringhe che contengono a loro volta JSON
+            # (gli argomenti di un'azione). Farlo sul testo grezzo romperebbe quel JSON interno quando il valore ha
+            # virgolette, barre rovesciate o a capo.
+            fresh = json.dumps(Leaves(self._search, entire=True).apply(ev), **_COMPACT) if RX_PLACEHOLDER.search(loading) else loading
         lines[i] = "data: " + fresh + ("\r" if lines[i].endswith("\r") else "")
         return before + "\n".join(lines).encode("utf-8", errors="surrogateescape")
 

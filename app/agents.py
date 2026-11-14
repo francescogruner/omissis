@@ -199,8 +199,16 @@ class OpenAIAgent(R.OpenAI):
                 R._blocks(m.get("content"), m, "content", ref)
                 if m.get("type") == "function_call":
                     self._arguments(m, "arguments", ref, nested)
+                elif m.get("type") == "custom_tool_call" and isinstance(m.get("input"), str):   # es. la modifica di un file: testo libero
+                    ref.append((m, "input"))
+                elif m.get("type") == "local_shell_call":      # il comando gia' eseguito
+                    leaves(m.get("action"), ref)
+                elif m.get("type") == "reasoning":            # il riassunto del ragionamento torna in chiaro; il resto e' cifrato
+                    R._blocks(m.get("summary"), m, "summary", ref)
                 if isinstance(m.get("output"), str):
                     ref.append((m, "output"))
+                elif isinstance(m.get("output"), list):       # risultato di uno strumento fatto di piu' blocchi
+                    R._blocks(m["output"], m, "output", ref)
 
         def reassemble():
             for container, key, inside in nested:
@@ -223,7 +231,7 @@ class OpenAIAgent(R.OpenAI):
                 if isinstance(f, dict) and isinstance(f.get("arguments"), str):
                     out.append((f, "arguments", "json"))
         if isinstance(ev.get("delta"), str):
-            if ev.get("type") == "response.output_text.delta":
+            if ev.get("type") in ("response.output_text.delta", "response.custom_tool_call_input.delta", "response.reasoning_summary_text.delta"):
                 out.append((ev, "delta"))
             elif ev.get("type") == "response.function_call_arguments.delta":
                 out.append((ev, "delta", "json"))
@@ -233,7 +241,7 @@ class OpenAIAgent(R.OpenAI):
         if not isinstance(ev, dict):
             return False
         return ev.get("type") in ("response.output_text.done", "response.function_call_arguments.done", "response.output_item.done",
-                                  "response.completed") or \
+                                  "response.custom_tool_call_input.done", "response.reasoning_summary_text.done", "response.completed") or \
             any(isinstance(c, dict) and c.get("finish_reason") for c in ev.get("choices") or [])
 
 

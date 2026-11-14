@@ -659,12 +659,24 @@ const gatewayStatus = test(async () => {
 const connectTerminal = test(async el => {
   el.innerHTML = card(`<div class="line"><h2>${esc(t("terminal.status"))}</h2><span id="gwStatus" class="label">…</span><span class="space"></span><span class="faded small" id="gwNumbers"></span></div>`)
     + card(`<h2>${esc(t("terminal.how"))}</h2><p>${esc(t("terminal.how.below"))}</p><div class="block" id="gwLines"></div>`)
-    + card(`<h2>${esc(t("terminal.verified"))}</h2><ul class="listing faded">${[1, 2, 3, 4].map(i => `<li>${t(`terminal.verified.${i}`)}</li>`).join("")}</ul>`);
+    + `<section class="card" aria-label="${esc(t("terminal.own"))}"><div class="inside"><h2>${esc(t("terminal.own"))}</h2><p>${esc(t("terminal.own.below"))}</p></div>
+        ${["anthropic", "openai"].map(n => line(t(`terminal.own.${n}`), "", `<input type="text" class="wide" data-own="${n}" placeholder="https://" aria-label="${esc(t(`terminal.own.${n}`))}">`)).join("")}
+        <div class="footer"><span class="space"></span><button class="button" id="ownSave">${esc(t("general.save"))}</button></div></section>`
+    + card(`<h2>${esc(t("terminal.verified"))}</h2><ul class="listing faded">${[1, 2, 3, 4, 5].map(i => `<li>${t(`terminal.verified.${i}`)}</li>`).join("")}</ul>`);
   const g = await gatewayStatus(), u = `http://127.0.0.1:${g.port}`;
-  const lines = [["claude", `$env:ANTHROPIC_BASE_URL="${u}/anthropic"; claude`], ["openai", `$env:OPENAI_BASE_URL="${u}/openai/v1"`],
-    ["others", g.routes.filter(r => !["anthropic", "openai", "ollama", "lmstudio"].includes(r)).map(r => `${u}/${r}`).join("\n")], ["local", `${u}/ollama/v1\n${u}/lmstudio/v1`]];
+  // Codex con l'accesso di ChatGPT: un fornitore in piu' nella sua configurazione, che manda qui le richieste con quell'accesso
+  const codex = `# ${t("terminal.codex.top")}\nmodel_provider = "omissis"\n\n# ${t("terminal.codex.bottom")}\n[model_providers.omissis]\nname = "Omissis"\nbase_url = "${u}/openai/v1"\nwire_api = "responses"\nrequires_openai_auth = true`;
+  const lines = [["claude", `$env:ANTHROPIC_BASE_URL="${u}/anthropic"; claude`], ["codex", codex], ["openai", `$env:OPENAI_BASE_URL="${u}/openai/v1"`],
+    ["others", g.routes.filter(r => !["anthropic", "openai", "codex", "ollama", "lmstudio"].includes(r)).map(r => `${u}/${r}`).join("\n")], ["local", `${u}/ollama/v1\n${u}/lmstudio/v1`]];
   $("#gwLines").innerHTML = lines.map(([n, r]) => `<div><div class="line"><h3>${esc(t(`terminal.line.${n}`))}</h3><span class="space"></span><button class="button" data-copy="${esc(r)}">${esc(t("general.copy"))}</button></div><pre>${esc(r)}</pre></div>`).join("");
   $$("button[data-copy]").forEach(b => b.onclick = () => copy(b.dataset.copy));
+  $$("input[data-own]").forEach(i => { i.value = g.upstreams[i.dataset.own] || ""; });
+  $("#ownSave").onclick = test(async () => {
+    const upstreams = {...g.upstreams};
+    $$("input[data-own]").forEach(i => { upstreams[i.dataset.own] = i.value.trim(); });
+    g.upstreams = (await api("/api/gateway", {upstreams})).upstreams;
+    notify(t("terminal.own.saved"));
+  });
 });
 
 // Il server MCP: la strada ufficiale dentro Claude Desktop e gli editor, per i documenti. Si registra nella configurazione dell'app.

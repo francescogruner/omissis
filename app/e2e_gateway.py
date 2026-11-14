@@ -8,6 +8,7 @@ Controlla che al servizio non arrivi nulla in chiaro (nemmeno negli argomenti de
 fatte e nei risultati degli strumenti), che allo strumento tornino i valori veri (anche dentro gli
 argomenti delle nuove azioni), che i ragionamenti firmati viaggino identici in entrambi i sensi.
 """
+import base64
 import gzip
 import json
 import re
@@ -18,8 +19,10 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import agents
 import gateway
 import paths
+import settings
 import restore as R
 
 HERE = Path(__file__).resolve().parent
@@ -74,12 +77,15 @@ class Fake(BaseHTTPRequestHandler):
         self.wfile.write(b"0\r\n\r\n")
 
     def do_GET(self):
+        SEEN["get"] = SEEN.get("get", 0) + 1
         self._post(200, "application/json", json.dumps({"data": [{"id": "model-fake"}], "path": self.path}).encode())
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
         SEEN.update(body=body, key=self.headers.get("x-api-key") or self.headers.get("Authorization"), n=SEEN["n"] + 1,
-                     encoding=self.headers.get("Accept-Encoding"))
+                     encoding=self.headers.get("Accept-Encoding"), path=self.path, account=self.headers.get("ChatGPT-Account-ID"))
+        # un gateway proprio davanti al servizio: stessi formati, sotto un suo percorso
+        route = self.path[4:] if self.path.startswith(("/llm/", "/api/v1/")) else self.path
         if SEEN["key"] in ("wrong", "Bearer sbagliata"):
             return self._post(401, "application/json", b'{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}')
         received = last_text(body)
@@ -87,7 +93,7 @@ class Fake(BaseHTTPRequestHandler):
         mail = re.search(r"\[EMAIL_\d+\]", received)   # il numero dipende da cio' che l'archivio contiene gia'
         arguments = json.dumps({"command": "write_file", "path": "bozze/mail.txt", "content": received, "recipients": [mail.group() if mail else "[EMAIL_1]"]}, ensure_ascii=False)
         stream = bool(body.get("stream"))
-        if self.path.startswith("/v1/messages"):
+        if route.startswith("/v1/messages"):
             if not stream:
                 return self._post(200, "application/json", json.dumps({"type": "message", "role": "assistant", "content": [
                     REASONING, {"type": "text", "text": text}, {"type": "tool_use", "id": "tu_1", "name": "write", "input": json.loads(arguments)}]},
@@ -105,7 +111,7 @@ class Fake(BaseHTTPRequestHandler):
             ev += [("content_block_stop", {"type": "content_block_stop", "index": 2}), ("message_delta", {"type": "message_delta", "delta": {"stop_reason": "tool_use"}}),
                    ("message_stop", {"type": "message_stop"})]
             return self._sse(ev)
-        if self.path.startswith("/v1/chat/completions"):
+        if route.startswith("/v1/chat/completions"):
             if not stream:
                 return self._post(200, "application/json", json.dumps({"choices": [{"message": {"role": "assistant", "content": text, "tool_calls": [
                     {"id": "c1", "type": "function", "function": {"name": "write", "arguments": arguments}}]}, "finish_reason": "tool_calls"}]}, ensure_ascii=False).encode("utf-8"))
@@ -113,7 +119,15 @@ class Fake(BaseHTTPRequestHandler):
             ev += [("", {"choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": x}}]}, "finish_reason": None}]}) for x in chunks(arguments, 5)]
             ev += [("", {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]}), ("", "[DONE]")]
             return self._sse(ev)
-        if self.path.startswith("/v1/responses"):
+        if route.startswith("/backend-api/codex/responses"):   # Codex con l'accesso di ChatGPT: l'azione completa sta in output_item.done
+            ev = [("response.output_text.delta", {"type": "response.output_text.delta", "delta": x}) for x in chunks(text, 6)]
+            ev += [("response.output_text.done", {"type": "response.output_text.done", "text": text})]
+            ev += [("response.custom_tool_call_input.delta", {"type": "response.custom_tool_call_input.delta", "delta": x}) for x in chunks(received, 7)]
+            ev += [("response.custom_tool_call_input.done", {"type": "response.custom_tool_call_input.done", "input": received}),
+                   ("response.output_item.done", {"type": "response.output_item.done", "item": {"type": "function_call", "name": "shell", "call_id": "c1", "arguments": arguments}}),
+                   ("response.completed", {"type": "response.completed", "response": {"output": []}})]
+            return self._sse(ev)
+        if route.startswith("/v1/responses"):
             ev = [("response.output_text.delta", {"type": "response.output_text.delta", "delta": x}) for x in chunks(text, 6)]
             ev += [("response.output_text.done", {"type": "response.output_text.done", "text": text})]
             ev += [("response.function_call_arguments.delta", {"type": "response.function_call_arguments.delta", "delta": x}) for x in chunks(arguments, 5)]
@@ -241,7 +255,80 @@ def main():
     except ValueError:
         action = {}
     mark("OpenAI responses in streaming: nulla in chiaro, testo, argomenti ed evento finale ripristinati", reveal(SEEN["body"]) == 0
-          and all(s in text for s in SENSITIVE) and all(s in action.get("content", "") for s in SENSITIVE) and all(s in final for s in SENSITIVE))
+          and all(s in text for s in SENSITIVE) and all(s in action.get("content", "") for s in SENSITIVE) and all(s in final for s in SENSITIVE)
+          and SEEN["path"] == "/v1/responses" and SEEN["account"] is None)
+
+    # --- Codex con l'accesso di ChatGPT (abbonamento): stesso formato, ma va all'indirizzo di ChatGPT e non a quello delle chiavi
+    def token(claims):
+        b = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode("utf-8")).decode("ascii").rstrip("=")   # noqa: E731
+        return f"Bearer {b({'alg': 'none'})}.{b(claims)}.firma-finta"
+    subscription = token({"https://api.openai.com/auth": {"chatgpt_account_id": "account-di-prova-123"}})
+    codex = {"model": "x", "stream": True, "instructions": "Sei Codex.", "input": [
+        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": TEXT}]},
+        {"type": "reasoning", "summary": [{"type": "summary_text", "text": "Devo scrivere a Giulia Ferraresi."}], "encrypted_content": "cifrato-che-non-si-tocca=="},
+        {"type": "custom_tool_call", "call_id": "p0", "name": "apply_patch", "input": "*** Add File: contatti.txt\n+Aldo Bruschi 347 5551234"},
+        {"type": "custom_tool_call_output", "call_id": "p0", "output": "scritto contatti.txt per Aldo Bruschi"},
+        {"type": "local_shell_call", "call_id": "s0", "action": {"type": "exec", "command": ["grep", "Giulia Ferraresi", "contatti.txt"]}},
+        {"type": "function_call_output", "call_id": "s0", "output": [{"type": "input_text", "text": "Giulia Ferraresi; giulia.ferraresi@nevatek.example"}]},
+        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": TEXT}]}]}
+    status, raw = call("/openai/v1/responses", codex, {"Authorization": subscription})
+    ev, arrived = events(raw), SEEN["body"]
+    text = "".join(e["delta"] for e in ev if e["type"] == "response.output_text.delta")
+    patch = "".join(e["delta"] for e in ev if e["type"] == "response.custom_tool_call_input.delta")
+    try:
+        action = json.loads(next(e for e in ev if e["type"] == "response.output_item.done")["item"]["arguments"])
+    except (ValueError, StopIteration):
+        action = {}
+    mark("Codex in abbonamento: riconosciuto dal gettone e mandato all'indirizzo di ChatGPT, con l'account", status == 200
+          and SEEN["path"] == "/backend-api/codex/responses" and SEEN["account"] == "account-di-prova-123" and SEEN["key"] == subscription, f"{status} {SEEN['path']}")
+    mark("Codex: nulla in chiaro (messaggi, modifiche ai file, comandi eseguiti, risultati, riassunto del ragionamento)", reveal(arrived) == 0
+          and arrived["input"][1]["encrypted_content"] == "cifrato-che-non-si-tocca==" and arrived["instructions"] == "Sei Codex."
+          and "[PERSONA_" in arrived["input"][2]["input"] and "[PERSONA_" in arrived["input"][4]["action"]["command"][1], f"in chiaro {reveal(arrived)}")
+    mark("Codex: testo, modifica al file e azione completa tornano con i valori veri", all(s in text for s in SENSITIVE) and all(s in patch for s in SENSITIVE)
+          and all(s in action.get("content", "") for s in SENSITIVE))
+    status, raw = call("/codex/responses", codex, {"Authorization": "Bearer gettone-opaco", "chatgpt-account-id": "account-di-prova-456"})
+    mark("Codex puntato sull'indirizzo dedicato: stessa strada", status == 200 and SEEN["path"] == "/backend-api/codex/responses"
+          and SEEN["account"] == "account-di-prova-456" and reveal(SEEN["body"]) == 0)
+    # l'azione completa porta gli argomenti come JSON dentro una stringa: un valore con virgolette, barre e a capo non deve romperlo
+    hard = 'Aldo "il Rosso" Bruschi\\ufficio\nsede'
+    stream = R.SSEStream(agents.OpenAIAgent(), {"[PERSONA_1]": hard}.get)
+    out = b"".join(stream(("data: " + json.dumps({"type": "response.output_item.done", "item": {"type": "function_call", "arguments": json.dumps(
+        {"path": "[PERSONA_1]", "note": ["per [PERSONA_1]"]})}}) + "\n\n").encode("utf-8")) + stream(b"")).decode("utf-8")
+    try:
+        inner = json.loads(json.loads(out[5:])["item"]["arguments"])
+    except ValueError:
+        inner = {}
+    mark("argomenti di un'azione con un valore «difficile»: il JSON resta valido", inner == {"path": hard, "note": ["per " + hard]})
+
+    # --- chi ha gia' un proprio gateway lo tiene: Omissis gli sta davanti
+    before = settings.FILE.read_bytes() if settings.FILE.exists() else None
+    settings.write({**settings.read(), "gateway_upstreams": {"anthropic": "https://gateway.azienda.example/llm/", "openai": "https://gateway.azienda.example/api/v1",
+                                                               "codex": "https://altrove.example", "non valido": "x", "deepseek": "ftp://no"}})
+    kept = settings.read()["gateway_upstreams"]
+    status, raw = call("/anthropic/v1/messages", {"model": "x", "max_tokens": 100, "messages": [{"role": "user", "content": TEXT}]}, {"x-api-key": "chiave-di-prova"})
+    path_a, clear_a = SEEN["path"], reveal(SEEN["body"])
+    status2, raw = call("/openai/v1/chat/completions", {"model": "x", "messages": [{"role": "user", "content": TEXT}]}, {"Authorization": "Bearer chiave-di-prova"})
+    path_o, clear_o = SEEN["path"], reveal(SEEN["body"])
+    mark("gateway proprio: le richieste vanno al suo indirizzo, già mascherate, senza ripetere /v1", status == 200 and status2 == 200 and path_a == "/llm/v1/messages"
+          and path_o == "/api/v1/chat/completions" and clear_a == 0 and clear_o == 0 and all(s in json.loads(raw)["choices"][0]["message"]["content"] for s in SENSITIVE)
+          and kept == {"anthropic": "https://gateway.azienda.example/llm", "openai": "https://gateway.azienda.example/api/v1"}, f"{path_a} · {path_o} · {sorted(kept)}")
+    status, raw = call("/openai/v1/responses", codex, {"Authorization": subscription})
+    mark("l'accesso in abbonamento non va mai al gateway proprio: sempre a ChatGPT", status == 200 and SEEN["path"] == "/backend-api/codex/responses")
+    if before is None:
+        settings.FILE.unlink()
+    else:
+        settings.FILE.write_bytes(before)
+    settings._cache.update(mtime=None, data=None)
+
+    # --- un collegamento WebSocket non si saprebbe controllare: rifiutato, lo strumento ripiega sulle richieste normali
+    n, gets = SEEN["n"], SEEN.get("get", 0)
+    req = urllib.request.Request(f"http://127.0.0.1:{GW_PORT}/openai/v1/responses", headers={"Upgrade": "websocket", "Connection": "Upgrade", "Authorization": subscription})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            status = r.status
+    except urllib.error.HTTPError as ex:
+        status = ex.code
+    mark("WebSocket: rifiutato, nulla inoltrato", status == 426 and SEEN["n"] == n and SEEN.get("get", 0) == gets, f"stato {status}")
 
     # --- il resto
     status, raw = call("/anthropic/v1/models")
@@ -264,6 +351,10 @@ def main():
     status = packed("gzip", gzip.compress(message))
     mark("richiesta compressa (gzip): aperta e mascherata", status == 200 and reveal(SEEN["body"]) == 0 and "[PERSONA_" in json.dumps(SEEN["body"]),
           f"stato {status} · in chiaro {reveal(SEEN['body'])}")
+    import zstandard
+    status = packed("zstd", zstandard.ZstdCompressor().compress(message))
+    mark("richiesta compressa (zstd, come fa Codex): aperta e mascherata", status == 200 and reveal(SEEN["body"]) == 0 and "[PERSONA_" in json.dumps(SEEN["body"]),
+          f"stato {status}")
     # --- le istruzioni che lo strumento inserisce a metà conversazione sono contesto tecnico: le parole del mestiere restano
     environment = "# Environment\nYou are Claude, running inside Claude Code by Anthropic. Use the Bash tool and the Git tool when needed. " * 4
     status, raw = call("/anthropic/v1/messages", {"model": "x", "max_tokens": 100, "messages": [{"role": "system", "content": environment},

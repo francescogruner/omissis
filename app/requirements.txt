@@ -4,6 +4,12 @@ pillow>=11
 lxml>=6
 pypdf>=7
 websocket-client>=1.9
+# richieste compresse degli strumenti da terminale (Codex le manda in zstd): senza, il gateway le ferma
+zstandard>=0.22
+# lettura dei documenti Office per il server MCP (mcp_server.py)
+python-docx>=1.2
+openpyxl>=3.1
+python-pptx>=1.0
 # lettura di scansioni e immagini con il riconoscimento dei caratteri di Windows
 winrt-runtime; sys_platform == "win32"
 winrt-Windows.Foundation; sys_platform == "win32"

@@ -52,6 +52,19 @@ def mark(name, ok, note=""):
     print(("OK   " if ok else "NO   ") + name + (f"  ({note})" if note else ""))
 
 
+def wait_until(condition, timeout=10):
+    """Attende che una condizione letta da qui (un file scritto dal pannello, per esempio) diventi vera."""
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            if condition():
+                return True
+        except (OSError, ValueError):
+            pass
+        time.sleep(0.2)
+    return False
+
+
 def wait(pag, expression, arg=None, timeout=30):
     """Attende che un'espressione diventi vera nella pagina. Non si usa wait_for_function: valuta il testo con eval, che la
     pagina vieta apposta (niente codice che non venga dai suoi file)."""
@@ -181,6 +194,30 @@ def main():
                     cfg.with_name(cfg.name + ".omissis-backup").unlink(missing_ok=True)
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: server MCP registrato e tolto dal pannello, senza toccare gli altri server", False, str(ex)[:160])
+
+                # --- terminale: le righe per Codex in abbonamento, e l'indirizzo di un gateway proprio salvato e tolto
+                try:
+                    stored = lambda: json.loads((paths.DATA / "settings.json").read_text(encoding="utf-8")).get("gateway_upstreams")   # noqa: E731
+                    pag.goto(f"{PANEL}/#/connections/terminal")
+                    pag.wait_for_selector("input[data-own=anthropic]", timeout=15000)
+                    wait(pag, "() => document.querySelectorAll('#gwLines pre').length >= 4", timeout=15)
+                    codex = pag.evaluate("[...document.querySelectorAll('#gwLines pre')].map(p => p.textContent).find(t => t.includes('model_providers')) || ''")
+                    pag.fill("input[data-own=anthropic]", "https://gateway.azienda.example/llm")
+                    pag.click("#ownSave")
+                    saved = wait_until(lambda: stored() == {"anthropic": "https://gateway.azienda.example/llm"})
+                    known = len(errors)
+                    pag.fill("input[data-own=anthropic]", "non-un-indirizzo")
+                    pag.click("#ownSave")
+                    pag.wait_for_timeout(600)
+                    refused = stored() == {"anthropic": "https://gateway.azienda.example/llm"} and len(errors) == known + 1 and "422" in errors[-1]
+                    del errors[known:]   # il rifiuto era voluto: non e' un errore del giro
+                    pag.fill("input[data-own=anthropic]", "")
+                    pag.click("#ownSave")
+                    cleared = wait_until(lambda: stored() == {})
+                    mark(f"{language}: terminale, righe per Codex in abbonamento e gateway proprio salvato, rifiutato se non valido, tolto",
+                         "requires_openai_auth = true" in codex and "/openai/v1" in codex and saved and refused and cleared, f"salvato {saved} · rifiutato {refused} · tolto {cleared}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: terminale, righe per Codex in abbonamento e gateway proprio salvato, rifiutato se non valido, tolto", False, str(ex)[:160])
 
                 # --- testo: incolla -> mascherato e copiato; incolla di nuovo -> valori veri
                 pag.goto(f"{PANEL}/#/text")

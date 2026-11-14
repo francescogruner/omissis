@@ -363,15 +363,45 @@ Su questo PC Codex da terminale e OpenCode usano l'accesso con l'account ChatGPT
 sono coperti**. Codex 0.164 ha un'impostazione per cambiare indirizzo (`openai_base_url`) e comprime
 le richieste con zstd: la strada c'è, ma va provata dal vivo con l'account prima di dichiararla.
 
-Verificato: `e2e_gateway.py` (22 controlli contro un servizio finto) e **due prove dal vivo con
+Verificato: `e2e_gateway.py` (31 controlli contro un servizio finto) e **due prove dal vivo con
 Claude Code** e accesso in abbonamento, con dati inventati. Nella prima un messaggio semplice: 0
 valori in chiaro verso il servizio, risposta tornata con i valori veri. Nella seconda un'azione:
 Claude Code ha scritto un file, sul disco ci sono i valori veri e il servizio ha visto solo
 segnaposto anche nella richiesta successiva, dove l'azione fatta torna nella cronologia. Non ancora
 provato con una sessione di lavoro lunga (molti comandi e file): lì il rischio non è la fuga di dati
 ma un contesto molto mascherato, che può confondere il modello. I nomi degli strumenti dichiarati
-nella richiesta non vengono mai sostituiti. Il formato OpenAI è provato solo con il servizio finto; Codex con accesso
-ChatGPT (non con chiave) parla con un indirizzo diverso e non è coperto.
+nella richiesta non vengono mai sostituiti. Il formato OpenAI è provato solo con il servizio finto.
+
+**Codex con l'accesso di ChatGPT (abbonamento).** Chi usa Codex con l'abbonamento non ha una
+chiave: Codex manda il proprio accesso a un indirizzo di ChatGPT diverso da quello delle chiavi. Il
+gateway lo riconosce da sé (dall'intestazione dell'account, o dal gettone stesso) e inoltra lì,
+con lo stesso formato; le regole applicate sono quelle del servizio ChatGPT. Per farlo passare dal
+gateway si aggiunge un fornitore alla configurazione di Codex (`config.toml` nella cartella
+`.codex`), le righe esatte sono nella sezione Terminale del pannello:
+
+```
+model_provider = "omissis"            # in cima al file, prima di ogni sezione
+
+[model_providers.omissis]             # in fondo al file
+name = "Omissis"
+base_url = "http://127.0.0.1:8767/openai/v1"
+wire_api = "responses"
+requires_openai_auth = true
+```
+
+Vengono sostituiti i messaggi, le modifiche ai file già fatte, i comandi già eseguiti e i loro
+risultati, il riassunto del ragionamento; il ragionamento cifrato viaggia identico. Le richieste
+compresse (Codex le manda in zstd) vengono aperte e controllate; un collegamento WebSocket, che
+non si saprebbe leggere, viene rifiutato e lo strumento ripiega sulle richieste normali.
+**Provato solo con un servizio finto**: dal vivo con Codex non ancora, e la configurazione di
+Codex è condivisa con l'app di ChatGPT, quindi va cambiata quando l'app non sta lavorando.
+
+**Chi ha già un proprio gateway** (aziendale, LiteLLM, OpenRouter…) lo tiene: nella sezione
+Terminale si scrive il suo indirizzo al posto dell'API di Anthropic o di OpenAI, e Omissis gli sta
+davanti: sostituisce i dati e inoltra lì invece che al servizio vero (per gli altri nomi:
+`gateway_upstreams` in `settings.json`). Le credenziali passano così come sono, quindi vanno a
+quell'indirizzo: è una scelta di chi lo scrive. Fa eccezione l'accesso in abbonamento di Codex, che
+va sempre e solo a ChatGPT. Provato solo con un servizio finto.
 
 ## Server MCP: i documenti, dentro le app (sperimentale)
 
@@ -558,7 +588,7 @@ non va copiata né condivisa.
 | Gemini | **sperimentale**: formato scritto a memoria, provato solo su un'imitazione |
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
-| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 22 controlli) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
+| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 31 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
 | Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |
@@ -731,7 +761,7 @@ inventate. Nessuno dei due ha bisogno di qualcosa acceso.
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (50 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (52 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,

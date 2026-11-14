@@ -16,6 +16,7 @@ Se il motore non risponde la richiesta viene fermata (503), mai inoltrata in chi
   .venv\\Scripts\\python.exe gateway.py [--port 8767]         (richiede la protezione attiva)
 """
 import argparse
+import base64
 import gzip
 import http.client
 import json
@@ -42,6 +43,28 @@ JUMP = {"host", "content-length", "connection", "keep-alive", "proxy-connection"
 JUMP_RESPONSE = {"content-length", "connection", "keep-alive", "transfer-encoding", "content-encoding"}
 # modelli che girano su questo PC: i dati non escono, ma si possono far passare lo stesso dal gateway
 LOCAL = {"ollama": ("http://127.0.0.1:11434", "openai", "Ollama"), "lmstudio": ("http://127.0.0.1:1234", "openai", "LM Studio")}
+# dove parla Codex quando l'accesso e' quello di ChatGPT (abbonamento) e non una chiave: stesso formato, altro indirizzo
+CHATGPT_CODEX = "https://chatgpt.com/backend-api/codex"
+
+
+def chatgpt_account(headers):
+    """L'accesso di questa richiesta e' quello di ChatGPT (abbonamento) e non una chiave API?
+    -> (si' o no, identificativo dell'account da aggiungere alle intestazioni se lo strumento non l'ha messo).
+    Lo dice l'intestazione chatgpt-account-id, oppure il gettone stesso, che in quel caso porta l'account al suo interno.
+    La firma non viene controllata: serve solo a scegliere la strada, l'autorizzazione vera la fa il servizio.
+    Nulla di cio' che si legge qui viene scritto o registrato."""
+    if headers.get("chatgpt-account-id"):
+        return True, None
+    scheme, _, token = (headers.get("Authorization") or "").partition(" ")
+    if scheme.lower() != "bearer" or token.count(".") < 2:
+        return False, None
+    piece = token.split(".", 2)[1]
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(piece + "=" * (-len(piece) % 4)).decode("utf-8"))
+        account = claims["https://api.openai.com/auth"]["chatgpt_account_id"]
+    except (ValueError, KeyError, TypeError):
+        return False, None
+    return (True, account.strip()) if isinstance(account, str) and account.strip() else (False, None)
 
 
 def unpack(body, encoding):
@@ -74,6 +97,8 @@ def routes():
             out[name] = ("https://" + s["domains"][0], s["adapter"], s, s["name"])
     for name, (address, adapter, label) in LOCAL.items():
         out[name] = (address, adapter, None, label)
+    # Codex con l'accesso di ChatGPT: le regole sono quelle del servizio ChatGPT, il formato quello dell'API OpenAI
+    out["codex"] = (CHATGPT_CODEX, "openai", catalog.PER_ID.get("chatgpt"), "Codex (ChatGPT)")
     return out
 
 
@@ -176,6 +201,23 @@ class Gateway:
                              % (self.port, ", ".join(sorted(self.routes))))
         address, adapter, service, label = route
         path = "/" + rest
+        more = {}   # intestazioni da aggiungere a quelle dello strumento
+        own = (settings.read().get("gateway_upstreams") or {}).get(name)   # chi ha gia' un proprio gateway lo tiene: Omissis gli sta davanti
+        if name in ("openai", "codex"):
+            subscription, account = chatgpt_account(h.headers)
+            if subscription and name == "openai":
+                # Codex puntato qui con l'accesso di ChatGPT: l'API con le chiavi non lo accetterebbe. Va all'indirizzo
+                # di ChatGPT, che parla lo stesso formato senza il /v1 davanti.
+                address, service, label = CHATGPT_CODEX, catalog.PER_ID.get("chatgpt") or service, "Codex (ChatGPT)"
+                path = path[3:] if path == "/v1" or path.startswith(("/v1/", "/v1?")) else path
+            if subscription:
+                own = None   # l'accesso in abbonamento va soltanto a ChatGPT, mai a un indirizzo scelto da altri
+                if account:
+                    more["ChatGPT-Account-ID"] = account
+        if name == "codex":
+            own = None
+        if own:
+            address = own
         policy = settings.policy(service) if service else "protect"
         who = service["id"] if service else name
         if policy == "block":
@@ -186,6 +228,12 @@ class Gateway:
         if service and policy != "ignore":
             self.reg.contact(service["id"], service["domains"][0], "guarded" if policy == "protect" else "not_protected")
 
+        if "websocket" in h.headers.get("Upgrade", "").lower():
+            # Un collegamento WebSocket non si saprebbe leggere: passerebbe senza controllo. Lo strumento ripiega sulle richieste normali.
+            self.reg.write(service=who, via="gateway", method=h.command, path=activity.clean_path(path), event="websocket_refused",
+                           client=activity.client_from_ua(h.headers.get("User-Agent", "")))
+            self.counts["blocked"] += 1
+            return h._error(426, "collegamento WebSocket non gestito: lo strumento deve usare le richieste normali (HTTP)")
         if h.headers.get("Transfer-Encoding", "").lower() == "chunked":
             return h._error(411, "richiesta senza lunghezza dichiarata: non gestita")
         length = int(h.headers.get("Content-Length") or 0)
@@ -254,13 +302,20 @@ class Gateway:
                         self.reg.write(**entry, event="no_text_field", structure=activity.shape(parsed))
 
         # ---- inoltro al servizio vero
-        u = urllib.parse.urlsplit(self.upstream or address)
+        u = urllib.parse.urlsplit(address)
+        if self.upstream:   # prove: stesso percorso, ma verso il servizio finto
+            fake = urllib.parse.urlsplit(self.upstream)
+            u = u._replace(scheme=fake.scheme, netloc=fake.netloc)
+        base = u.path.rstrip("/")
+        if base.endswith("/v1") and (path == "/v1" or path.startswith(("/v1/", "/v1?"))):
+            base = base[:-3]   # un indirizzo proprio scritto con /v1 in fondo: non va ripetuto
         Cls = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
         conn = Cls(u.hostname, u.port, timeout=900)
         headers = {k: v for k, v in h.headers.items() if k.lower() not in JUMP and not (ad is not None and packed and k.lower() == "content-encoding")}
         headers["Accept-Encoding"] = "identity"   # la risposta va letta e riscritta mentre arriva
+        headers.update(more)
         try:
-            conn.request(h.command, u.path.rstrip("/") + path, body=body or None, headers=headers)
+            conn.request(h.command, base + path, body=body or None, headers=headers)
             response = conn.getresponse()
         except Exception as ex:   # noqa: BLE001
             conn.close()
