@@ -34,9 +34,9 @@ import i18n
 import paths
 import restore as R
 
-QUI = Path(__file__).resolve().parent
-MOTORE = f"http://127.0.0.1:{paths.PORTA_MOTORE}"
-TESTO = {".txt", ".md", ".csv", ".tsv", ".json", ".log", ".xml", ".html", ".htm", ".eml", ".yaml", ".yml", ".ini", ".sql",
+HERE = Path(__file__).resolve().parent
+ENGINE = f"http://127.0.0.1:{paths.ENGINE_PORT}"
+TEXT = {".txt", ".md", ".csv", ".tsv", ".json", ".log", ".xml", ".html", ".htm", ".eml", ".yaml", ".yml", ".ini", ".sql",
          ".rtf", ".srt", ".vtt", ".tex", ".py", ".js", ".ts", ".ps1", ".sh", ".bat", ".cfg", ".conf", ".toml"}
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 A = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -50,95 +50,95 @@ OFFICE = {
               (r"xl/comments\d*\.xml", f"{{{S}}}comment", (f"{{{S}}}t",))],
 }
 # parti comuni a tutti i formati: grafici (etichette e valori memorizzati) e disegni
-COMUNI = [(r"(word|ppt|xl)/(charts/chart\d+|diagrams/data\d+|drawings/drawing\d+)\.xml", None, None)]
-PROPRIETA = {"creator", "lastModifiedBy", "Company", "Manager"}
-IMMAGINI = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}   # lette con il riconoscimento dei caratteri: ne esce un file di testo
-COPERTI = TESTO | set(OFFICE) | {".pdf"} | IMMAGINI
+COMMON = [(r"(word|ppt|xl)/(charts/chart\d+|diagrams/data\d+|drawings/drawing\d+)\.xml", None, None)]
+PROPERTIES = {"creator", "lastModifiedBy", "Company", "Manager"}
+IMAGES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}   # lette con il riconoscimento dei caratteri: ne esce un file di testo
+COVERED = TEXT | set(OFFICE) | {".pdf"} | IMAGES
 
 
-class Errore(Exception):
+class Error(Exception):
     """codice: il perche' in una parola (protezione | senza_testo | formato), per chi deve decidere cosa fare del file."""
 
-    def __init__(self, messaggio, codice=""):
-        super().__init__(messaggio)
-        self.codice = codice
+    def __init__(self, message, code=""):
+        super().__init__(message)
+        self.code = code
 
 
-def motore(percorso, dati):
-    token = (paths.DATI / "token.txt").read_text(encoding="utf-8").strip()
-    rich = urllib.request.Request(MOTORE + percorso, data=json.dumps(dati).encode("utf-8"),
+def engine(path, data):
+    token = (paths.DATA / "token.txt").read_text(encoding="utf-8").strip()
+    req = urllib.request.Request(ENGINE + path, data=json.dumps(data).encode("utf-8"),
                                   headers={"Content-Type": "application/json", "X-Token": token})
     try:
-        with urllib.request.urlopen(rich, timeout=300) as r:
+        with urllib.request.urlopen(req, timeout=300) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.URLError as ex:
-        raise Errore(i18n.t("programma.protezione_non_attiva"), "protezione") from ex
+        raise Error(i18n.t("program.protection_not_active"), "protection") from ex
 
 
-def applica(segmenti, posizioni):
+def apply(segments, positions):
     """Riporta le sostituzioni [inizio, fine, nuovo] (riferite al testo unito) dentro i singoli pezzi:
     il nuovo testo va nel primo pezzo toccato, gli altri perdono solo i caratteri coperti."""
-    out, inizi, n = list(segmenti), [], 0
-    for s in segmenti:
-        inizi.append(n)
+    out, starts, n = list(segments), [], 0
+    for s in segments:
+        starts.append(n)
         n += len(s)
-    for ini, fine, nuovo in sorted(posizioni, reverse=True):
-        i = max(k for k, x in enumerate(inizi) if x <= ini)
-        j = max(k for k, x in enumerate(inizi) if x < fine) if fine > ini else i
+    for ini, end, fresh in sorted(positions, reverse=True):
+        i = max(k for k, x in enumerate(starts) if x <= ini)
+        j = max(k for k, x in enumerate(starts) if x < end) if end > ini else i
         if i == j:
-            out[i] = out[i][:ini - inizi[i]] + nuovo + out[i][fine - inizi[i]:]
+            out[i] = out[i][:ini - starts[i]] + fresh + out[i][end - starts[i]:]
         else:
-            out[j] = out[j][fine - inizi[j]:]
+            out[j] = out[j][end - starts[j]:]
             for k in range(i + 1, j):
                 out[k] = ""
-            out[i] = out[i][:ini - inizi[i]] + nuovo
+            out[i] = out[i][:ini - starts[i]] + fresh
     return out
 
 
-class Lavoro:
+class Work:
     """Una passata di anonimizzazione o di ripristino: raccoglie i conteggi."""
 
-    def __init__(self, azione):
-        self.azione, self.conteggi, self.cache = azione, {}, {}
+    def __init__(self, action):
+        self.action, self.counts, self.cache = action, {}, {}
 
-    def posizioni(self, testi):
+    def positions(self, texts):
         """Per ogni testo le sostituzioni da fare: [[inizio, fine, nuovo], ...]."""
-        if self.azione == "anonimizza":
+        if self.action == "anonymize":
             out = []
-            for k in range(0, len(testi), 150):
-                r = motore("/mask", {"testi": testi[k:k + 150]})
-                out += r["posizioni"]
-                for e, n in r["conteggi"].items():
-                    self.conteggi[e] = self.conteggi.get(e, 0) + n
+            for k in range(0, len(texts), 150):
+                r = engine("/mask", {"texts": texts[k:k + 150]})
+                out += r["positions"]
+                for e, n in r["counts"].items():
+                    self.counts[e] = self.counts.get(e, 0) + n
             return out
-        trovati = [[(m.start(), m.end(), m.group()) for m in R.RX_SEGNAPOSTO.finditer(t)] for t in testi]
-        mancanti = sorted({seg for riga in trovati for _, _, seg in riga} - set(self.cache))
-        for k in range(0, len(mancanti), 500):
-            self.cache.update(motore("/values", {"segnaposto": mancanti[k:k + 500]})["mappa"])
+        found_items = [[(m.start(), m.end(), m.group()) for m in R.RX_PLACEHOLDER.finditer(t)] for t in texts]
+        missing = sorted({seg for line in found_items for _, _, seg in line} - set(self.cache))
+        for k in range(0, len(missing), 500):
+            self.cache.update(engine("/values", {"placeholder": missing[k:k + 500]})["mapping"])
         out = []
-        for riga in trovati:
-            buoni = [[s, e, self.cache[seg]] for s, e, seg in riga if seg in self.cache]
-            self.conteggi["ripristinati"] = self.conteggi.get("ripristinati", 0) + len(buoni)
-            self.conteggi["sconosciuti"] = self.conteggi.get("sconosciuti", 0) + len(riga) - len(buoni)
-            out.append(buoni)
+        for line in found_items:
+            good = [[s, e, self.cache[seg]] for s, e, seg in line if seg in self.cache]
+            self.counts["restored"] = self.counts.get("restored", 0) + len(good)
+            self.counts["unknown"] = self.counts.get("unknown", 0) + len(line) - len(good)
+            out.append(good)
         return out
 
-    def testo(self, t):
+    def text(self, t):
         """Testo semplice, a blocchi di righe per non mandare tutto in un colpo solo."""
-        blocchi, cur = [], ""
-        for riga in t.splitlines(keepends=True):
-            if len(cur) + len(riga) > 3000 and cur:
-                blocchi.append(cur)
+        blocks, cur = [], ""
+        for line in t.splitlines(keepends=True):
+            if len(cur) + len(line) > 3000 and cur:
+                blocks.append(cur)
                 cur = ""
-            cur += riga
-        blocchi.append(cur)
-        return "".join("".join(applica([b], p)) for b, p in zip(blocchi, self.posizioni(blocchi)))
+            cur += line
+        blocks.append(cur)
+        return "".join("".join(apply([b], p)) for b, p in zip(blocks, self.positions(blocks)))
 
-    def autori(self, radice):
+    def authors(self, root):
         """Nomi di chi ha scritto revisioni e commenti: stanno negli attributi, non nel testo. Non ripristinabili."""
-        if self.azione != "anonimizza":
+        if self.action != "anonymize":
             return
-        for n in radice.iter():
+        for n in root.iter():
             if not isinstance(n.tag, str):
                 continue
             locale = etree.QName(n).localname
@@ -146,193 +146,193 @@ class Lavoro:
                 a = etree.QName(attr).localname
                 if a in ("author", "userId", "displayName", "initials") or (a == "name" and locale in ("cmAuthor", "author", "person")):
                     n.set(attr, "A" if a == "initials" else "Autore")
-                    self.conteggi["autori di revisioni e commenti rimossi"] = self.conteggi.get("autori di revisioni e commenti rimossi", 0) + (a != "initials")
+                    self.counts["autori di revisioni e commenti rimossi"] = self.counts.get("autori di revisioni e commenti rimossi", 0) + (a != "initials")
             if locale == "author" and n.text and n.text.strip() and len(n) == 0:   # elenco degli autori dei commenti in Excel
                 n.text = "Autore"
-                self.conteggi["autori di revisioni e commenti rimossi"] = self.conteggi.get("autori di revisioni e commenti rimossi", 0) + 1
+                self.counts["autori di revisioni e commenti rimossi"] = self.counts.get("autori di revisioni e commenti rimossi", 0) + 1
 
-    def xml(self, dati, paragrafo, portatori):
-        radice = etree.fromstring(dati)
-        self.autori(radice)
-        if paragrafo is None:   # parte senza struttura nota: ogni nodo di testo per conto suo
-            gruppi = [[n] for n in radice.iter() if isinstance(n.tag, str) and n.text and n.text.strip() and len(n) == 0]
+    def xml(self, data, paragraph, carriers):
+        root = etree.fromstring(data)
+        self.authors(root)
+        if paragraph is None:   # parte senza struttura nota: ogni nodo di testo per conto suo
+            groups = [[n] for n in root.iter() if isinstance(n.tag, str) and n.text and n.text.strip() and len(n) == 0]
         else:                   # ogni pezzo di testo va con il paragrafo piu' vicino che lo contiene (le caselle
             per = {}            # di testo sono paragrafi dentro paragrafi: cosi' nessun pezzo e' trattato due volte)
-            for n in radice.iter(*portatori):
+            for n in root.iter(*carriers):
                 if n.text:
                     p = n.getparent()
-                    while p is not None and p.tag != paragrafo:
+                    while p is not None and p.tag != paragraph:
                         p = p.getparent()
                     per.setdefault(p, []).append(n)
-            gruppi = list(per.values())
-        gruppi = [g for g in gruppi if "".join(n.text for n in g).strip()]
-        for g, pos in zip(gruppi, self.posizioni(["".join(n.text for n in g) for g in gruppi])):
+            groups = list(per.values())
+        groups = [g for g in groups if "".join(n.text for n in g).strip()]
+        for g, pos in zip(groups, self.positions(["".join(n.text for n in g) for g in groups])):
             if pos:
-                for n, nuovo in zip(g, applica([n.text for n in g], pos)):
-                    n.text = nuovo
+                for n, fresh in zip(g, apply([n.text for n in g], pos)):
+                    n.text = fresh
                     n.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-        return etree.tostring(radice, xml_declaration=True, encoding="UTF-8", standalone=True)
+        return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
-    def collegamenti(self, dati):
+    def connections(self, data):
         """Collegamenti verso l'esterno (siti, mailto): se contengono un dato sensibile vengono neutralizzati.
         Non sono ripristinabili: nel documento resta il testo del collegamento, non la sua destinazione."""
-        radice = etree.fromstring(dati)
-        esterni = [n for n in radice if n.get("TargetMode") == "External" and n.get("Target")]
-        if not esterni:
-            return dati
-        testi = [urllib.parse.unquote(n.get("Target")) for n in esterni]
-        for n, pos in zip(esterni, self.posizioni(testi)):
+        root = etree.fromstring(data)
+        external = [n for n in root if n.get("TargetMode") == "External" and n.get("Target")]
+        if not external:
+            return data
+        texts = [urllib.parse.unquote(n.get("Target")) for n in external]
+        for n, pos in zip(external, self.positions(texts)):
             if pos:
                 n.set("Target", "https://collegamento-rimosso.invalid/")
-                self.conteggi["collegamenti neutralizzati"] = self.conteggi.get("collegamenti neutralizzati", 0) + 1
-        return etree.tostring(radice, xml_declaration=True, encoding="UTF-8", standalone=True)
+                self.counts["collegamenti neutralizzati"] = self.counts.get("collegamenti neutralizzati", 0) + 1
+        return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
-    def office(self, dati, est):
-        entrata, uscita = zipfile.ZipFile(io.BytesIO(dati)), io.BytesIO()
-        with zipfile.ZipFile(uscita, "w", zipfile.ZIP_DEFLATED) as z:
-            for voce in entrata.infolist():
-                contenuto = entrata.read(voce.filename)
-                incorporato = re.search(r"/embeddings/[^/]+(\.docx|\.xlsx|\.pptx)$", voce.filename.lower())
-                for modello, paragrafo, portatori in OFFICE[est] + COMUNI:
-                    if re.fullmatch(modello, voce.filename):
-                        contenuto = self.xml(contenuto, paragrafo, portatori)
+    def office(self, data, est):
+        inbound_item, output = zipfile.ZipFile(io.BytesIO(data)), io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as z:
+            for entry in inbound_item.infolist():
+                content = inbound_item.read(entry.filename)
+                embedded = re.search(r"/embeddings/[^/]+(\.docx|\.xlsx|\.pptx)$", entry.filename.lower())
+                for model, paragraph, carriers in OFFICE[est] + COMMON:
+                    if re.fullmatch(model, entry.filename):
+                        content = self.xml(content, paragraph, carriers)
                         break
                 else:
-                    if incorporato:                       # un foglio o un documento dentro il documento
-                        contenuto = self.office(contenuto, incorporato.group(1))
-                    elif voce.filename.endswith(".rels") and self.azione == "anonimizza":
-                        contenuto = self.collegamenti(contenuto)
-                    elif self.azione == "anonimizza" and re.fullmatch(
-                            r"(word/people|ppt/commentAuthors|ppt/authors|xl/persons/[^/]+|xl/threadedComments/[^/]+)\.xml", voce.filename):
-                        radice = etree.fromstring(contenuto)
-                        self.autori(radice)
-                        contenuto = etree.tostring(radice, xml_declaration=True, encoding="UTF-8", standalone=True)
-                    if self.azione == "anonimizza" and voce.filename in ("docProps/core.xml", "docProps/app.xml"):
-                        radice = etree.fromstring(contenuto)
-                        for n in radice.iter():
-                            if isinstance(n.tag, str) and etree.QName(n).localname in PROPRIETA and n.text:
+                    if embedded:                       # un foglio o un documento dentro il documento
+                        content = self.office(content, embedded.group(1))
+                    elif entry.filename.endswith(".rels") and self.action == "anonymize":
+                        content = self.connections(content)
+                    elif self.action == "anonymize" and re.fullmatch(
+                            r"(word/people|ppt/commentAuthors|ppt/authors|xl/persons/[^/]+|xl/threadedComments/[^/]+)\.xml", entry.filename):
+                        root = etree.fromstring(content)
+                        self.authors(root)
+                        content = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+                    if self.action == "anonymize" and entry.filename in ("docProps/core.xml", "docProps/app.xml"):
+                        root = etree.fromstring(content)
+                        for n in root.iter():
+                            if isinstance(n.tag, str) and etree.QName(n).localname in PROPERTIES and n.text:
                                 n.text = ""
-                                self.conteggi["proprietà del file svuotate"] = self.conteggi.get("proprietà del file svuotate", 0) + 1
-                        contenuto = etree.tostring(radice, xml_declaration=True, encoding="UTF-8", standalone=True)
-                z.writestr(voce, contenuto)
-        return uscita.getvalue()
+                                self.counts["proprietà del file svuotate"] = self.counts.get("proprietà del file svuotate", 0) + 1
+                        content = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+                z.writestr(entry, content)
+        return output.getvalue()
 
-    def pdf(self, dati):
+    def pdf(self, data):
         from pypdf import PdfReader
-        pagine = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(dati)).pages]
-        if sum(len(p.strip()) for p in pagine) < 20:   # scansione: le pagine sono immagini
-            pagine = self._letto(lambda: ocr.pdf(dati), "PDF senza testo (scansione)")
-        return "\n\n".join(f"--- pagina {i + 1} ---\n{self.testo(p)}" for i, p in enumerate(pagine)).encode("utf-8")
+        pages = [(p.extract_text() or "") for p in PdfReader(io.BytesIO(data)).pages]
+        if sum(len(p.strip()) for p in pages) < 20:   # scansione: le pagine sono immagini
+            pages = self._read_back(lambda: ocr.pdf(data), "PDF senza testo (scansione)")
+        return "\n\n".join(f"--- pagina {i + 1} ---\n{self.text(p)}" for i, p in enumerate(pages)).encode("utf-8")
 
-    def immagine(self, dati):
-        return self.testo(self._letto(lambda: [ocr.immagine(dati)], "immagine")[0]).encode("utf-8")
+    def image(self, data):
+        return self.text(self._read_back(lambda: [ocr.image(data)], "image")[0]).encode("utf-8")
 
-    def _letto(self, leggi, cosa):
+    def _read_back(self, read, what):
         """Testo ricavato con il riconoscimento dei caratteri. Puo' contenere errori di lettura (una I letta come 1),
         quindi il risultato va riletto: lo segnala anche il resoconto."""
         try:
-            pagine = leggi()
-        except ocr.NonDisponibile as ex:
-            raise Errore(f"{cosa}: {ex}") from ex
+            pages = read()
+        except ocr.Unavailable as ex:
+            raise Error(f"{what}: {ex}") from ex
         except Exception as ex:   # noqa: BLE001
-            raise Errore(i18n.t("documenti.errore.lettura", cosa=cosa, motivo=type(ex).__name__)) from ex
-        if sum(len(p.strip()) for p in pagine) < 10:
-            raise Errore(i18n.t("documenti.errore.senza_testo", cosa=cosa), "senza_testo")
-        self.conteggi["pagine_lette"] = self.conteggi.get("pagine_lette", 0) + len(pagine)   # lette dall'immagine: da rileggere
-        return pagine
+            raise Error(i18n.t("documents.error.reading", what=what, reason=type(ex).__name__)) from ex
+        if sum(len(p.strip()) for p in pages) < 10:
+            raise Error(i18n.t("documents.error.without_text", what=what), "without_text")
+        self.counts["pages_read"] = self.counts.get("pages_read", 0) + len(pages)   # lette dall'immagine: da rileggere
+        return pages
 
 
-def nome_uscita(nome, azione):
+def output_name(name, action):
     """nome.docx -> nome.anon.docx ; nome.anon.docx -> nome.ripristinato.docx ; il PDF diventa testo."""
-    p = Path(nome)
+    p = Path(name)
     base, est = p.stem, p.suffix.lower()
-    if azione == "ripristina":
+    if action == "restore":
         base = re.sub(r"\.anon$", "", base)
-    return f"{base}.{'anon' if azione == 'anonimizza' else 'ripristinato'}{'.txt' if est == '.pdf' or est in IMMAGINI else p.suffix}"
+    return f"{base}.{'anon' if action == 'anonymize' else 'restored'}{'.txt' if est == '.pdf' or est in IMAGES else p.suffix}"
 
 
-def elabora(nome, dati, azione):
+def work_on(name, data, action):
     """(nome del file in uscita, contenuto, conteggi). Solleva Errore se il formato non e' coperto."""
-    est, lavoro = Path(nome).suffix.lower(), Lavoro(azione)
+    est, work = Path(name).suffix.lower(), Work(action)
     if est in OFFICE:
         try:
-            nuovo = lavoro.office(dati, est)
+            fresh = work.office(data, est)
         except (zipfile.BadZipFile, etree.XMLSyntaxError) as ex:
-            raise Errore(i18n.t("documenti.errore.office")) from ex
+            raise Error(i18n.t("documents.error.office")) from ex
     elif est == ".pdf":
-        if azione == "ripristina":
-            raise Errore(i18n.t("documenti.errore.pdf_ripristino"))
-        nuovo = lavoro.pdf(dati)
-    elif est in IMMAGINI:
-        if azione == "ripristina":
-            raise Errore(i18n.t("documenti.errore.immagine_ripristino"))
-        nuovo = lavoro.immagine(dati)
-    elif est in TESTO:
+        if action == "restore":
+            raise Error(i18n.t("documents.error.pdf_restoring"))
+        fresh = work.pdf(data)
+    elif est in IMAGES:
+        if action == "restore":
+            raise Error(i18n.t("documents.error.image_restoring"))
+        fresh = work.image(data)
+    elif est in TEXT:
         try:
-            testo, cod = dati.decode("utf-8-sig"), "utf-8"
+            text, cod = data.decode("utf-8-sig"), "utf-8"
         except UnicodeDecodeError:
-            testo, cod = dati.decode("cp1252", errors="replace"), "cp1252"
-        nuovo = lavoro.testo(testo).encode(cod, errors="replace")
+            text, cod = data.decode("cp1252", errors="replace"), "cp1252"
+        fresh = work.text(text).encode(cod, errors="replace")
     else:
-        raise Errore(i18n.t("documenti.errore.formato", formato=est or i18n.t("documenti.errore.senza_estensione")), "formato")
-    return nome_uscita(nome, azione), nuovo, lavoro.conteggi
+        raise Error(i18n.t("documents.error.fmt", fmt=est or i18n.t("documents.error.without_extension")), "fmt")
+    return output_name(name, action), fresh, work.counts
 
 
-def elabora_auto(nome, dati, azione="auto"):
+def work_on_auto(name, data, action="auto"):
     """Come elabora, ma con azione "auto" decide da se': un file che contiene segnaposto presenti nell'archivio
     viene ripristinato, ogni altro anonimizzato. Restituisce (azione fatta, nome in uscita, contenuto, conteggi)."""
-    if azione == "auto":
-        est = Path(nome).suffix.lower()
-        if est in OFFICE or est in TESTO:
+    if action == "auto":
+        est = Path(name).suffix.lower()
+        if est in OFFICE or est in TEXT:
             try:
-                uscita, nuovo, conteggi = elabora(nome, dati, "ripristina")
-                if conteggi.get("ripristinati"):
-                    return "ripristina", uscita, nuovo, conteggi
-            except Errore:   # illeggibile o protezione ferma: lo dira' il tentativo qui sotto
+                output, fresh, counts = work_on(name, data, "restore")
+                if counts.get("restored"):
+                    return "restore", output, fresh, counts
+            except Error:   # illeggibile o protezione ferma: lo dira' il tentativo qui sotto
                 pass
-        azione = "anonimizza"
-    return (azione, *elabora(nome, dati, azione))
+        action = "anonymize"
+    return (action, *work_on(name, data, action))
 
 
-def percorso(dove, azione):
+def path(where, action):
     """Elabora un file oppure una cartella intera. Restituisce il resoconto, file per file."""
-    p = Path(dove.strip().strip('"'))
+    p = Path(where.strip().strip('"'))
     if not p.exists():
-        raise Errore(i18n.t("documenti.errore.percorso"))
-    suffisso = ".anon" if azione == "anonimizza" else ".ripristinato"
+        raise Error(i18n.t("documents.error.path"))
+    suffix = ".anon" if action == "anonymize" else ".restored"
     if p.is_file():
-        coppie, radice = [(p, p.parent / nome_uscita(p.name, azione))], p.parent
-        destinazione = coppie[0][1]
+        pairs, root = [(p, p.parent / output_name(p.name, action))], p.parent
+        destination = pairs[0][1]
     else:
-        base = re.sub(r"\.anon$", "", p.name) if azione == "ripristina" else p.name
-        destinazione = radice = p.parent / (base + suffisso)
-        coppie = [(f, radice / f.relative_to(p).parent / nome_uscita(f.name, azione)) for f in sorted(p.rglob("*")) if f.is_file()]
-    fatti, saltati, totale = [], [], {}
-    for origine, uscita in coppie:
+        base = re.sub(r"\.anon$", "", p.name) if action == "restore" else p.name
+        destination = root = p.parent / (base + suffix)
+        pairs = [(f, root / f.relative_to(p).parent / output_name(f.name, action)) for f in sorted(p.rglob("*")) if f.is_file()]
+    completed, skipped, total = [], [], {}
+    for origin, output in pairs:
         try:
-            if origine.stat().st_size > 60_000_000:
-                raise Errore(i18n.t("documenti.errore.grande"))
-            _, nuovo, conteggi = elabora(origine.name, origine.read_bytes(), azione)
-            uscita.parent.mkdir(parents=True, exist_ok=True)
-            uscita.write_bytes(nuovo)
-            fatti.append({"file": str(origine.relative_to(p) if p.is_dir() else origine.name), "uscita": uscita.name, "conteggi": conteggi})
-            for k, n in conteggi.items():
-                totale[k] = totale.get(k, 0) + n
-        except Errore as ex:
-            saltati.append({"file": str(origine.relative_to(p) if p.is_dir() else origine.name), "motivo": str(ex)})
-    return {"destinazione": str(destinazione), "fatti": fatti, "saltati": saltati, "conteggi": totale}
+            if origin.stat().st_size > 60_000_000:
+                raise Error(i18n.t("documents.error.large"))
+            _, fresh, counts = work_on(origin.name, origin.read_bytes(), action)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(fresh)
+            completed.append({"file": str(origin.relative_to(p) if p.is_dir() else origin.name), "output": output.name, "counts": counts})
+            for k, n in counts.items():
+                total[k] = total.get(k, 0) + n
+        except Error as ex:
+            skipped.append({"file": str(origin.relative_to(p) if p.is_dir() else origin.name), "reason": str(ex)})
+    return {"destination": str(destination), "completed": completed, "skipped": skipped, "counts": total}
 
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
-    if len(sys.argv) != 3 or sys.argv[1] not in ("anonimizza", "ripristina"):
+    if len(sys.argv) != 3 or sys.argv[1] not in ("anonymize", "restore"):
         sys.exit(__doc__)
     try:
-        r = percorso(sys.argv[2], sys.argv[1])
-    except Errore as ex:
+        r = path(sys.argv[2], sys.argv[1])
+    except Error as ex:
         sys.exit(str(ex))
-    print(f"{len(r['fatti'])} file elaborati, {len(r['saltati'])} saltati -> {r['destinazione']}")
-    for f in r["fatti"]:
-        print(f"  {f['file']} -> {f['uscita']}  {f['conteggi']}")
-    for f in r["saltati"]:
-        print(f"  SALTATO {f['file']}: {f['motivo']}")
+    print(f"{len(r['completed'])} file elaborati, {len(r['skipped'])} saltati -> {r['destination']}")
+    for f in r["completed"]:
+        print(f"  {f['file']} -> {f['output']}  {f['counts']}")
+    for f in r["skipped"]:
+        print(f"  SALTATO {f['file']}: {f['reason']}")

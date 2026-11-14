@@ -20,54 +20,54 @@ import os
 import sys
 from pathlib import Path
 
-QUI = Path(__file__).resolve().parent
-RADICE = QUI.parent
-MODELLO_PREDEFINITO = "omissis-base"
-PORTA_MOTORE = int(os.environ.get("OMISSIS_PORT") or 8765)
-PORTA_PANNELLO, PORTA_GATEWAY = PORTA_MOTORE + 1, PORTA_MOTORE + 2
-_NOMI_VECCHI = {"v3-base": "omissis-base", "v3-small": "omissis-small"}
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+DEFAULT_MODEL = "omissis-base"
+ENGINE_PORT = int(os.environ.get("OMISSIS_PORT") or 8765)
+PANEL_PORT, GATEWAY_PORT = ENGINE_PORT + 1, ENGINE_PORT + 2
+_OLD_NAMES = {"v3-base": "omissis-base", "v3-small": "omissis-small"}
 
 
-def _installata():
+def _installed():
     try:
-        return json.loads((RADICE / "installed.json").read_text(encoding="utf-8"))
+        return json.loads((ROOT / "installed.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
 
-INSTALLATA = _installata()   # None = copia lanciata dai sorgenti; altrimenti {"versione": ..., "canale": "github" | "store"}
+INSTALLED = _installed()   # None = copia lanciata dai sorgenti; altrimenti {"versione": ..., "canale": "github" | "store"}
 
 
-def _dati():
+def _data():
     if os.environ.get("OMISSIS_DATA"):
         return Path(os.environ["OMISSIS_DATA"])
-    if INSTALLATA is not None:
+    if INSTALLED is not None:
         return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "Omissis"
-    return QUI / "data"
+    return HERE / "data"
 
 
-DATI = _dati()
+DATA = _data()
 
 
-def liste():
+def lists():
     """Le liste personali (never.txt, always.txt): dell'utente, quindi fuori dalla cartella del programma se installato."""
     if os.environ.get("OMISSIS_LISTS"):
         return Path(os.environ["OMISSIS_LISTS"])
-    return DATI / "lists" if INSTALLATA is not None else cartella_modello() / "lists"
+    return DATA / "lists" if INSTALLED is not None else model_folder() / "lists"
 
 
-def cartella_modello():
+def model_folder():
     """La cartella con inference.py, le liste e i pesi."""
-    for nome in ("model", "msp-pii"):
-        if (RADICE / nome / "inference.py").exists():
-            return RADICE / nome
-    return RADICE / "model"
+    for name in ("model", "msp-pii"):
+        if (ROOT / name / "inference.py").exists():
+            return ROOT / name
+    return ROOT / "model"
 
 
-def python_modello():
-    scelti = [os.environ.get("OMISSIS_PYTHON"), cartella_modello() / ".venv" / "Scripts" / "python.exe",
-              cartella_modello() / ".venv" / "bin" / "python", RADICE / "benchmark" / ".venv" / "Scripts" / "python.exe"]
-    for p in scelti:
+def python_model():
+    chosen = [os.environ.get("OMISSIS_PYTHON"), model_folder() / ".venv" / "Scripts" / "python.exe",
+              model_folder() / ".venv" / "bin" / "python", ROOT / "benchmark" / ".venv" / "Scripts" / "python.exe"]
+    for p in chosen:
         if p and Path(p).exists():
             return Path(p)
     return Path(sys.executable)
@@ -76,25 +76,25 @@ def python_modello():
 def mitmdump():
     """Il comando che avvia il proxy: l'eseguibile accanto all'interprete in uso (o in .venv); dove non c'e', come
     nella copia installata che porta con se' il proprio Python, lo stesso programma chiamato dall'interprete."""
-    for cartella in (Path(sys.executable).parent, QUI / ".venv" / "Scripts", QUI / ".venv" / "bin"):
-        for nome in ("mitmdump.exe", "mitmdump"):
-            if (cartella / nome).exists():
-                return [str(cartella / nome)]
+    for folder in (Path(sys.executable).parent, HERE / ".venv" / "Scripts", HERE / ".venv" / "bin"):
+        for name in ("mitmdump.exe", "mitmdump"):
+            if (folder / name).exists():
+                return [str(folder / name)]
     return [sys.executable, "-c", "from mitmproxy.tools.main import mitmdump; mitmdump()"]
 
 
-def browser_di_prova():
+def test_browser():
     """Il Chromium scaricato da Playwright per le prove (None se non c'e')."""
-    base = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or QUI / ".playwright")
+    base = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or HERE / ".playwright")
     return next(base.glob("chromium-*/chrome-win64/chrome.exe"), None)
 
 
-def modello(nome):
+def model(name):
     """Cartella dei pesi: un percorso completo, oppure il nome di un modello dentro <cartella del modello>\\modelli."""
-    if Path(nome).is_dir():
-        return Path(nome)
-    nome = _NOMI_VECCHI.get(nome, nome)
-    scaricato, accanto = DATI / "models" / nome, cartella_modello() / "models" / nome
-    if INSTALLATA is not None or (scaricato.is_dir() and not accanto.is_dir()):
-        return scaricato   # quelli scaricati dal programma stanno tra i dati
-    return accanto
+    if Path(name).is_dir():
+        return Path(name)
+    name = _OLD_NAMES.get(name, name)
+    downloaded, beside = DATA / "models" / name, model_folder() / "models" / name
+    if INSTALLED is not None or (downloaded.is_dir() and not beside.is_dir()):
+        return downloaded   # quelli scaricati dal programma stanno tra i dati
+    return beside

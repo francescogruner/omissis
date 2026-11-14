@@ -1,38 +1,38 @@
 // Omissis — finestrella dell'icona. Le frasi stanno in _locales/<lingua>/messages.json (la lingua è quella del browser).
 const el = id => document.getElementById(id);
-const T = (chiave, ...valori) => chrome.i18n.getMessage(chiave, valori.map(String)) || chiave;
+const T = (key, ...values) => chrome.i18n.getMessage(key, values.map(String)) || key;
 
 document.documentElement.lang = chrome.i18n.getUILanguage();
 for (const e of document.querySelectorAll('[data-t]')) e.textContent = T(e.dataset.t);
-for (const e of document.querySelectorAll('[data-nome]')) { e.setAttribute('aria-label', T(e.dataset.nome)); e.placeholder = T(e.dataset.nome); }
+for (const e of document.querySelectorAll('[data-name]')) { e.setAttribute('aria-label', T(e.dataset.name)); e.placeholder = T(e.dataset.name); }
 
-async function mostra() {
-  const d = await chrome.runtime.sendMessage({t: 'finestra'});
-  const guasto = !d.collegata ? T('guasto_non_collegata')
-    : !d.salute.ok ? T(d.salute.motivo === 'codice non valido' ? 'guasto_codice' : 'guasto_programma') : '';
-  const stato = guasto ? 'non_attiva' : d.sospesa ? 'sospesa' : 'attiva';
-  el('titolo').dataset.stato = stato;   // il codice dello stato, uguale in ogni lingua (lo leggono le prove)
-  el('titoloTesto').textContent = T('stato_' + stato);
-  el('guasto').hidden = !guasto;
-  el('guasto').textContent = guasto;
-  el('collegamento').hidden = d.collegata && d.salute.motivo !== 'codice non valido';
-  el('servizio').textContent = d.servizio ? d.servizio.nome : d.host ? T('sito_fuori_catalogo') : '—';
-  const pol = d.servizio ? (d.servizio.politica === 'proteggi' && !d.servizio.leggibile ? 'registra' : d.servizio.politica) : null;
-  el('politica').textContent = !pol ? '—' : pol === 'proteggi' && d.sospesa ? T('politica_sospeso', T('politica_proteggi')) : T('politica_' + pol);
-  const c = d.conteggi || {messaggi: 0, sostituzioni: 0, bloccate: 0};
-  for (const k of ['messaggi', 'sostituzioni', 'bloccate']) el(k).textContent = c[k];
-  el('avvisi').checked = d.avvisi;
-  el('sospesa').checked = d.sospesa;
-  el('versione').textContent = T('versione', d.versione);
+async function show() {
+  const d = await chrome.runtime.sendMessage({t: 'win'});
+  const fault = !d.connected ? T('fault_not_connected')
+    : !d.health.ok ? T(d.health.reason === 'codice non valido' ? 'fault_code' : 'fault_program') : '';
+  const status = fault ? 'not_active' : d.suspended ? 'suspended' : 'active';
+  el('title').dataset.status = status;   // il codice dello stato, uguale in ogni lingua (lo leggono le prove)
+  el('textTitle').textContent = T('status_' + status);
+  el('fault').hidden = !fault;
+  el('fault').textContent = fault;
+  el('connection').hidden = d.connected && d.health.reason !== 'codice non valido';
+  el('service').textContent = d.service ? d.service.name : d.host ? T('site_outside_catalog') : '—';
+  const pol = d.service ? (d.service.policy === 'protect' && !d.service.readable ? 'record' : d.service.policy) : null;
+  el('policy').textContent = !pol ? '—' : pol === 'protect' && d.suspended ? T('policy_suspended', T('policy_protect')) : T('policy_' + pol);
+  const c = d.counts || {messages: 0, replacements: 0, blocked: 0};
+  for (const k of ['messages', 'replacements', 'blocked']) el(k).textContent = c[k];
+  el('notices').checked = d.notices;
+  el('suspended').checked = d.suspended;
+  el('version').textContent = T('version', d.version);
 }
 
-el('avvisi').addEventListener('change', e => chrome.runtime.sendMessage({t: 'imposta', avvisi: e.target.checked}));
-el('sospesa').addEventListener('change', async e => { await chrome.runtime.sendMessage({t: 'imposta', sospesa: e.target.checked}); mostra(); });
-el('collega').addEventListener('click', async () => {
-  const codice = el('codice').value.trim();
-  if (!codice) return;
-  await chrome.runtime.sendMessage({t: 'collega', token: codice});
-  el('codice').value = '';
-  mostra();
+el('notices').addEventListener('change', e => chrome.runtime.sendMessage({t: 'configure', notices: e.target.checked}));
+el('suspended').addEventListener('change', async e => { await chrome.runtime.sendMessage({t: 'configure', suspended: e.target.checked}); show(); });
+el('connect').addEventListener('click', async () => {
+  const code = el('code').value.trim();
+  if (!code) return;
+  await chrome.runtime.sendMessage({t: 'connect', token: code});
+  el('code').value = '';
+  show();
 });
-mostra();
+show();

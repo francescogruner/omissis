@@ -9,17 +9,17 @@ import sys
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
-bloccato, registrato = sys.argv[1], sys.argv[2]
-for host, atteso in ((bloccato, "rifiutato"), (registrato, "aperto")):
+blocked, recorded = sys.argv[1], sys.argv[2]
+for host, expected in ((blocked, "refused"), (recorded, "opened")):
     c = http.client.HTTPSConnection("127.0.0.1", 8080, timeout=30)
     c.set_tunnel(host, 443)
     try:
         c.connect()
-        esito = "aperto"
+        outcome = "opened"
         c.close()
     except OSError as ex:
-        esito = "rifiutato" if "403" in str(ex) else f"errore: {ex}"
-    print(f"{'OK    ' if esito == atteso else 'ERRORE'} {host}: {esito} (atteso: {atteso})")
+        outcome = "refused" if "403" in str(ex) else f"errore: {ex}"
+    print(f"{'OK    ' if outcome == expected else 'ERRORE'} {host}: {outcome} (atteso: {expected})")
 db = sqlite3.connect(Path(__file__).resolve().parent / "data" / "contacts.sqlite")
-for riga in db.execute("SELECT servizio, host, esito, n FROM contatti ORDER BY ultimo DESC LIMIT 6"):
-    print("  contatto registrato:", riga)
+for line in db.execute("SELECT service, host, outcome, n FROM contacts ORDER BY last DESC LIMIT 6"):
+    print("  contatto registrato:", line)

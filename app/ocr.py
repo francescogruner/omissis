@@ -10,14 +10,14 @@ Se i pacchetti winrt non sono installati le funzioni sollevano NonDisponibile.
 """
 import asyncio
 
-LATO = 2600   # lato lungo, in punti immagine, a cui si porta una pagina prima di leggerla
+SIDE = 2600   # lato lungo, in punti immagine, a cui si porta una pagina prima di leggerla
 
 
-class NonDisponibile(Exception):
+class Unavailable(Exception):
     pass
 
 
-def _moduli():
+def _modules():
     try:
         from winrt.windows.data.pdf import PdfDocument, PdfPageRenderOptions
         from winrt.windows.globalization import Language
@@ -25,17 +25,17 @@ def _moduli():
         from winrt.windows.media.ocr import OcrEngine
         from winrt.windows.storage.streams import DataWriter, InMemoryRandomAccessStream
     except ImportError as ex:
-        raise NonDisponibile("la lettura delle scansioni non è installata (pacchetti winrt)") from ex
-    motore = OcrEngine.try_create_from_language(Language("it")) or OcrEngine.try_create_from_user_profile_languages()
-    if motore is None:
-        raise NonDisponibile("in Windows manca la lingua per la lettura dei caratteri (Impostazioni → Lingua → Italiano → Funzionalità)")
-    return PdfDocument, PdfPageRenderOptions, BitmapDecoder, DataWriter, InMemoryRandomAccessStream, motore
+        raise Unavailable("la lettura delle scansioni non è installata (pacchetti winrt)") from ex
+    engine = OcrEngine.try_create_from_language(Language("it")) or OcrEngine.try_create_from_user_profile_languages()
+    if engine is None:
+        raise Unavailable("in Windows manca la lingua per la lettura dei caratteri (Impostazioni → Lingua → Italiano → Funzionalità)")
+    return PdfDocument, PdfPageRenderOptions, BitmapDecoder, DataWriter, InMemoryRandomAccessStream, engine
 
 
-async def _flusso(dati, DataWriter, InMemoryRandomAccessStream):
+async def _stream(data, DataWriter, InMemoryRandomAccessStream):
     s = InMemoryRandomAccessStream()
     w = DataWriter(s)
-    w.write_bytes(dati)
+    w.write_bytes(data)
     await w.store_async()
     await w.flush_async()
     w.detach_stream()
@@ -43,37 +43,37 @@ async def _flusso(dati, DataWriter, InMemoryRandomAccessStream):
     return s
 
 
-async def _leggi(flusso, BitmapDecoder, motore):
-    bitmap = await (await BitmapDecoder.create_async(flusso)).get_software_bitmap_async()
-    esito = await motore.recognize_async(bitmap)
-    return "\n".join(riga.text for riga in esito.lines)
+async def _read(stream, BitmapDecoder, engine):
+    bitmap = await (await BitmapDecoder.create_async(stream)).get_software_bitmap_async()
+    outcome = await engine.recognize_async(bitmap)
+    return "\n".join(line.text for line in outcome.lines)
 
 
-async def _pdf(dati):
-    PdfDocument, PdfPageRenderOptions, BitmapDecoder, DataWriter, InMemoryRandomAccessStream, motore = _moduli()
-    documento = await PdfDocument.load_from_stream_async(await _flusso(dati, DataWriter, InMemoryRandomAccessStream))
-    pagine = []
-    for i in range(documento.page_count):
-        pagina = documento.get_page(i)
-        scala = LATO / max(pagina.size.width, pagina.size.height, 1)
-        opzioni = PdfPageRenderOptions()
-        opzioni.destination_width = int(pagina.size.width * scala)
-        opzioni.destination_height = int(pagina.size.height * scala)
-        uscita = InMemoryRandomAccessStream()
-        await pagina.render_to_stream_async(uscita, opzioni)
-        uscita.seek(0)
-        pagine.append(await _leggi(uscita, BitmapDecoder, motore))
-    return pagine
+async def _pdf(data):
+    PdfDocument, PdfPageRenderOptions, BitmapDecoder, DataWriter, InMemoryRandomAccessStream, engine = _modules()
+    document = await PdfDocument.load_from_stream_async(await _stream(data, DataWriter, InMemoryRandomAccessStream))
+    pages = []
+    for i in range(document.page_count):
+        page = document.get_page(i)
+        scale = SIDE / max(page.size.width, page.size.height, 1)
+        options = PdfPageRenderOptions()
+        options.destination_width = int(page.size.width * scale)
+        options.destination_height = int(page.size.height * scale)
+        output = InMemoryRandomAccessStream()
+        await page.render_to_stream_async(output, options)
+        output.seek(0)
+        pages.append(await _read(output, BitmapDecoder, engine))
+    return pages
 
 
-async def _immagine(dati):
-    _, _, BitmapDecoder, DataWriter, InMemoryRandomAccessStream, motore = _moduli()
-    return await _leggi(await _flusso(dati, DataWriter, InMemoryRandomAccessStream), BitmapDecoder, motore)
+async def _image(data):
+    _, _, BitmapDecoder, DataWriter, InMemoryRandomAccessStream, engine = _modules()
+    return await _read(await _stream(data, DataWriter, InMemoryRandomAccessStream), BitmapDecoder, engine)
 
 
-def pdf(dati):
-    return asyncio.run(_pdf(dati))
+def pdf(data):
+    return asyncio.run(_pdf(data))
 
 
-def immagine(dati):
-    return asyncio.run(_immagine(dati))
+def image(data):
+    return asyncio.run(_image(data))

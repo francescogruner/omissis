@@ -1,50 +1,50 @@
 {
- "_cosa": "Cio' che l'autore ha verificato di persona, con quale programma e quale versione. livello: dal_vivo (servizio vero, dati inventati) | servizio_finto (prove automatiche contro un servizio simulato).",
- "aggiornato": "2026-11-13",
- "voci": [
+ "_what": "Cio' che l'autore ha verificato di persona, con quale programma e quale versione. livello: dal_vivo (servizio vero, dati inventati) | servizio_finto (prove automatiche contro un servizio simulato).",
+ "updated": "2026-11-13",
+ "entries": [
   {
-   "servizio": "chatgpt",
+   "service": "chatgpt",
    "via": "app desktop",
-   "cliente": "ChatGPT per Windows",
-   "versione": "26.1106",
-   "metodo": "casella",
-   "livello": "dal_vivo",
+   "client": "ChatGPT per Windows",
+   "version": "26.1106",
+   "method": "box",
+   "level": "live",
    "data": "2026-11-12"
   },
   {
-   "servizio": "anthropic-api",
+   "service": "anthropic-api",
    "via": "gateway",
-   "cliente": "Claude Code",
-   "versione": "",
-   "metodo": "api",
-   "livello": "dal_vivo",
+   "client": "Claude Code",
+   "version": "",
+   "method": "api",
+   "level": "live",
    "data": "2026-11-12"
   },
   {
-   "servizio": "",
-   "via": "estensione",
-   "cliente": "Microsoft Edge",
-   "versione": "157",
-   "metodo": "rete",
-   "livello": "servizio_finto",
+   "service": "",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "fake_service",
    "data": "2026-11-13"
   },
   {
-   "servizio": "",
-   "via": "estensione",
-   "cliente": "Brave",
-   "versione": "157",
-   "metodo": "rete",
-   "livello": "servizio_finto",
+   "service": "",
+   "via": "extension",
+   "client": "Brave",
+   "version": "157",
+   "method": "network",
+   "level": "fake_service",
    "data": "2026-11-13"
   },
   {
-   "servizio": "",
-   "via": "estensione",
-   "cliente": "Chromium",
-   "versione": "",
-   "metodo": "rete",
-   "livello": "servizio_finto",
+   "service": "",
+   "via": "extension",
+   "client": "Chromium",
+   "version": "",
+   "method": "network",
+   "level": "fake_service",
    "data": "2026-11-13"
   }
  ]

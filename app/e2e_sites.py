@@ -12,62 +12,62 @@ import sys
 import tempfile
 from pathlib import Path
 
-QUI = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent
 import paths   # noqa: E402
-os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(QUI / ".playwright"))
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(HERE / ".playwright"))
 from playwright.sync_api import sync_playwright   # noqa: E402
 
-SITI = sys.argv[1:] or ["https://claude.ai/login", "https://chatgpt.com/", "https://gemini.google.com/", "https://www.perplexity.ai/",
+SITES = sys.argv[1:] or ["https://claude.ai/login", "https://chatgpt.com/", "https://gemini.google.com/", "https://www.perplexity.ai/",
                         "https://copilot.microsoft.com/", "https://chat.mistral.ai/", "https://chat.deepseek.com/"]
 
 
-def righe():
-    f = paths.DATI / "activity.jsonl"
+def lines():
+    f = paths.DATA / "activity.jsonl"
     return f.read_text(encoding="utf-8").splitlines() if f.exists() else []
 
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
-    with sync_playwright() as pw, tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profilo:
-        est = str(QUI / "extension")
-        ctx = pw.chromium.launch_persistent_context(profilo, channel="chromium", headless=True,
+    with sync_playwright() as pw, tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profile:
+        est = str(HERE / "extension")
+        ctx = pw.chromium.launch_persistent_context(profile, channel="chromium", headless=True,
                                                     args=[f"--disable-extensions-except={est}", f"--load-extension={est}"])
         if not ctx.service_workers:
             ctx.wait_for_event("serviceworker", timeout=20000)
         pan = ctx.new_page()
         pan.goto("http://127.0.0.1:8766/")
         pan.click("nav button[data-s=browser]")
-        pan.wait_for_function("document.getElementById('estStato').textContent.includes('versione')", timeout=10000)
-        pan.click("#estCollega")
-        pan.wait_for_function("/collegata$/.test(document.getElementById('estStato').textContent)", timeout=15000)
-        for sito in SITI:
-            prima = len(righe())
+        pan.wait_for_function("document.getElementById('estStatus').textContent.includes('version')", timeout=10000)
+        pan.click("#estConnect")
+        pan.wait_for_function("/collegata$/.test(document.getElementById('estStatus').textContent)", timeout=15000)
+        for site in SITES:
+            before = len(lines())
             p = ctx.new_page()
-            errori, console = [], []
-            p.on("pageerror", lambda e: errori.append(str(e)[:160]))
+            errors, console = [], []
+            p.on("pageerror", lambda e: errors.append(str(e)[:160]))
             p.on("console", lambda m: console.append(m.text[:160]) if m.type == "error" else None)
             try:
-                p.goto(sito, timeout=40000, wait_until="domcontentloaded")
+                p.goto(site, timeout=40000, wait_until="domcontentloaded")
                 p.wait_for_timeout(7000)
-                titolo, arrivo = p.title()[:50], p.url.split("?")[0][:70]
-                testo = len(p.inner_text("body"))
+                title, arrival = p.title()[:50], p.url.split("?")[0][:70]
+                text = len(p.inner_text("body"))
             except Exception as ex:   # noqa: BLE001
-                titolo, arrivo, testo = "NON CARICATA: " + str(ex).splitlines()[0][:90], "", 0
-            nuove = [json.loads(r) for r in righe()[prima:]]
-            mie = [v for v in nuove if v.get("via") == "estensione"]
-            eventi = {}
-            for v in mie:
-                eventi[v.get("evento", "")] = eventi.get(v.get("evento", ""), 0) + 1
-            nostri = [e for e in errori + console if "msp" in e.lower() or "chrome-extension" in e]
-            print(f"{sito}\n   arrivo: {arrivo} · titolo: {titolo} · caratteri di testo: {testo}"
-                  f"\n   errori della pagina: {len(errori)} · errori in console: {len(console)} · riferiti all'estensione: {len(nostri)}"
-                  f"\n   richieste passate dall'estensione: {len(mie)} {eventi if eventi else ''}", flush=True)
-            for e in nostri[:3]:
+                title, arrival, text = "NON CARICATA: " + str(ex).splitlines()[0][:90], "", 0
+            new_ones = [json.loads(r) for r in lines()[before:]]
+            my = [v for v in new_ones if v.get("via") == "extension"]
+            events = {}
+            for v in my:
+                events[v.get("event", "")] = events.get(v.get("event", ""), 0) + 1
+            ours = [e for e in errors + console if "msp" in e.lower() or "chrome-extension" in e]
+            print(f"{site}\n   arrivo: {arrival} · titolo: {title} · caratteri di testo: {text}"
+                  f"\n   errori della pagina: {len(errors)} · errori in console: {len(console)} · riferiti all'estensione: {len(ours)}"
+                  f"\n   richieste passate dall'estensione: {len(my)} {events if events else ''}", flush=True)
+            for e in ours[:3]:
                 print("      ", e)
             p.close()
         ctx.close()
-    db = sqlite3.connect(paths.DATI / "contacts.sqlite")
-    print("\ncontatti registrati oggi:", db.execute("SELECT servizio, esito, n FROM contatti WHERE giorno = date('now','localtime') ORDER BY servizio").fetchall())
+    db = sqlite3.connect(paths.DATA / "contacts.sqlite")
+    print("\ncontatti registrati oggi:", db.execute("SELECT service, outcome, n FROM contacts WHERE day = date('now','localtime') ORDER BY service").fetchall())
 
 
 if __name__ == "__main__":

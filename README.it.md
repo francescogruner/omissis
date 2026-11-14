@@ -9,13 +9,13 @@ soltanto segnaposto.
 Tutto gira in locale: il modello che riconosce i dati, l'archivio dei segnaposto, il pannello. Nulla
 viene mandato a un server di Omissis, perché non esiste.
 
-![La pagina iniziale](docs/screenshots/inizio-it.png)
+![La pagina iniziale](docs/screenshots/start-it.png)
 
-![Incolli un testo: viene mascherato e copiato da solo](docs/screenshots/testo-it.png)
+![Incolli un testo: viene mascherato e copiato da solo](docs/screenshots/text-it.png)
 
-![Trascini un documento: la copia anonimizzata si scarica da sola](docs/screenshots/documenti-it.png)
+![Trascini un documento: la copia anonimizzata si scarica da sola](docs/screenshots/documents-it.png)
 
-<img src="docs/screenshots/estensione-finestrella-it.png" alt="L'estensione del browser" width="340">
+<img src="docs/screenshots/extension-popup-it.png" alt="L'estensione del browser" width="340">
 
 > **Stato: beta.** Il modello è addestrato e misurato. I connettori superano le prove automatiche
 > contro un servizio finto, ma **le verifiche dal vivo sono ancora poche**: il gateway per il terminale

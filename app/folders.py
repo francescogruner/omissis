@@ -13,76 +13,76 @@ import threading
 import uuid
 from ctypes import wintypes
 
-_una_per_volta = threading.Lock()
-CLSID_FINESTRA = "{DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7}"    # FileOpenDialog
-IID_FINESTRA = "{D57C7288-D4AD-4768-BE02-9D969532D960}"      # IFileOpenDialog
-IID_ELEMENTO = "{43826D1E-E718-42EE-BC55-A1E261C37BFE}"      # IShellItem
-SOLO_CARTELLE, SOLO_DISCO = 0x20, 0x40
-PERCORSO_SUL_DISCO = 0x80058000
+_one_at_a_time = threading.Lock()
+CLSID_WINDOW = "{DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7}"    # FileOpenDialog
+IID_WINDOW = "{D57C7288-D4AD-4768-BE02-9D969532D960}"      # IFileOpenDialog
+IID_ITEM = "{43826D1E-E718-42EE-BC55-A1E261C37BFE}"      # IShellItem
+ONLY_FOLDERS, ONLY_DISK = 0x20, 0x40
+PATH_ON_DISK = 0x80058000
 # posizione dei metodi nelle interfacce di Windows (IUnknown occupa le prime tre)
-RILASCIA, MOSTRA, OPZIONI, CARTELLA, TITOLO, RISULTATO, NOME = 2, 3, 9, 12, 17, 20, 5
+RELEASE, SHOW, OPTIONS, FOLDER, TITLE, RESULT, NAME = 2, 3, 9, 12, 17, 20, 5
 
 
 class _GUID(ctypes.Structure):
     _fields_ = [("a", wintypes.DWORD), ("b", wintypes.WORD), ("c", wintypes.WORD), ("d", ctypes.c_ubyte * 8)]
 
-    def __init__(self, testo):
+    def __init__(self, text):
         super().__init__()
-        ctypes.memmove(ctypes.byref(self), uuid.UUID(testo).bytes_le, 16)
+        ctypes.memmove(ctypes.byref(self), uuid.UUID(text).bytes_le, 16)
 
 
-def _metodo(oggetto, posizione, *tipi):
-    tabella = ctypes.cast(ctypes.cast(oggetto, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
-    funzione = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, *tipi)(tabella[posizione])
-    return lambda *argomenti: funzione(oggetto, *argomenti)
+def _method(obj, position, *kinds):
+    table = ctypes.cast(ctypes.cast(obj, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+    func = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, *kinds)(table[position])
+    return lambda *arguments: func(obj, *arguments)
 
 
-def scegli(titolo, iniziale="", davanti=True):
+def choose(title, initial="", front=True):
     """Apre «Seleziona cartella» e aspetta la scelta. davanti: la finestra si lega a quella in primo piano (il browser),
     cosi' non resta nascosta dietro. Una finestra per volta: se ce n'e' gia' una aperta restituisce None."""
-    if not _una_per_volta.acquire(blocking=False):
+    if not _one_at_a_time.acquire(blocking=False):
         return None
     ole32, shell32, user32 = ctypes.OleDLL("ole32"), ctypes.WinDLL("shell32"), ctypes.WinDLL("user32")
     user32.GetForegroundWindow.restype = wintypes.HWND
     ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
     shell32.SHCreateItemFromParsingName.argtypes = [wintypes.LPCWSTR, ctypes.c_void_p, ctypes.POINTER(_GUID), ctypes.POINTER(ctypes.c_void_p)]
-    finestra, elemento, avviato = ctypes.c_void_p(), ctypes.c_void_p(), False
+    win, item, launched = ctypes.c_void_p(), ctypes.c_void_p(), False
     try:
         ole32.CoInitialize(None)
-        avviato = True
-        ole32.CoCreateInstance(ctypes.byref(_GUID(CLSID_FINESTRA)), None, 1, ctypes.byref(_GUID(IID_FINESTRA)), ctypes.byref(finestra))
-        _metodo(finestra, OPZIONI, wintypes.DWORD)(SOLO_CARTELLE | SOLO_DISCO)
-        _metodo(finestra, TITOLO, wintypes.LPCWSTR)(titolo)
-        if iniziale and os.path.isdir(iniziale):
-            partenza = ctypes.c_void_p()
-            if shell32.SHCreateItemFromParsingName(iniziale, None, ctypes.byref(_GUID(IID_ELEMENTO)), ctypes.byref(partenza)) == 0:
-                _metodo(finestra, CARTELLA, ctypes.c_void_p)(partenza)
-                _metodo(partenza, RILASCIA)()
-        if _metodo(finestra, MOSTRA, wintypes.HWND)(user32.GetForegroundWindow() if davanti else None) != 0:
+        launched = True
+        ole32.CoCreateInstance(ctypes.byref(_GUID(CLSID_WINDOW)), None, 1, ctypes.byref(_GUID(IID_WINDOW)), ctypes.byref(win))
+        _method(win, OPTIONS, wintypes.DWORD)(ONLY_FOLDERS | ONLY_DISK)
+        _method(win, TITLE, wintypes.LPCWSTR)(title)
+        if initial and os.path.isdir(initial):
+            start_point = ctypes.c_void_p()
+            if shell32.SHCreateItemFromParsingName(initial, None, ctypes.byref(_GUID(IID_ITEM)), ctypes.byref(start_point)) == 0:
+                _method(win, FOLDER, ctypes.c_void_p)(start_point)
+                _method(start_point, RELEASE)()
+        if _method(win, SHOW, wintypes.HWND)(user32.GetForegroundWindow() if front else None) != 0:
             return ""   # annullato
-        if _metodo(finestra, RISULTATO, ctypes.POINTER(ctypes.c_void_p))(ctypes.byref(elemento)) != 0:
+        if _method(win, RESULT, ctypes.POINTER(ctypes.c_void_p))(ctypes.byref(item)) != 0:
             return ""
-        nome = ctypes.c_void_p()
-        if _metodo(elemento, NOME, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p))(PERCORSO_SUL_DISCO, ctypes.byref(nome)) != 0:
+        name = ctypes.c_void_p()
+        if _method(item, NAME, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p))(PATH_ON_DISK, ctypes.byref(name)) != 0:
             return ""
         try:
-            return ctypes.wstring_at(nome.value)
+            return ctypes.wstring_at(name.value)
         finally:
-            ole32.CoTaskMemFree(nome)
+            ole32.CoTaskMemFree(name)
     except OSError:
         return ""
     finally:
-        for oggetto in (elemento, finestra):
-            if oggetto:
-                _metodo(oggetto, RILASCIA)()
-        if avviato:
+        for obj in (item, win):
+            if obj:
+                _method(obj, RELEASE)()
+        if launched:
             ole32.CoUninitialize()
-        _una_per_volta.release()
+        _one_at_a_time.release()
 
 
-def apri(percorso):
+def open_up(path):
     """Apre la cartella in Esplora file. Solo cartelle che esistono."""
-    if not os.path.isdir(percorso):
+    if not os.path.isdir(path):
         return False
-    os.startfile(percorso)   # noqa: S606  (una cartella, non un programma)
+    os.startfile(path)   # noqa: S606  (una cartella, non un programma)
     return True

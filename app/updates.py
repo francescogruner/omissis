@@ -35,188 +35,188 @@ import settings
 import i18n
 import weights
 import paths
-from version import VERSIONE
+from version import VERSION
 
-CHIAVE_PUBBLICA = "FTc5/hItV90nAewMfdnTO7X4CgDXLyerwg5ks8fMFIc="
-ORIGINE = (os.environ.get("OMISSIS_UPDATES_URL") or "https://github.com/francescogruner/omissis/releases/latest/download").rstrip("/")
-PAGINA = "https://github.com/francescogruner/omissis/releases/latest"
-CARTELLA = paths.DATI / "updates"
+PUBLIC_KEY = "FTc5/hItV90nAewMfdnTO7X4CgDXLyerwg5ks8fMFIc="
+ORIGIN = (os.environ.get("OMISSIS_UPDATES_URL") or "https://github.com/francescogruner/omissis/releases/latest/download").rstrip("/")
+PAGE = "https://github.com/francescogruner/omissis/releases/latest"
+FOLDER = paths.DATA / "updates"
 RX_FILE = re.compile(r"^[A-Za-z0-9][\w.-]{3,80}\.exe$")
-RX_VERSIONE = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}$")
+RX_VERSION = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}$")
 # fase: mai | controllo | aggiornato | disponibile | scarico | pronto | errore
-STATO = {"fase": "mai", "versione": "", "note": "", "errore": "", "controllato": "", "fatti": 0, "totale": 0}
-_foglio = {}
-_lucchetto = threading.Lock()
+STATUS = {"phase": "never", "version": "", "notes": "", "error": "", "last_check": "", "completed": 0, "total": 0}
+_sheet = {}
+_lock = threading.Lock()
 
 
-class Errore(Exception):
+class Error(Exception):
     pass
 
 
-def numeri(v):
+def numbers(v):
     return tuple(int(x) for x in v.split("."))
 
 
-def canale():
+def channel():
     """github (installer, si aggiorna da solo) | store (ci pensa lo Store) | sorgenti."""
-    return (paths.INSTALLATA or {}).get("canale") or "sorgenti"
+    return (paths.INSTALLED or {}).get("channel") or "source_code"
 
 
-def modalita():
-    if canale() == "store":
+def mode():
+    if channel() == "store":
         return "store"
-    scelta = settings.leggi().get("aggiornamenti", "automatici")
-    return scelta if scelta in ("automatici", "avvisa", "mai") else "automatici"
+    choice = settings.read().get("updates", "automatic")
+    return choice if choice in ("automatic", "notify", "never") else "automatic"
 
 
-def installabile():
-    return canale() == "github" and sys.platform == "win32"
+def installable():
+    return channel() == "github" and sys.platform == "win32"
 
 
-def _verifica(foglio, firma):
+def _verify(sheet, signature):
     """Il foglio e' autentico? Restituisce il contenuto, o solleva Errore."""
     try:
         from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
     except ImportError:
-        raise Errore(i18n.t("aggiornamenti.errore.libreria")) from None
+        raise Error(i18n.t("updates.error.library")) from None
     try:
-        Ed25519PublicKey.from_public_bytes(base64.b64decode(CHIAVE_PUBBLICA)).verify(base64.b64decode(firma.strip(), validate=True), foglio)
-        d = json.loads(foglio.decode("utf-8"))
+        Ed25519PublicKey.from_public_bytes(base64.b64decode(PUBLIC_KEY)).verify(base64.b64decode(signature.strip(), validate=True), sheet)
+        d = json.loads(sheet.decode("utf-8"))
     except (InvalidSignature, ValueError):
-        raise Errore(i18n.t("aggiornamenti.errore.firma")) from None
-    if (not isinstance(d, dict) or d.get("prodotto") != "omissis" or not RX_VERSIONE.match(str(d.get("versione", "")))
+        raise Error(i18n.t("updates.error.signature")) from None
+    if (not isinstance(d, dict) or d.get("product") != "omissis" or not RX_VERSION.match(str(d.get("version", "")))
             or not RX_FILE.match(str(d.get("file", ""))) or not re.fullmatch(r"[0-9a-f]{64}", str(d.get("sha256", "")))
             or not isinstance(d.get("byte"), int) or not 0 < d["byte"] < 2_000_000_000):
-        raise Errore(i18n.t("aggiornamenti.errore.formato"))
+        raise Error(i18n.t("updates.error.fmt"))
     return d
 
 
-def _leggi(nome, massimo):
-    indirizzo = f"{ORIGINE}/{nome}"
-    if not indirizzo.startswith("https://") and not indirizzo.startswith("http://127.0.0.1"):
-        raise Errore(i18n.t("aggiornamenti.errore.indirizzo"))
-    rich = urllib.request.Request(indirizzo, headers={"User-Agent": f"Omissis/{VERSIONE}"})
-    with urllib.request.urlopen(rich, timeout=30) as r:
-        dati = r.read(massimo + 1)
-    if len(dati) > massimo:
-        raise Errore(i18n.t("aggiornamenti.errore.grande"))
-    return dati
+def _read(name, maximum):
+    address = f"{ORIGIN}/{name}"
+    if not address.startswith("https://") and not address.startswith("http://127.0.0.1"):
+        raise Error(i18n.t("updates.error.address"))
+    req = urllib.request.Request(address, headers={"User-Agent": f"Omissis/{VERSION}"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = r.read(maximum + 1)
+    if len(data) > maximum:
+        raise Error(i18n.t("updates.error.large"))
+    return data
 
 
-def controlla():
+def check():
     """Legge e verifica il foglio. Aggiorna STATO e lo restituisce."""
-    global _foglio
-    if STATO["fase"] in ("scarico", "controllo"):
-        return STATO
-    prima = STATO["fase"]
-    STATO.update(fase="controllo", errore="")
+    global _sheet
+    if STATUS["phase"] in ("downloading", "check"):
+        return STATUS
+    before = STATUS["phase"]
+    STATUS.update(phase="check", error="")
     try:
-        foglio, firma = _leggi("update.json", 65536), _leggi("update.json.sig", 4096)
-        d = _verifica(foglio, firma)
-        if numeri(d["versione"]) <= numeri(VERSIONE):
-            STATO.update(fase="aggiornato", versione="", note="")
-        elif prima == "pronto" and STATO["versione"] == d["versione"]:
-            STATO.update(fase="pronto")
+        sheet, signature = _read("update.json", 65536), _read("update.json.sig", 4096)
+        d = _verify(sheet, signature)
+        if numbers(d["version"]) <= numbers(VERSION):
+            STATUS.update(phase="updated", version="", notes="")
+        elif before == "ready_now" and STATUS["version"] == d["version"]:
+            STATUS.update(phase="ready_now")
         else:
-            _foglio = {"dati": d, "foglio": foglio, "firma": firma}
-            STATO.update(fase="disponibile", versione=d["versione"], note=str(d.get("note", ""))[:600], fatti=0, totale=d["byte"])
+            _sheet = {"data": d, "sheet": sheet, "signature": signature}
+            STATUS.update(phase="available", version=d["version"], notes=str(d.get("notes", ""))[:600], completed=0, total=d["byte"])
     except urllib.error.HTTPError as ex:
         if ex.code == 404:   # nessuna versione pubblicata
-            STATO.update(fase="aggiornato", versione="", note="")
+            STATUS.update(phase="updated", version="", notes="")
         else:
-            STATO.update(fase="errore", errore=i18n.t("aggiornamenti.errore.pagina", codice=ex.code))
+            STATUS.update(phase="error", error=i18n.t("updates.error.page", code=ex.code))
     except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as ex:
-        STATO.update(fase="errore", errore=i18n.t("aggiornamenti.errore.controllo", motivo=getattr(ex, "reason", ex)))
-    except Errore as ex:
-        STATO.update(fase="errore", errore=str(ex))
-    STATO["controllato"] = time.strftime("%Y-%m-%d %H:%M")
-    return STATO
+        STATUS.update(phase="error", error=i18n.t("updates.error.check", reason=getattr(ex, "reason", ex)))
+    except Error as ex:
+        STATUS.update(phase="error", error=str(ex))
+    STATUS["last_check"] = time.strftime("%Y-%m-%d %H:%M")
+    return STATUS
 
 
-def scarica():
+def download():
     """Scarica l'installer della versione disponibile e lo tiene pronto, insieme al foglio firmato."""
-    if not installabile():
-        raise Errore(i18n.t("aggiornamenti.errore.non_da_sola"))
-    if STATO["fase"] != "disponibile" or not _foglio:
-        raise Errore(i18n.t("aggiornamenti.errore.niente"))
-    if not _lucchetto.acquire(blocking=False):
-        return STATO
+    if not installable():
+        raise Error(i18n.t("updates.error.not_by_itself"))
+    if STATUS["phase"] != "available" or not _sheet:
+        raise Error(i18n.t("updates.error.nothing"))
+    if not _lock.acquire(blocking=False):
+        return STATUS
     try:
-        d = _foglio["dati"]
-        STATO.update(fase="scarico", fatti=0, totale=d["byte"], errore="")
-        CARTELLA.mkdir(parents=True, exist_ok=True)
-        for vecchio in CARTELLA.iterdir():   # un solo aggiornamento per volta
-            if vecchio.name not in (d["file"], d["file"] + ".parte"):
-                vecchio.unlink(missing_ok=True)
-        weights.un_file(f"{ORIGINE}/{d['file']}", CARTELLA / d["file"], {"byte": d["byte"], "sha256": d["sha256"]}, STATO, "aggiornamento")
-        (CARTELLA / "update.json").write_bytes(_foglio["foglio"])
-        (CARTELLA / "update.json.sig").write_bytes(_foglio["firma"])
-        STATO.update(fase="pronto")
-    except (weights.Errore, OSError) as ex:
-        STATO.update(fase="errore", errore=str(ex))
+        d = _sheet["data"]
+        STATUS.update(phase="downloading", completed=0, total=d["byte"], error="")
+        FOLDER.mkdir(parents=True, exist_ok=True)
+        for old in FOLDER.iterdir():   # un solo aggiornamento per volta
+            if old.name not in (d["file"], d["file"] + ".part"):
+                old.unlink(missing_ok=True)
+        weights.un_file(f"{ORIGIN}/{d['file']}", FOLDER / d["file"], {"byte": d["byte"], "sha256": d["sha256"]}, STATUS, "update")
+        (FOLDER / "update.json").write_bytes(_sheet["sheet"])
+        (FOLDER / "update.json.sig").write_bytes(_sheet["signature"])
+        STATUS.update(phase="ready_now")
+    except (weights.Error, OSError) as ex:
+        STATUS.update(phase="error", error=str(ex))
     finally:
-        _lucchetto.release()
-    return STATO
+        _lock.release()
+    return STATUS
 
 
-def pronto():
+def ready_now():
     """C'e' un installer gia' scaricato, autentico e piu' nuovo di questa versione? Controllo senza rete: rilegge la
     firma del foglio e l'impronta del file. Restituisce (percorso, versione) oppure None."""
-    if not installabile() or modalita() == "mai":
+    if not installable() or mode() == "never":
         return None
     try:
-        d = _verifica((CARTELLA / "update.json").read_bytes(), (CARTELLA / "update.json.sig").read_bytes())
-        file = CARTELLA / d["file"]
-        if numeri(d["versione"]) <= numeri(VERSIONE):   # gia' installato: si fa pulizia
-            for vecchio in CARTELLA.iterdir():
-                vecchio.unlink(missing_ok=True)
+        d = _verify((FOLDER / "update.json").read_bytes(), (FOLDER / "update.json.sig").read_bytes())
+        file = FOLDER / d["file"]
+        if numbers(d["version"]) <= numbers(VERSION):   # gia' installato: si fa pulizia
+            for old in FOLDER.iterdir():
+                old.unlink(missing_ok=True)
             return None
         h = hashlib.sha256()
         with file.open("rb") as s:
-            for pezzo in iter(lambda: s.read(1 << 20), b""):
-                h.update(pezzo)
+            for chunk in iter(lambda: s.read(1 << 20), b""):
+                h.update(chunk)
         if file.stat().st_size != d["byte"] or h.hexdigest() != d["sha256"]:
             file.unlink(missing_ok=True)
             return None
-        return file, d["versione"]
-    except (OSError, Errore):
+        return file, d["version"]
+    except (OSError, Error):
         return None
 
 
-def installa(automatico=False):
+def install(automatic=False):
     """Lancia l'installer scaricato, in silenzio: chiude il programma, lo sostituisce e lo riapre. Chi chiama deve
     poi fermare tutto e uscire. Restituisce la versione che sta per essere installata, o None se non c'era nulla.
     All'avvio (automatico=True) ogni versione viene tentata una volta sola: se l'installazione non riesce, il
     programma deve comunque partire, e si riprova dal pannello."""
-    trovato = pronto()
-    if trovato is None:
+    found = ready_now()
+    if found is None:
         return None
-    file, versione = trovato
-    tentato = CARTELLA / "attempted.txt"
-    if automatico and tentato.exists() and tentato.read_text(encoding="utf-8").strip() == versione:
+    file, version = found
+    attempted = FOLDER / "attempted.txt"
+    if automatic and attempted.exists() and attempted.read_text(encoding="utf-8").strip() == version:
         return None
-    tentato.write_text(versione, encoding="utf-8")
-    staccato = 0x00000008 | 0x00000200   # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: deve sopravvivere a questo programma
-    subprocess.Popen([str(file), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RIAVVIA=1"], creationflags=staccato, close_fds=True,
+    attempted.write_text(version, encoding="utf-8")
+    detached = 0x00000008 | 0x00000200   # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: deve sopravvivere a questo programma
+    subprocess.Popen([str(file), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RIAVVIA=1"], creationflags=detached, close_fds=True,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return versione
+    return version
 
 
-def stato():
-    return {**STATO, "attuale": VERSIONE, "canale": canale(), "modalita": modalita(), "installabile": installabile(), "pagina": PAGINA}
+def status():
+    return {**STATUS, "current": VERSION, "channel": channel(), "mode": mode(), "installable": installable(), "page": PAGE}
 
 
-def ciclo(dopo=45, ogni=86400):
+def loop(after=45, every=86400):
     """Controllo periodico: poco dopo l'avvio e poi una volta al giorno, secondo l'impostazione."""
-    time.sleep(dopo)
+    time.sleep(after)
     while True:
-        m = modalita()
-        if m in ("automatici", "avvisa"):
+        m = mode()
+        if m in ("automatic", "notify"):
             try:
-                controlla()
-                if m == "automatici" and installabile() and STATO["fase"] == "disponibile":
-                    scarica()
+                check()
+                if m == "automatic" and installable() and STATUS["phase"] == "available":
+                    download()
             except Exception:   # noqa: BLE001  (un controllo fallito non deve mai fermare il programma)
                 pass
-        time.sleep(ogni)
+        time.sleep(every)

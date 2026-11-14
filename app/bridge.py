@@ -36,329 +36,329 @@ import paths
 import activity
 import restore as R
 
-MAX_CORPO = 8_000_000
-MAX_ALLEGATO = 20_000_000
-TIPI_FILE = {".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+MAX_BODY = 8_000_000
+MAX_ATTACHMENT = 20_000_000
+FILE_KINDS = {".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
              ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
              ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
              ".txt": "text/plain", ".md": "text/markdown", ".csv": "text/csv", ".json": "application/json", ".html": "text/html",
              ".htm": "text/html", ".xml": "application/xml"}
 
 
-class _ConCliente:
+class _WithClient:
     """Il registro, con in piu' su ogni riga il programma che ha fatto la richiesta (se lo ha dichiarato)."""
 
-    def __init__(self, registro, locale):
-        self._registro, self._locale = registro, locale
+    def __init__(self, log, locale):
+        self._log, self._locale = log, locale
 
-    def scrivi(self, **voce):
-        cliente = getattr(self._locale, "cliente", "")
-        return self._registro.scrivi(**({**voce, "cliente": cliente} if cliente else voce))
+    def write(self, **entry):
+        client = getattr(self._locale, "client", "")
+        return self._log.write(**({**entry, "client": client} if client else entry))
 
-    def __getattr__(self, nome):
-        return getattr(self._registro, nome)
+    def __getattr__(self, name):
+        return getattr(self._log, name)
 
 
-class NonFatto(Exception):
+class NotDone(Exception):
     """Un allegato che non si e' potuto anonimizzare; codice dice perche' (vedi documenti.Errore)."""
 
-    def __init__(self, codice=""):
-        super().__init__(codice)
-        self.codice = codice
-VERSIONE = 1
+    def __init__(self, code=""):
+        super().__init__(code)
+        self.code = code
+VERSION = 1
 
 
-class Ponte:
-    def __init__(self, motore):
-        self.m = motore
+class Bridge:
+    def __init__(self, engine):
+        self.m = engine
         self.locale = threading.local()   # il programma (nome e versione) della richiesta in corso, per le righe del registro
-        self.reg = _ConCliente(activity.Registro(), self.locale)
-        self.allegati_recenti = collections.deque(maxlen=40)   # (quando, servizio, peso) delle copie anonimizzate consegnate
+        self.reg = _WithClient(activity.Log(), self.locale)
+        self.recent_attachments = collections.deque(maxlen=40)   # (quando, servizio, peso) delle copie anonimizzate consegnate
         try:   # le librerie per leggere i documenti ci sono solo dove il programma e' un pacchetto unico: si guarda una volta
-            import documents as documenti
-            self.documenti = documenti
+            import documents as documents
+            self.documents = documents
         except ImportError:
-            self.documenti = None
-        self.prova = os.environ.get("OMISSIS_TEST") == "1"
-        self.flussi = {}        # id -> [flusso, servizio, percorso, ultimo uso]
-        self.originali = {}     # valore -> segnaposto, per accorgersi di un valore che esce in chiaro altrove
-        self.lucchetto = threading.Lock()
+            self.documents = None
+        self.test = os.environ.get("OMISSIS_TEST") == "1"
+        self.streams = {}        # id -> [flusso, servizio, percorso, ultimo uso]
+        self.originals = {}     # valore -> segnaposto, per accorgersi di un valore che esce in chiaro altrove
+        self.lock = threading.Lock()
 
     # ---------------------------------------------------------------- utilita'
     @staticmethod
-    def _via(dati):
-        return "app desktop" if dati.get("via") == "app" else "estensione"
+    def _via(data):
+        return "app desktop" if data.get("via") == "app" else "extension"
 
-    def _servizio(self, url):
+    def _service(self, url):
         """(adattatore, id del servizio, host, percorso) per un indirizzo; adattatore None = non si tocca."""
         u = urllib.parse.urlsplit(str(url))
-        host, percorso = (u.hostname or "").lower(), u.path + ("?" + u.query if u.query else "")
-        s = catalog.trova(host)
+        host, path = (u.hostname or "").lower(), u.path + ("?" + u.query if u.query else "")
+        s = catalog.find(host)
         if s is not None:
-            protetto = s["adattatore"] and settings.politica(s) == "proteggi"
-            return (R.CLASSI[s["adattatore"]]() if protetto else None), s["id"], host, percorso
-        if self.prova and host in ("localhost", "127.0.0.1"):
-            ad = R.di_prova(percorso)
-            return ad, (ad.nome if ad else None), host, percorso
-        return None, None, host, percorso
+            guarded = s["adapter"] and settings.policy(s) == "protect"
+            return (R.CLASSES[s["adapter"]]() if guarded else None), s["id"], host, path
+        if self.test and host in ("localhost", "127.0.0.1"):
+            ad = R.for_test(path)
+            return ad, (ad.name if ad else None), host, path
+        return None, None, host, path
 
-    def gestisci(self, azione, dati):
-        f = {"stato": self.stato, "richiesta": self.richiesta, "testo": self.testo, "apri": self.apri, "pezzo": self.pezzo, "intera": self.intera,
-             "valori": self.valori, "visita": self.visita, "websocket": self.websocket, "allegato": self.allegato}.get(azione)
+    def handle(self, action, data):
+        f = {"status": self.status, "request": self.request, "text": self.text, "open_up": self.open_up, "chunk": self.chunk, "whole": self.whole,
+             "values": self.values, "visit": self.visit, "websocket": self.websocket, "attachment": self.attachment}.get(action)
         if f is None:
             return None
-        cliente = dati.get("cliente")
-        self.locale.cliente = re.sub(r"[^\w .()\[\]/-]", "", str(cliente))[:60] if isinstance(cliente, str) else ""
-        return f(dati)
+        client = data.get("client")
+        self.locale.client = re.sub(r"[^\w .()\[\]/-]", "", str(client))[:60] if isinstance(client, str) else ""
+        return f(data)
 
     # ---------------------------------------------------------------- politiche
-    def stato(self, dati):
-        imp = settings.leggi()
+    def status(self, data):
+        cfg = settings.read()
         # del radar all'estensione interessano solo i servizi da bloccare: degli altri non puo' fare nulla
-        servizi = [{"id": s["id"], "nome": s["nome"], "domini": s["domini"], "politica": settings.politica(s, imp),
-                    "leggibile": bool(s["adattatore"]), **({"radar": True} if s["radar"] else {})}
-                   for s in catalog.SERVIZI if not s["radar"] or settings.politica(s, imp) == "blocca"]
-        if self.prova:
-            servizi.append({"id": "prova", "nome": "Servizio finto", "domini": ["localhost"], "politica": "proteggi", "leggibile": True})
-        return {"versione": VERSIONE, "ripristina": bool(imp["ripristina"]), "blocca_file": bool(imp["blocca_file"]),
-                "casella": bool(imp.get("casella", True)), "allegati": bool(imp.get("allegati", True)), "servizi": servizi}
+        services = [{"id": s["id"], "name": s["name"], "domains": s["domains"], "policy": settings.policy(s, cfg),
+                    "readable": bool(s["adapter"]), **({"radar": True} if s["radar"] else {})}
+                   for s in catalog.SERVICES if not s["radar"] or settings.policy(s, cfg) == "block"]
+        if self.test:
+            services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True})
+        return {"version": VERSION, "restore": bool(cfg["restore"]), "block_files": bool(cfg["block_files"]),
+                "box": bool(cfg.get("box", True)), "attachments": bool(cfg.get("attachments", True)), "services": services}
 
-    def visita(self, dati):
-        host = str(dati.get("host", "")).lower()
-        s = catalog.trova(host)
+    def visit(self, data):
+        host = str(data.get("host", "")).lower()
+        s = catalog.find(host)
         if s is None:
             return {}
-        pol = settings.politica(s)
-        if pol != "ignora":
-            self.reg.contatto(s["id"], host, "bloccato" if pol == "blocca" else
-                              "protetto" if pol == "proteggi" and s["adattatore"] else "non protetto")
-        return {"servizio": s["id"], "politica": pol}
+        pol = settings.policy(s)
+        if pol != "ignore":
+            self.reg.contact(s["id"], host, "blocked" if pol == "block" else
+                              "guarded" if pol == "protect" and s["adapter"] else "not_protected")
+        return {"service": s["id"], "policy": pol}
 
-    def websocket(self, dati):
-        ad, servizio, _, percorso = self._servizio(dati.get("url", ""))
+    def websocket(self, data):
+        ad, service, _, path = self._service(data.get("url", ""))
         if ad is not None:
-            self.reg.scrivi(servizio=servizio, via=self._via(dati), percorso=activity.percorso_pulito(percorso),
-                            evento="canale websocket NON coperto")
+            self.reg.write(service=service, via=self._via(data), path=activity.clean_path(path),
+                            event="websocket_not_covered")
         return {}
 
     # ---------------------------------------------------------------- richiesta
-    def richiesta(self, dati):
-        ad, servizio, _, percorso = self._servizio(dati.get("url", ""))
+    def request(self, data):
+        ad, service, _, path = self._service(data.get("url", ""))
         if ad is None:
-            return {"azione": "passa"}
-        imp = settings.leggi()
-        tipo, corpo = str(dati.get("tipo") or ""), dati.get("corpo")
+            return {"action": "passthrough"}
+        cfg = settings.read()
+        kind, body = str(data.get("kind") or ""), data.get("body")
         # "rete": secondo controllo fatto dal connettore subito prima dell'invio. Di norma la pagina ha gia' sostituito
         # tutto: nel registro va solo cio' che questo controllo ha dovuto sostituire o bloccare.
-        rete = bool(dati.get("rete"))
-        voce = {"servizio": servizio, "via": self._via(dati), "metodo": str(dati.get("metodo", "POST")),
-                "percorso": activity.percorso_pulito(percorso),
-                "byte": len(corpo.encode("utf-8")) if isinstance(corpo, str) else int(dati.get("byte") or 0)}
-        if dati.get("file") or "multipart/" in tipo or "octet-stream" in tipo or re.search(r"(?i)upload|/files?(/|$)", percorso):
-            if self._gia_anonimizzato(servizio, voce["byte"]):   # e' la copia che abbiamo appena preparato noi: puo' partire
-                return {"azione": "passa"}
-            if not rete or imp["blocca_file"]:
-                self.reg.scrivi(**voce, evento="file bloccato" if imp["blocca_file"] else "file NON mascherato")
-            return {"azione": "blocca", "motivo": "file"} if imp["blocca_file"] else {"azione": "passa"}
-        if not isinstance(corpo, str):
-            if voce["byte"] > 200 and not rete:
-                self.reg.scrivi(**voce, evento="corpo non testuale: NON letto")
-            return {"azione": "passa"}
-        if not corpo or len(corpo) > MAX_CORPO:
-            return {"azione": "passa"}
-        if "json" not in tipo and "x-www-form-urlencoded" not in tipo and corpo.lstrip()[:1] in ("{", "["):
-            tipo = "application/json"   # molte pagine mandano JSON senza dichiararlo
-        aperta = ad.richiesta(percorso, tipo, corpo)
-        if aperta is None:
-            return {"azione": "passa"}
-        rif, ricomponi, interpretato = aperta
-        rif = [(c, k) for c, k in rif if c[k].strip()]
-        esito_ext = {"azione": "passa"}
-        if rif:
-            originali = [c[k] for c, k in rif]
+        network = bool(data.get("network"))
+        entry = {"service": service, "via": self._via(data), "method": str(data.get("method", "POST")),
+                "path": activity.clean_path(path),
+                "byte": len(body.encode("utf-8")) if isinstance(body, str) else int(data.get("byte") or 0)}
+        if data.get("file") or "multipart/" in kind or "octet-stream" in kind or re.search(r"(?i)upload|/files?(/|$)", path):
+            if self._already_anonymized(service, entry["byte"]):   # e' la copia che abbiamo appena preparato noi: puo' partire
+                return {"action": "passthrough"}
+            if not network or cfg["block_files"]:
+                self.reg.write(**entry, event="file_blocked" if cfg["block_files"] else "file_not_masked")
+            return {"action": "block", "reason": "file"} if cfg["block_files"] else {"action": "passthrough"}
+        if not isinstance(body, str):
+            if entry["byte"] > 200 and not network:
+                self.reg.write(**entry, event="body_not_read")
+            return {"action": "passthrough"}
+        if not body or len(body) > MAX_BODY:
+            return {"action": "passthrough"}
+        if "json" not in kind and "x-www-form-urlencoded" not in kind and body.lstrip()[:1] in ("{", "["):
+            kind = "application/json"   # molte pagine mandano JSON senza dichiararlo
+        opened = ad.request(path, kind, body)
+        if opened is None:
+            return {"action": "passthrough"}
+        ref, reassemble, parsed = opened
+        ref = [(c, k) for c, k in ref if c[k].strip()]
+        outcome_ext = {"action": "passthrough"}
+        if ref:
+            originals = [c[k] for c, k in ref]
             try:
-                esito = self.m.maschera(originali)
+                outcome = self.m.mask(originals)
             except Exception as ex:   # noqa: BLE001  (mai inoltrare in chiaro)
-                self.reg.scrivi(**voce, evento="BLOCCATA: il modello non ha risposto", errore=type(ex).__name__)
-                return {"azione": "blocca", "motivo": "motore"}
-            with self.lucchetto:
-                for seg, val in esito["mappa"].items():
+                self.reg.write(**entry, event="blocked_model_silent", error=type(ex).__name__)
+                return {"action": "block", "reason": "engine"}
+            with self.lock:
+                for seg, val in outcome["mapping"].items():
                     if len(val) >= 5:
-                        self.originali[val] = seg
-                while len(self.originali) > 20000:
-                    self.originali.pop(next(iter(self.originali)))
-            voce.update(evento="mascherata", campi=len(rif), caratteri=sum(len(t) for t in esito["testi"]),
-                        sostituzioni=esito["conteggi"], ms=esito["ms"])
-            if esito["testi"] != originali:   # se non c'e' nulla da sostituire la richiesta resta com'e'
-                for (c, k), nuovo in zip(rif, esito["testi"]):
-                    c[k] = nuovo
-                corpo = ricomponi()
-                esito_ext = {"azione": "sostituisci", "corpo": corpo, "sostituzioni": sum(esito["conteggi"].values())}
+                        self.originals[val] = seg
+                while len(self.originals) > 20000:
+                    self.originals.pop(next(iter(self.originals)))
+            entry.update(event="masked", fields=len(ref), characters=sum(len(t) for t in outcome["texts"]),
+                        replacements=outcome["counts"], ms=outcome["ms"])
+            if outcome["texts"] != originals:   # se non c'e' nulla da sostituire la richiesta resta com'e'
+                for (c, k), fresh in zip(ref, outcome["texts"]):
+                    c[k] = fresh
+                body = reassemble()
+                outcome_ext = {"action": "replace", "body": body, "replacements": sum(outcome["counts"].values())}
         else:
-            voce.update(evento="nessun campo di testo riconosciuto", struttura=activity.forma(interpretato))
-        with self.lucchetto:
-            fuori = sum(1 for v in self.originali if v in corpo)
-        if fuori:
-            voce["VALORI_IN_CHIARO"] = fuori
-            voce.setdefault("struttura", activity.forma(interpretato))
-        if rete:
-            if esito_ext["azione"] != "sostituisci" and not fuori:
-                return esito_ext
-            voce["strato"] = "rete"   # la pagina non l'aveva fatto: l'ha fermato il controllo prima dell'invio
-        self.reg.scrivi(**voce)
-        return esito_ext
+            entry.update(event="no_text_field", structure=activity.shape(parsed))
+        with self.lock:
+            outside = sum(1 for v in self.originals if v in body)
+        if outside:
+            entry["VALORI_IN_CHIARO"] = outside
+            entry.setdefault("structure", activity.shape(parsed))
+        if network:
+            if outcome_ext["action"] != "replace" and not outside:
+                return outcome_ext
+            entry["layer"] = "network"   # la pagina non l'aveva fatto: l'ha fermato il controllo prima dell'invio
+        self.reg.write(**entry)
+        return outcome_ext
 
-    def testo(self, dati):
+    def text(self, data):
         """Il testo della casella di scrittura, sostituito prima che l'app lo legga (dove le richieste non si vedono)."""
-        host, t = str(dati.get("host", "")).lower(), dati.get("testo")
-        ad, servizio, _, _ = self._servizio(f"https://{host}/generico/casella")
+        host, t = str(data.get("host", "")).lower(), data.get("text")
+        ad, service, _, _ = self._service(f"https://{host}/generic/box")
         if ad is None or not isinstance(t, str) or not t.strip():
-            return {"azione": "passa"}
-        voce = {"servizio": servizio, "via": self._via(dati), "metodo": "casella", "percorso": "(casella di scrittura)", "byte": len(t.encode("utf-8"))}
+            return {"action": "passthrough"}
+        entry = {"service": service, "via": self._via(data), "method": "box", "path": "(casella di scrittura)", "byte": len(t.encode("utf-8"))}
         try:
-            esito = self.m.maschera([t])
+            outcome = self.m.mask([t])
         except Exception as ex:   # noqa: BLE001  (mai lasciar partire in chiaro)
-            self.reg.scrivi(**voce, evento="BLOCCATA: il modello non ha risposto", errore=type(ex).__name__)
-            return {"azione": "blocca", "motivo": "motore"}
-        self.reg.scrivi(**voce, evento="mascherata", campi=1, caratteri=len(esito["testi"][0]), sostituzioni=esito["conteggi"], ms=esito["ms"])
-        if esito["testi"][0] == t:
-            return {"azione": "passa"}
-        return {"azione": "sostituisci", "testo": esito["testi"][0], "sostituzioni": sum(esito["conteggi"].values())}
+            self.reg.write(**entry, event="blocked_model_silent", error=type(ex).__name__)
+            return {"action": "block", "reason": "engine"}
+        self.reg.write(**entry, event="masked", fields=1, characters=len(outcome["texts"][0]), replacements=outcome["counts"], ms=outcome["ms"])
+        if outcome["texts"][0] == t:
+            return {"action": "passthrough"}
+        return {"action": "replace", "text": outcome["texts"][0], "replacements": sum(outcome["counts"].values())}
 
     # ---------------------------------------------------------------- allegati
-    def _gia_anonimizzato(self, servizio, peso):
+    def _already_anonymized(self, service, weight):
         """Il caricamento che sta partendo e' fatto di copie appena anonimizzate? Si riconoscono dal peso: quello di una
         copia, o la somma delle ultime (piu' file nello stesso invio)."""
-        ora, somma = time.time(), 0
-        for quando, di, byte in reversed(self.allegati_recenti):
-            if ora - quando > 180:
+        stamp, tally = time.time(), 0
+        for when, di, byte in reversed(self.recent_attachments):
+            if stamp - when > 180:
                 break
-            if di == servizio:
-                somma += byte
-                if peso in (byte, somma):
+            if di == service:
+                tally += byte
+                if weight in (byte, tally):
                     return True
         return False
 
-    def _anonimizza_file(self, nome, grezzo):
+    def _anonymize_file(self, name, raw):
         """(nome nuovo, contenuto, conteggi). Leggere Word, Excel, PDF e immagini e' un lavoro del programma di gestione:
         se questo processo ne ha le librerie lo fa da se', altrimenti lo chiede al pannello sullo stesso PC."""
-        documenti = self.documenti
-        if documenti is not None:
+        documents = self.documents
+        if documents is not None:
             try:
-                return documenti.elabora(nome, grezzo, "anonimizza")
-            except documenti.Errore as ex:
-                raise NonFatto(ex.codice) from None
-        token = (paths.DATI / "token.txt").read_text(encoding="utf-8").strip()
-        rich = urllib.request.Request(f"http://127.0.0.1:{paths.PORTA_PANNELLO}/internal/attachment",
-                                      data=json.dumps({"nome": nome, "dati": base64.b64encode(grezzo).decode("ascii")}).encode("utf-8"),
+                return documents.work_on(name, raw, "anonymize")
+            except documents.Error as ex:
+                raise NotDone(ex.code) from None
+        token = (paths.DATA / "token.txt").read_text(encoding="utf-8").strip()
+        req = urllib.request.Request(f"http://127.0.0.1:{paths.PANEL_PORT}/internal/attachment",
+                                      data=json.dumps({"name": name, "data": base64.b64encode(raw).decode("ascii")}).encode("utf-8"),
                                       headers={"Content-Type": "application/json", "X-Token": token})
         try:
-            with urllib.request.urlopen(rich, timeout=300) as r:
+            with urllib.request.urlopen(req, timeout=300) as r:
                 d = json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as ex:
             try:
-                codice = json.loads(ex.read().decode("utf-8")).get("codice", "")
+                code = json.loads(ex.read().decode("utf-8")).get("code", "")
             except ValueError:
-                codice = ""
-            raise NonFatto(codice) from None
+                code = ""
+            raise NotDone(code) from None
         except (urllib.error.URLError, OSError, ValueError):
-            raise NonFatto("pannello") from None
-        return d["nome"], base64.b64decode(d["dati"]), d["conteggi"]
+            raise NotDone("panel") from None
+        return d["name"], base64.b64decode(d["data"]), d["counts"]
 
-    def allegato(self, dati):
+    def attachment(self, data):
         """Un file che l'utente sta per allegare a un messaggio (scelto, trascinato o incollato): la pagina ricevera' la copia
         anonimizzata. Cio' che non si riesce ad anonimizzare segue la scelta «blocca i file»; un'immagine o un PDF senza
         testo non ha nulla da sostituire e passa; se la protezione non risponde non parte nulla."""
-        ad, servizio, _, _ = self._servizio(f"https://{str(dati.get('host', '')).lower()}/generico/casella")
+        ad, service, _, _ = self._service(f"https://{str(data.get('host', '')).lower()}/generic/box")
         if ad is None:
-            return {"azione": "passa"}
-        imp = settings.leggi()
-        nome = Path(str(dati.get("nome") or "file")).name[:200]
-        est = Path(nome).suffix.lower()
-        voce = {"servizio": servizio, "via": self._via(dati), "metodo": "allegato", "percorso": f"(allegato {est or 'senza estensione'})",
-                "byte": int(dati.get("byte") or 0)}
+            return {"action": "passthrough"}
+        cfg = settings.read()
+        name = Path(str(data.get("name") or "file")).name[:200]
+        est = Path(name).suffix.lower()
+        entry = {"service": service, "via": self._via(data), "method": "attachment", "path": f"(allegato {est or 'senza estensione'})",
+                "byte": int(data.get("byte") or 0)}
 
-        def non_anonimizzato():
-            self.reg.scrivi(**voce, evento="file bloccato" if imp["blocca_file"] else "file NON mascherato")
-            return {"azione": "blocca", "motivo": "file"} if imp["blocca_file"] else {"azione": "passa"}
+        def not_anonymized():
+            self.reg.write(**entry, event="file_blocked" if cfg["block_files"] else "file_not_masked")
+            return {"action": "block", "reason": "file"} if cfg["block_files"] else {"action": "passthrough"}
 
-        if not imp.get("allegati", True):
-            return non_anonimizzato()
+        if not cfg.get("attachments", True):
+            return not_anonymized()
         try:
-            grezzo = base64.b64decode(dati.get("dati") or "")
+            raw = base64.b64decode(data.get("data") or "")
         except ValueError:
-            grezzo = b""
-        if not grezzo or len(grezzo) > MAX_ALLEGATO:
-            return non_anonimizzato()
-        voce["byte"] = len(grezzo)
-        inizio = time.time()
+            raw = b""
+        if not raw or len(raw) > MAX_ATTACHMENT:
+            return not_anonymized()
+        entry["byte"] = len(raw)
+        start = time.time()
         try:
-            nuovo_nome, nuovo, conteggi = self._anonimizza_file(nome, grezzo)
-        except NonFatto as ex:
-            if ex.codice == "senza_testo":
-                self.reg.scrivi(**voce, evento="allegato senza testo: passato")
-                return {"azione": "passa"}
-            if ex.codice == "protezione":
-                self.reg.scrivi(**voce, evento="BLOCCATA: motore non raggiungibile")
-                return {"azione": "blocca", "motivo": "motore"}
-            return non_anonimizzato()
+            new_name, fresh, counts = self._anonymize_file(name, raw)
+        except NotDone as ex:
+            if ex.code == "without_text":
+                self.reg.write(**entry, event="attachment_without_text")
+                return {"action": "passthrough"}
+            if ex.code == "protection":
+                self.reg.write(**entry, event="blocked_engine_unreachable")
+                return {"action": "block", "reason": "engine"}
+            return not_anonymized()
         except Exception as ex:   # noqa: BLE001  (un file che manda in errore la lettura non deve partire in chiaro per sbaglio)
-            voce["errore"] = type(ex).__name__
-            return non_anonimizzato()
-        self.allegati_recenti.append((time.time(), servizio, len(nuovo)))
-        sostituzioni = {k: n for k, n in conteggi.items() if k != "pagine_lette" and n}
-        self.reg.scrivi(**voce, evento="allegato mascherato", sostituzioni=sostituzioni, ms=round((time.time() - inizio) * 1000))
-        nuova_est = Path(nuovo_nome).suffix.lower()
-        return {"azione": "sostituisci", "nome": nuovo_nome, "tipo": TIPI_FILE.get(nuova_est, "application/octet-stream"),
-                "dati": base64.b64encode(nuovo).decode("ascii"), "sostituzioni": sum(sostituzioni.values()), "convertito": nuova_est != est}
+            entry["error"] = type(ex).__name__
+            return not_anonymized()
+        self.recent_attachments.append((time.time(), service, len(fresh)))
+        replacements = {k: n for k, n in counts.items() if k != "pages_read" and n}
+        self.reg.write(**entry, event="attachment_masked", replacements=replacements, ms=round((time.time() - start) * 1000))
+        new_est = Path(new_name).suffix.lower()
+        return {"action": "replace", "name": new_name, "kind": FILE_KINDS.get(new_est, "application/octet-stream"),
+                "data": base64.b64encode(fresh).decode("ascii"), "replacements": sum(replacements.values()), "converted": new_est != est}
 
     # ---------------------------------------------------------------- risposta
-    def apri(self, dati):
-        if not settings.leggi()["ripristina"]:
+    def open_up(self, data):
+        if not settings.read()["restore"]:
             return {"id": None}
-        ad, servizio, _, percorso = self._servizio(dati.get("url", ""))
-        if ad is None or not ad.in_streaming(str(dati.get("tipo") or ""), percorso):
+        ad, service, _, path = self._service(data.get("url", ""))
+        if ad is None or not ad.in_streaming(str(data.get("kind") or ""), path):
             return {"id": None}
-        ident, ora = secrets.token_hex(8), time.time()
-        with self.lucchetto:
-            for k in [k for k, v in self.flussi.items() if ora - v[3] > 1800]:   # risposte interrotte a meta'
-                del self.flussi[k]
-            self.flussi[ident] = [ad.flusso(self.m.archivio.valore), servizio, activity.percorso_pulito(percorso), ora, self._via(dati)]
+        ident, stamp = secrets.token_hex(8), time.time()
+        with self.lock:
+            for k in [k for k, v in self.streams.items() if stamp - v[3] > 1800]:   # risposte interrotte a meta'
+                del self.streams[k]
+            self.streams[ident] = [ad.stream(self.m.vault.value), service, activity.clean_path(path), stamp, self._via(data)]
         return {"id": ident}
 
-    def pezzo(self, dati):
-        ident, fine = str(dati.get("id", "")), bool(dati.get("fine"))
-        with self.lucchetto:
-            voce = self.flussi.pop(ident, None) if fine else self.flussi.get(ident)
-        if voce is None:   # flusso sconosciuto: i dati tornano come sono (restano i segnaposto, nessun danno)
-            return {"dati": dati.get("dati") or "", "perso": True}
-        flusso, servizio, percorso, _, via = voce
-        voce[3] = time.time()
-        grezzo = base64.b64decode(dati.get("dati") or "")
-        out = b"".join(flusso(grezzo)) if grezzo else b""
-        if fine:
-            out += b"".join(flusso(b""))
-            if flusso.ripristinati:
-                self.reg.scrivi(servizio=servizio, via=via, percorso=percorso, evento="risposta in streaming",
-                                ripristinati=flusso.ripristinati)
-        return {"dati": base64.b64encode(out).decode("ascii")}
+    def chunk(self, data):
+        ident, end = str(data.get("id", "")), bool(data.get("end"))
+        with self.lock:
+            entry = self.streams.pop(ident, None) if end else self.streams.get(ident)
+        if entry is None:   # flusso sconosciuto: i dati tornano come sono (restano i segnaposto, nessun danno)
+            return {"data": data.get("data") or "", "lost": True}
+        stream, service, path, _, via = entry
+        entry[3] = time.time()
+        raw = base64.b64decode(data.get("data") or "")
+        out = b"".join(stream(raw)) if raw else b""
+        if end:
+            out += b"".join(stream(b""))
+            if stream.restored:
+                self.reg.write(service=service, via=via, path=path, event="response_streaming",
+                                restored=stream.restored)
+        return {"data": base64.b64encode(out).decode("ascii")}
 
-    def intera(self, dati):
-        testo = dati.get("testo")
-        if not isinstance(testo, str) or not settings.leggi()["ripristina"]:
+    def whole(self, data):
+        text = data.get("text")
+        if not isinstance(text, str) or not settings.read()["restore"]:
             return {}
-        ad, servizio, _, percorso = self._servizio(dati.get("url", ""))
-        trovati = len(R.RX_SEGNAPOSTO.findall(testo))
-        if ad is None or not trovati or len(testo) > MAX_CORPO:
+        ad, service, _, path = self._service(data.get("url", ""))
+        found_items = len(R.RX_PLACEHOLDER.findall(text))
+        if ad is None or not found_items or len(text) > MAX_BODY:
             return {}
-        nuovo = ad.intera(str(dati.get("tipo") or ""), testo, self.m.archivio.valore)
-        rimasti = len(R.RX_SEGNAPOSTO.findall(nuovo))
-        if trovati > rimasti:
-            self.reg.scrivi(servizio=servizio, via=self._via(dati), percorso=activity.percorso_pulito(percorso), evento="risposta",
-                            ripristinati=trovati - rimasti)
-        return {"testo": nuovo}
+        fresh = ad.whole(str(data.get("kind") or ""), text, self.m.vault.value)
+        remaining = len(R.RX_PLACEHOLDER.findall(fresh))
+        if found_items > remaining:
+            self.reg.write(service=service, via=self._via(data), path=activity.clean_path(path), event="response",
+                            restored=found_items - remaining)
+        return {"text": fresh}
 
-    def valori(self, dati):
-        if not settings.leggi()["ripristina"]:
-            return {"mappa": {}}
-        return self.m.valori([str(s) for s in (dati.get("segnaposto") or [])[:500]])
+    def values(self, data):
+        if not settings.read()["restore"]:
+            return {"mapping": {}}
+        return self.m.values([str(s) for s in (data.get("placeholder") or [])[:500]])

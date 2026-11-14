@@ -19,12 +19,12 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-TEMP = Path(tempfile.mkdtemp(prefix="omissis_prova_"))
-PORTA = 9917
+TEMP = Path(tempfile.mkdtemp(prefix="omissis_test_"))
+PORT = 9917
 os.environ["OMISSIS_DATA"] = str(TEMP / "data")
 os.environ["OMISSIS_LANG"] = "it"   # i controlli guardano anche i messaggi
-os.environ["OMISSIS_MODELS_URL"] = f"http://127.0.0.1:{PORTA}/models"
-os.environ["OMISSIS_UPDATES_URL"] = f"http://127.0.0.1:{PORTA}/versioni"
+os.environ["OMISSIS_MODELS_URL"] = f"http://127.0.0.1:{PORT}/models"
+os.environ["OMISSIS_UPDATES_URL"] = f"http://127.0.0.1:{PORT}/versioni"
 
 import updates   # noqa: E402
 import weights         # noqa: E402
@@ -32,188 +32,188 @@ import paths        # noqa: E402
 from cryptography.hazmat.primitives import serialization                         # noqa: E402
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 
-SERVITI = {}      # percorso -> contenuto
-RICHIESTE = []    # (percorso, intestazione Range)
-esiti = []
+SERVED = {}      # percorso -> contenuto
+REQUESTS = []    # (percorso, intestazione Range)
+outcomes = []
 
 
-def segna(nome, ok, nota=""):
-    esiti.append(ok)
-    print(("OK   " if ok else "NO   ") + nome + (f"  ({nota})" if nota else ""))
+def mark(name, ok, note=""):
+    outcomes.append(ok)
+    print(("OK   " if ok else "NO   ") + name + (f"  ({note})" if note else ""))
 
 
-class Finto(BaseHTTPRequestHandler):
+class Fake(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
     def do_GET(self):
-        dati = SERVITI.get(self.path)
-        RICHIESTE.append((self.path, self.headers.get("Range")))
-        if dati is None:
+        data = SERVED.get(self.path)
+        REQUESTS.append((self.path, self.headers.get("Range")))
+        if data is None:
             self.send_response(404)
             self.end_headers()
             return
-        intervallo, inizio = self.headers.get("Range"), 0
-        if intervallo:
-            inizio = int(intervallo.split("=")[1].split("-")[0])
+        interval, start = self.headers.get("Range"), 0
+        if interval:
+            start = int(interval.split("=")[1].split("-")[0])
             self.send_response(206)
-            self.send_header("Content-Range", f"bytes {inizio}-{len(dati) - 1}/{len(dati)}")
+            self.send_header("Content-Range", f"bytes {start}-{len(data) - 1}/{len(data)}")
         else:
             self.send_response(200)
-        self.send_header("Content-Length", str(len(dati) - inizio))
+        self.send_header("Content-Length", str(len(data) - start))
         self.end_headers()
-        self.wfile.write(dati[inizio:])
+        self.wfile.write(data[start:])
 
 
-def voce(dati):
-    return {"byte": len(dati), "sha256": hashlib.sha256(dati).hexdigest()}
+def entry(data):
+    return {"byte": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
-    server = ThreadingHTTPServer(("127.0.0.1", PORTA), Finto)
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), Fake)
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
     # ------------------------------------------------------------ il modello
-    pesi = {"config.json": b'{"id2label": {}}', "tokenizer.json": os.urandom(40_000), "model.onnx": os.urandom(3_500_000)}
-    elenco = {"origine": "", "modelli": {"finto": {"revisione": "main", "file": {k: voce(v) for k, v in pesi.items()}}}}
-    weights.elenco = lambda: elenco
-    for k, v in pesi.items():
-        SERVITI[f"/models/finto/{k}"] = v
-    cartella = paths.DATI / "models" / "finto"
+    model_files = {"config.json": b'{"id2label": {}}', "tokenizer.json": os.urandom(40_000), "model.onnx": os.urandom(3_500_000)}
+    listing = {"origin": "", "models": {"finto": {"revision": "main", "file": {k: entry(v) for k, v in model_files.items()}}}}
+    weights.listing = lambda: listing
+    for k, v in model_files.items():
+        SERVED[f"/models/finto/{k}"] = v
+    folder = paths.DATA / "models" / "finto"
 
-    segna("un modello che manca viene riconosciuto", weights.manca("finto") and weights.scaricabile("finto"))
-    weights.scarica("finto")
-    segna("scaricamento: file identici agli originali, modello pronto",
-          all((cartella / k).read_bytes() == v for k, v in pesi.items()) and not weights.manca("finto") and weights.STATO["fase"] == "pronto"
-          and weights.STATO["fatti"] == weights.STATO["totale"], f"{weights.STATO['fatti']} byte")
+    mark("un modello che manca viene riconosciuto", weights.missing("finto") and weights.downloadable("finto"))
+    weights.download("finto")
+    mark("scaricamento: file identici agli originali, modello pronto",
+          all((folder / k).read_bytes() == v for k, v in model_files.items()) and not weights.missing("finto") and weights.STATUS["phase"] == "ready_now"
+          and weights.STATUS["completed"] == weights.STATUS["total"], f"{weights.STATUS['completed']} byte")
 
-    RICHIESTE.clear()
-    weights.scarica("finto")
-    segna("file già presenti e integri: non si riscarica nulla", not RICHIESTE)
+    REQUESTS.clear()
+    weights.download("finto")
+    mark("file già presenti e integri: non si riscarica nulla", not REQUESTS)
 
-    (cartella / "model.onnx").unlink()
-    (cartella / "model.onnx.parte").write_bytes(pesi["model.onnx"][:1_200_000])
-    RICHIESTE.clear()
-    weights.scarica("finto")
-    segna("ripresa: si chiede solo la parte mancante e il file risulta integro",
-          RICHIESTE == [("/models/finto/model.onnx", "bytes=1200000-")] and (cartella / "model.onnx").read_bytes() == pesi["model.onnx"], str(RICHIESTE))
+    (folder / "model.onnx").unlink()
+    (folder / "model.onnx.part").write_bytes(model_files["model.onnx"][:1_200_000])
+    REQUESTS.clear()
+    weights.download("finto")
+    mark("ripresa: si chiede solo la parte mancante e il file risulta integro",
+          REQUESTS == [("/models/finto/model.onnx", "bytes=1200000-")] and (folder / "model.onnx").read_bytes() == model_files["model.onnx"], str(REQUESTS))
 
-    (cartella / "model.onnx").unlink()
-    SERVITI["/models/finto/model.onnx"] = pesi["model.onnx"][:-1] + b"X"   # stesso peso, un byte diverso
+    (folder / "model.onnx").unlink()
+    SERVED["/models/finto/model.onnx"] = model_files["model.onnx"][:-1] + b"X"   # stesso peso, un byte diverso
     try:
-        weights.scarica("finto")
-        scartato = False
-    except weights.Errore as ex:
-        scartato = "non corrisponde" in str(ex)
-    segna("file manomesso: scartato, il modello resta mancante", scartato and not (cartella / "model.onnx").exists()
-          and not (cartella / "model.onnx.parte").exists() and weights.manca("finto") and weights.STATO["fase"] == "errore")
+        weights.download("finto")
+        discarded = False
+    except weights.Error as ex:
+        discarded = "non corrisponde" in str(ex)
+    mark("file manomesso: scartato, il modello resta mancante", discarded and not (folder / "model.onnx").exists()
+          and not (folder / "model.onnx.part").exists() and weights.missing("finto") and weights.STATUS["phase"] == "error")
 
-    SERVITI["/models/finto/model.onnx"] = pesi["model.onnx"] + b"in piu'"
+    SERVED["/models/finto/model.onnx"] = model_files["model.onnx"] + b"in piu'"
     try:
-        weights.scarica("finto")
-        scartato = False
-    except weights.Errore:
-        scartato = True
-    segna("file più grande del previsto: scartato", scartato and weights.manca("finto"))
+        weights.download("finto")
+        discarded = False
+    except weights.Error:
+        discarded = True
+    mark("file più grande del previsto: scartato", discarded and weights.missing("finto"))
 
-    del SERVITI["/models/finto/model.onnx"]
+    del SERVED["/models/finto/model.onnx"]
     try:
-        weights.scarica("finto")
-        messaggio = ""
-    except weights.Errore as ex:
-        messaggio = str(ex)
-    segna("modello non ancora pubblicato: errore chiaro", "non è ancora disponibile" in messaggio, messaggio)
+        weights.download("finto")
+        message = ""
+    except weights.Error as ex:
+        message = str(ex)
+    mark("modello non ancora pubblicato: errore chiaro", "non è ancora disponibile" in message, message)
     try:
-        weights.scarica("sconosciuto")
-        messaggio = ""
-    except weights.Errore as ex:
-        messaggio = str(ex)
-    segna("modello fuori elenco: non si scarica nulla", "non è tra quelli" in messaggio)
+        weights.download("unknown")
+        message = ""
+    except weights.Error as ex:
+        message = str(ex)
+    mark("modello fuori elenco: non si scarica nulla", "non è tra quelli" in message)
 
     # ------------------------------------------------------------ gli aggiornamenti
-    chiave, estranea = Ed25519PrivateKey.generate(), Ed25519PrivateKey.generate()
-    updates.CHIAVE_PUBBLICA = base64.b64encode(chiave.public_key().public_bytes(
+    key, foreign = Ed25519PrivateKey.generate(), Ed25519PrivateKey.generate()
+    updates.PUBLIC_KEY = base64.b64encode(key.public_key().public_bytes(
         serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode("ascii")
-    attuale = updates.VERSIONE
-    nuova = ".".join(str(x) for x in (*updates.numeri(attuale)[:-1], updates.numeri(attuale)[-1] + 1))
+    current = updates.VERSION
+    new_one = ".".join(str(x) for x in (*updates.numbers(current)[:-1], updates.numbers(current)[-1] + 1))
     installer = os.urandom(900_000)
 
-    def pubblica(versione=nuova, file=None, con=chiave, ritocco=None, contenuto=installer):
-        file = file or f"Omissis-{versione}-setup.exe"
-        foglio = json.dumps({"prodotto": "omissis", "versione": versione, "file": file, **{"byte": len(installer), "sha256": hashlib.sha256(installer).hexdigest()},
-                             "note": "prova"}).encode("utf-8")
-        SERVITI["/versioni/update.json.sig"] = base64.b64encode(con.sign(foglio))
-        SERVITI["/versioni/update.json"] = ritocco(foglio) if ritocco else foglio
-        SERVITI[f"/versioni/{file}"] = contenuto
-        updates.STATO.update(fase="mai", versione="", errore="")
+    def public(version=new_one, file=None, con=key, tweak=None, content=installer):
+        file = file or f"Omissis-{version}-setup.exe"
+        sheet = json.dumps({"product": "omissis", "version": version, "file": file, **{"byte": len(installer), "sha256": hashlib.sha256(installer).hexdigest()},
+                             "notes": "test"}).encode("utf-8")
+        SERVED["/versioni/update.json.sig"] = base64.b64encode(con.sign(sheet))
+        SERVED["/versioni/update.json"] = tweak(sheet) if tweak else sheet
+        SERVED[f"/versioni/{file}"] = content
+        updates.STATUS.update(phase="never", version="", error="")
 
-    pubblica()
-    updates.controlla()
-    segna("versione nuova con firma valida: disponibile", updates.STATO["fase"] == "disponibile" and updates.STATO["versione"] == nuova)
-    pubblica(versione=attuale)
-    segna("stessa versione: nessun aggiornamento", updates.controlla()["fase"] == "aggiornato")
-    pubblica(versione="0.0.1")
-    segna("versione più vecchia: mai accettata", updates.controlla()["fase"] == "aggiornato")
-    pubblica(con=estranea)
-    segna("foglio firmato con un'altra chiave: ignorato", updates.controlla()["fase"] == "errore" and "firma" in updates.STATO["errore"])
-    pubblica(ritocco=lambda f: f.replace(nuova.encode(), b"9.9.9"))
-    segna("foglio ritoccato dopo la firma: ignorato", updates.controlla()["fase"] == "errore" and updates.STATO["versione"] == "")
-    pubblica(file="..\\..\\fuori.exe")
-    segna("nome di file con un percorso dentro: ignorato", updates.controlla()["fase"] == "errore")
-    del SERVITI["/versioni/update.json"]
-    updates.STATO.update(fase="mai")
-    segna("nessuna versione pubblicata: nessun errore", updates.controlla()["fase"] == "aggiornato")
+    public()
+    updates.check()
+    mark("versione nuova con firma valida: disponibile", updates.STATUS["phase"] == "available" and updates.STATUS["version"] == new_one)
+    public(version=current)
+    mark("stessa versione: nessun aggiornamento", updates.check()["phase"] == "updated")
+    public(version="0.0.1")
+    mark("versione più vecchia: mai accettata", updates.check()["phase"] == "updated")
+    public(con=foreign)
+    mark("foglio firmato con un'altra chiave: ignorato", updates.check()["phase"] == "error" and "firma" in updates.STATUS["error"])
+    public(tweak=lambda f: f.replace(new_one.encode(), b"9.9.9"))
+    mark("foglio ritoccato dopo la firma: ignorato", updates.check()["phase"] == "error" and updates.STATUS["version"] == "")
+    public(file="..\\..\\fuori.exe")
+    mark("nome di file con un percorso dentro: ignorato", updates.check()["phase"] == "error")
+    del SERVED["/versioni/update.json"]
+    updates.STATUS.update(phase="never")
+    mark("nessuna versione pubblicata: nessun errore", updates.check()["phase"] == "updated")
 
-    pubblica()
-    updates.controlla()
+    public()
+    updates.check()
     try:
-        updates.scarica()
-        rifiutato = False
-    except updates.Errore:
-        rifiutato = True
-    segna("copia dai sorgenti: avvisa ma non scarica e non installa", rifiutato and updates.pronto() is None and not updates.installabile())
+        updates.download()
+        refused = False
+    except updates.Error:
+        refused = True
+    mark("copia dai sorgenti: avvisa ma non scarica e non installa", refused and updates.ready_now() is None and not updates.installable())
 
-    paths.INSTALLATA = {"versione": attuale, "canale": "github"}   # da qui in poi come una copia installata
-    pubblica(contenuto=installer[:-1] + b"X")
-    updates.controlla()
-    updates.scarica()
-    segna("installer manomesso: scartato", updates.STATO["fase"] == "errore" and updates.pronto() is None
-          and not list(updates.CARTELLA.glob("*.exe")))
-    pubblica()
-    updates.controlla()
-    updates.scarica()
-    trovato = updates.pronto()
-    segna("installer integro: scaricato e pronto, riconosciuto anche senza rete", updates.STATO["fase"] == "pronto" and trovato is not None
-          and trovato[1] == nuova and trovato[0].read_bytes() == installer)
+    paths.INSTALLED = {"version": current, "channel": "github"}   # da qui in poi come una copia installata
+    public(content=installer[:-1] + b"X")
+    updates.check()
+    updates.download()
+    mark("installer manomesso: scartato", updates.STATUS["phase"] == "error" and updates.ready_now() is None
+          and not list(updates.FOLDER.glob("*.exe")))
+    public()
+    updates.check()
+    updates.download()
+    found = updates.ready_now()
+    mark("installer integro: scaricato e pronto, riconosciuto anche senza rete", updates.STATUS["phase"] == "ready_now" and found is not None
+          and found[1] == new_one and found[0].read_bytes() == installer)
 
-    lanciati = []
-    vero = subprocess.Popen
-    subprocess.Popen = lambda comando, **k: lanciati.append(comando)   # non si lancia nulla davvero
+    launched = []
+    real = subprocess.Popen
+    subprocess.Popen = lambda command, **k: launched.append(command)   # non si lancia nulla davvero
     try:
-        prima = updates.installa(automatico=True)
-        seconda = updates.installa(automatico=True)
-        a_mano = updates.installa()
+        before = updates.install(automatic=True)
+        second = updates.install(automatic=True)
+        by_hand = updates.install()
     finally:
-        subprocess.Popen = vero
-    segna("installazione: in silenzio, con riapertura; all'avvio una volta sola per versione, dal pannello sempre",
-          prima == nuova and seconda is None and a_mano == nuova and len(lanciati) == 2
-          and lanciati[0][1:] == ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RIAVVIA=1"], str(lanciati[0][1:]) if lanciati else "")
+        subprocess.Popen = real
+    mark("installazione: in silenzio, con riapertura; all'avvio una volta sola per versione, dal pannello sempre",
+          before == new_one and second is None and by_hand == new_one and len(launched) == 2
+          and launched[0][1:] == ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RIAVVIA=1"], str(launched[0][1:]) if launched else "")
 
-    trovato[0].write_bytes(installer[:-1] + b"X")
-    segna("installer sostituito sul disco dopo lo scaricamento: non viene lanciato", updates.pronto() is None and updates.installa() is None)
+    found[0].write_bytes(installer[:-1] + b"X")
+    mark("installer sostituito sul disco dopo lo scaricamento: non viene lanciato", updates.ready_now() is None and updates.install() is None)
 
-    impostazioni_vere = updates.settings.leggi
-    updates.settings.leggi = lambda: {**impostazioni_vere(), "aggiornamenti": "mai"}
-    segna("impostazione «mai»: nessuna installazione", updates.modalita() == "mai" and updates.pronto() is None)
-    updates.settings.leggi = impostazioni_vere
-    paths.INSTALLATA = {"versione": attuale, "canale": "store"}
-    segna("copia dello Store: nessun controllo, ci pensa lo Store", updates.modalita() == "store" and not updates.installabile())
+    real_settings = updates.settings.read
+    updates.settings.read = lambda: {**real_settings(), "updates": "never"}
+    mark("impostazione «mai»: nessuna installazione", updates.mode() == "never" and updates.ready_now() is None)
+    updates.settings.read = real_settings
+    paths.INSTALLED = {"version": current, "channel": "store"}
+    mark("copia dello Store: nessun controllo, ci pensa lo Store", updates.mode() == "store" and not updates.installable())
 
     server.shutdown()
     shutil.rmtree(TEMP, ignore_errors=True)
-    print(f"\n{sum(esiti)}/{len(esiti)} controlli superati")
-    sys.exit(0 if all(esiti) else 1)
+    print(f"\n{sum(outcomes)}/{len(outcomes)} controlli superati")
+    sys.exit(0 if all(outcomes) else 1)
 
 
 if __name__ == "__main__":

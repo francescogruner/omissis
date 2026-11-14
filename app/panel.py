@@ -43,128 +43,128 @@ import weights
 import paths
 import restore
 import scan
-from version import VERSIONE
+from version import VERSION
 
-QUI = Path(__file__).resolve().parent
-DATI = paths.DATI
-PY_MODELLO = paths.python_modello()
-LISTE = paths.liste()
-PORTA_PANNELLO, PORTA_MOTORE = paths.PORTA_PANNELLO, paths.PORTA_MOTORE
-SENZA_FINESTRA = 0x08000000
-CODICE = secrets.token_urlsafe(24)
-PAGINA = QUI / "panel"   # i file della pagina: index.html, style.css, app.js, icon.svg, locales\<codice>.json
-STATICI = {"/style.css": "text/css; charset=utf-8", "/app.js": "text/javascript; charset=utf-8", "/icon.svg": "image/svg+xml"}
-RX_LINGUA = re.compile(r"/locales/[a-z]{2,3}(-[A-Za-z]{2,4})?\.json")
+HERE = Path(__file__).resolve().parent
+DATA = paths.DATA
+PY_MODEL = paths.python_model()
+LISTS = paths.lists()
+PANEL_PORT, ENGINE_PORT = paths.PANEL_PORT, paths.ENGINE_PORT
+NO_WINDOW = 0x08000000
+CODE = secrets.token_urlsafe(24)
+PAGE = HERE / "panel"   # i file della pagina: index.html, style.css, app.js, icon.svg, locales\<codice>.json
+STATIC = {"/style.css": "text/css; charset=utf-8", "/app.js": "text/javascript; charset=utf-8", "/icon.svg": "image/svg+xml"}
+RX_LANGUAGE = re.compile(r"/locales/[a-z]{2,3}(-[A-Za-z]{2,4})?\.json")
 # la pagina carica solo file suoi: niente script o stili scritti dentro l'HTML, nessuna risorsa da fuori
-POLITICA_PAGINA = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; "
+POLICY_PAGE = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; "
                    "base-uri 'none'; frame-ancestors 'none'")
 # quanto e' provata la lettura di ciascun servizio: la pagina traduce il codice (servizi.lettura.<codice>)
-STATO_LETTURA = {"claude": "provato", "chatgpt": "provato", "anthropic": "provato", "openai": "provato",
-                 "gemini": "sperimentale", "generico": "generico", None: "no"}
+READING_STATUS = {"claude": "tested", "chatgpt": "tested", "anthropic": "tested", "openai": "tested",
+                 "gemini": "experimental", "generic": "generic", None: "no"}
 
 
-SCORCIATOIE = None        # le scorciatoie da tastiera (clipboard.Scorciatoie), quando c'e' l'icona vicino all'orologio
-AVVISA = None             # funzione che mostra una notifica di Windows, quando c'e' l'icona
-CARTELLE = set()          # cartelle scelte o prodotte in questa sessione: le sole che la pagina puo' far aprire
-OGNI = {"giornaliera": 86400, "settimanale": 7 * 86400}   # ogni quanto si ripete l'analisi degli strumenti AI
+SHORTCUTS = None        # le scorciatoie da tastiera (clipboard.Scorciatoie), quando c'e' l'icona vicino all'orologio
+NOTIFY = None             # funzione che mostra una notifica di Windows, quando c'e' l'icona
+FOLDERS = set()          # cartelle scelte o prodotte in questa sessione: le sole che la pagina puo' far aprire
+EVERY = {"daily": 86400, "weekly": 7 * 86400}   # ogni quanto si ripete l'analisi degli strumenti AI
 
 
-class Rifiuto(Exception):
+class Refusal(Exception):
     """Una richiesta della pagina che non si puo' esaudire: il messaggio e' per l'utente, nella sua lingua."""
 
 
-def porta_aperta(porta):
+def opened_port(port):
     with socket.socket() as s:
         s.settimeout(0.3)
-        return s.connect_ex(("127.0.0.1", porta)) == 0
+        return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def motore(percorso, dati=None, attesa=60):
-    token = (DATI / "token.txt").read_text(encoding="utf-8").strip()
-    rich = urllib.request.Request(f"http://127.0.0.1:{PORTA_MOTORE}{percorso}", headers={"X-Token": token, "Content-Type": "application/json"},
-                                  data=json.dumps(dati).encode("utf-8") if dati is not None else None)
-    with urllib.request.urlopen(rich, timeout=attesa) as r:
+def engine(path, data=None, timeout=60):
+    token = (DATA / "token.txt").read_text(encoding="utf-8").strip()
+    req = urllib.request.Request(f"http://127.0.0.1:{ENGINE_PORT}{path}", headers={"X-Token": token, "Content-Type": "application/json"},
+                                  data=json.dumps(data).encode("utf-8") if data is not None else None)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
-class Supervisore:
+class Supervisor:
     """Tiene in vita i due processi: il motore (modello) e il proxy (mitmproxy)."""
 
-    def __init__(self, prova=False):
-        self.motore = self.proxy = self.gateway = None
-        self.errore_gateway = ""
-        self.prova, self.fase, self.errore = prova, "ferma", ""
-        self.lucchetto = threading.Lock()
-        self.avviato_con = None
+    def __init__(self, test=False):
+        self.engine = self.proxy = self.gateway = None
+        self.gateway_error = ""
+        self.test, self.phase, self.error = test, "stop", ""
+        self.lock = threading.Lock()
+        self.launched_with = None
 
-    def _vivo(self, p):
+    def _alive(self, p):
         return p is not None and p.poll() is None
 
-    def avvia(self):
-        with self.lucchetto:
-            if self.fase in ("avvio", "modello"):
+    def launch(self):
+        with self.lock:
+            if self.phase in ("startup", "model"):
                 return
-            self.fase, self.errore = "avvio", ""
-        threading.Thread(target=self._avvia, daemon=True).start()
+            self.phase, self.error = "startup", ""
+        threading.Thread(target=self._launch, daemon=True).start()
 
-    def _avvia(self):
-        imp = settings.leggi()
+    def _launch(self):
+        cfg = settings.read()
         try:
-            DATI.mkdir(parents=True, exist_ok=True)
-            amb = {**os.environ, "PYTHONUTF8": "1", "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1",
-                   "OMISSIS_ENGINE_URL": f"http://127.0.0.1:{PORTA_MOTORE}"}
-            if self.prova:
-                amb["OMISSIS_TEST"] = "1"
-            if not self._vivo(self.motore) or self.avviato_con is None or self.avviato_con[:2] != (imp["modello"], imp["device"]):
-                self._ferma(self.motore)
-                if weights.manca(imp["modello"]):   # primo avvio di una copia installata: i pesi si scaricano una volta
-                    self.fase = "modello"
-                    weights.scarica(imp["modello"])
-                    self.fase = "avvio"
-                modello = str(paths.modello(imp["modello"]))
-                comando = [str(PY_MODELLO), str(QUI / "engine.py"), "--model", modello, "--port", str(PORTA_MOTORE)]
-                if imp["device"] in ("cpu", "cuda"):
-                    comando += ["--device", imp["device"]]
-                self.motore = subprocess.Popen(comando, env=amb, cwd=QUI, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                               creationflags=SENZA_FINESTRA)
+            DATA.mkdir(parents=True, exist_ok=True)
+            env = {**os.environ, "PYTHONUTF8": "1", "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1",
+                   "OMISSIS_ENGINE_URL": f"http://127.0.0.1:{ENGINE_PORT}"}
+            if self.test:
+                env["OMISSIS_TEST"] = "1"
+            if not self._alive(self.engine) or self.launched_with is None or self.launched_with[:2] != (cfg["model"], cfg["device"]):
+                self._stop(self.engine)
+                if weights.missing(cfg["model"]):   # primo avvio di una copia installata: i pesi si scaricano una volta
+                    self.phase = "model"
+                    weights.download(cfg["model"])
+                    self.phase = "startup"
+                model = str(paths.model(cfg["model"]))
+                command = [str(PY_MODEL), str(HERE / "engine.py"), "--model", model, "--port", str(ENGINE_PORT)]
+                if cfg["device"] in ("cpu", "cuda"):
+                    command += ["--device", cfg["device"]]
+                self.engine = subprocess.Popen(command, env=env, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                               creationflags=NO_WINDOW)
                 for _ in range(180):
-                    if not self._vivo(self.motore):
-                        raise RuntimeError(i18n.t("programma.motore_chiuso"))
+                    if not self._alive(self.engine):
+                        raise RuntimeError(i18n.t("program.engine_closed"))
                     try:
-                        motore("/status", attesa=2)
+                        engine("/status", timeout=2)
                         break
                     except Exception:   # noqa: BLE001
                         time.sleep(1)
                 else:
-                    raise RuntimeError(i18n.t("programma.motore_muto"))
-            self._ferma(self.proxy)
-            comando = [*paths.mitmdump(), "-q", "-s", str(QUI / "addon.py"), "--listen-host", "127.0.0.1",
-                       "-p", str(imp["porta"]), "--set", f"confdir={DATI / 'ca'}"]
-            for h in catalog.espressioni_host(settings.protetti(imp)):
-                comando += ["--allow-hosts", h]
-            self.proxy = subprocess.Popen(comando, env=amb, cwd=QUI, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                          creationflags=SENZA_FINESTRA)
+                    raise RuntimeError(i18n.t("program.engine_silent"))
+            self._stop(self.proxy)
+            command = [*paths.mitmdump(), "-q", "-s", str(HERE / "addon.py"), "--listen-host", "127.0.0.1",
+                       "-p", str(cfg["port"]), "--set", f"confdir={DATA / 'ca'}"]
+            for h in catalog.expressions_host(settings.guarded(cfg)):
+                command += ["--allow-hosts", h]
+            self.proxy = subprocess.Popen(command, env=env, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                          creationflags=NO_WINDOW)
             for _ in range(40):
-                if porta_aperta(imp["porta"]):
+                if opened_port(cfg["port"]):
                     break
-                if not self._vivo(self.proxy):
-                    raise RuntimeError(i18n.t("programma.proxy_non_parte", porta=imp["porta"]))
+                if not self._alive(self.proxy):
+                    raise RuntimeError(i18n.t("program.proxy_not_starting", port=cfg["port"]))
                 time.sleep(0.5)
-            self.avviato_con = (imp["modello"], imp["device"], imp["porta"], tuple(s["id"] for s in settings.protetti(imp)))
+            self.launched_with = (cfg["model"], cfg["device"], cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
             if self.gateway is None:   # per gli strumenti da terminale; se la porta e' occupata il resto funziona lo stesso
                 try:
-                    self.gateway, self.errore_gateway = gateway.Gateway().avvia(), ""
+                    self.gateway, self.gateway_error = gateway.Gateway().launch(), ""
                 except OSError:
-                    self.errore_gateway = i18n.t("programma.gateway_porta", porta=paths.PORTA_GATEWAY)
-            self.fase = "attiva"
-        except weights.Annullato:
-            self.fase = "ferma"
+                    self.gateway_error = i18n.t("program.gateway_port", port=paths.GATEWAY_PORT)
+            self.phase = "active"
+        except weights.Cancelled:
+            self.phase = "stop"
         except Exception as ex:   # noqa: BLE001
-            self._ferma(self.proxy)
-            self.fase, self.errore = "errore", str(ex)
+            self._stop(self.proxy)
+            self.phase, self.error = "error", str(ex)
 
     @staticmethod
-    def _ferma(p):
+    def _stop(p):
         if p is not None and p.poll() is None:
             p.terminate()
             try:
@@ -172,515 +172,492 @@ class Supervisore:
             except subprocess.TimeoutExpired:
                 p.kill()
 
-    def ferma(self):
-        if self.fase == "modello":
-            weights.annulla()
+    def stop(self):
+        if self.phase == "model":
+            weights.cancel()
         if self.gateway is not None:
-            self.gateway.ferma()
+            self.gateway.stop()
             self.gateway = None
-        self._ferma(self.proxy)
-        self._ferma(self.motore)
-        self.proxy = self.motore = self.avviato_con = None
-        self.fase = "ferma"
+        self._stop(self.proxy)
+        self._stop(self.engine)
+        self.proxy = self.engine = self.launched_with = None
+        self.phase = "stop"
 
-    def da_riavviare(self):
+    def restart_needed(self):
         """Le impostazioni salvate richiedono un riavvio per avere effetto?"""
-        if self.fase != "attiva" or self.avviato_con is None:
+        if self.phase != "active" or self.launched_with is None:
             return False
-        imp = settings.leggi()
-        return self.avviato_con != (imp["modello"], imp["device"], imp["porta"], tuple(s["id"] for s in settings.protetti(imp)))
+        cfg = settings.read()
+        return self.launched_with != (cfg["model"], cfg["device"], cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
 
-    def stato(self):
-        if self.fase == "attiva" and not (self._vivo(self.motore) and self._vivo(self.proxy)):
-            self.fase, self.errore = "errore", i18n.t("programma.processo_chiuso")
+    def status(self):
+        if self.phase == "active" and not (self._alive(self.engine) and self._alive(self.proxy)):
+            self.phase, self.error = "error", i18n.t("program.process_closed")
         info = {}
-        if self._vivo(self.motore) and self.fase == "attiva":
+        if self._alive(self.engine) and self.phase == "active":
             try:
-                info = motore("/status", attesa=3)
+                info = engine("/status", timeout=3)
             except Exception:   # noqa: BLE001
                 info = {}
-        return {"fase": self.fase, "errore": self.errore, "da_riavviare": self.da_riavviare(), "versione": VERSIONE,
-                "scaricamento": weights.stato(settings.leggi()["modello"]) if self.fase in ("modello", "errore") else None,
-                "aggiornamento": updates.stato(),
-                "modello": Path(info["modello"]).name if info.get("modello") else None, "device": info.get("device"),
-                "soglia": info.get("soglia"), "voci": info.get("voci"), "porta": settings.leggi()["porta"]}
+        return {"phase": self.phase, "error": self.error, "restart_needed": self.restart_needed(), "version": VERSION,
+                "downloading": weights.status(settings.read()["model"]) if self.phase in ("model", "error") else None,
+                "update": updates.status(),
+                "model": Path(info["model"]).name if info.get("model") else None, "device": info.get("device"),
+                "threshold": info.get("threshold"), "entries": info.get("entries"), "port": settings.read()["port"]}
 
 
 SUP = None
-ICONA = None
-CONNETTORI = {}   # app desktop avviate da qui: chiave -> Connettore
+ICON = None
+CONNECTORS = {}   # app desktop avviate da qui: chiave -> Connettore
 
 
-def spegni(dopo=1.5):
+def turn_off(after=1.5):
     """Chiude tutto il programma (lo usa l'aggiornamento: l'installer lo sostituisce e lo riapre)."""
-    def esegui():
-        time.sleep(dopo)   # il tempo di rispondere alla pagina
+    def run():
+        time.sleep(after)   # il tempo di rispondere alla pagina
         try:
-            for c in list(CONNETTORI.values()):
-                c.chiudi()
-            SUP.ferma()
-            if ICONA is not None:
-                ICONA.stop()
+            for c in list(CONNECTORS.values()):
+                c.close()
+            SUP.stop()
+            if ICON is not None:
+                ICON.stop()
         finally:
             os._exit(0)
-    threading.Thread(target=esegui, daemon=True).start()
+    threading.Thread(target=run, daemon=True).start()
 
 
 def app_desktop():
     out = []
-    for chiave, a in connector.APP.items():
-        c = CONNETTORI.get(chiave)
-        if c is not None and not c.vivo:   # l'app e' stata chiusa
-            CONNETTORI.pop(chiave, None)
+    for key, a in connector.APP.items():
+        c = CONNECTORS.get(key)
+        if c is not None and not c.alive:   # l'app e' stata chiusa
+            CONNECTORS.pop(key, None)
             c = None
-        out.append({"id": chiave, "nome": a["nome"], "installata": Path(os.path.expandvars(a["comando"])).exists(),
-                    "collegata": c is not None, "esito": c.esito if c else None, "conteggi": dict(c.conteggi) if c else None,
-                    "errori": (c.avvisi + c.errori)[-3:] if c else []})
+        out.append({"id": key, "name": a["name"], "installed": Path(os.path.expandvars(a["command"])).exists(),
+                    "connected": c is not None, "outcome": c.outcome if c else None, "counts": dict(c.counts) if c else None,
+                    "errors": (c.notices + c.errors)[-3:] if c else []})
     return out
 
 
 # ------------------------------------------------------------------ dati per la pagina
 
-def leggi_registro(n=20000):
-    f = DATI / "activity.jsonl"
+def read_log(n=20000):
+    f = DATA / "activity.jsonl"
     if not f.exists():
         return []
     out = []
-    for riga in f.read_text(encoding="utf-8").splitlines()[-n:]:
+    for line in f.read_text(encoding="utf-8").splitlines()[-n:]:
         try:
-            out.append(json.loads(riga))
+            out.append(json.loads(line))
         except ValueError:
             pass
     return out
 
 
-def statistiche():
-    oggi = time.strftime("%Y-%m-%d")
-    giorni = [time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400 * i)) for i in range(6, -1, -1)]
-    per_giorno = {g: 0 for g in giorni}
-    tipi, servizi, avvisi = collections.Counter(), collections.Counter(), collections.Counter()
-    conta = collections.Counter()
-    for v in leggi_registro():
-        g, ev = v.get("ora", "")[:10], v.get("evento", "")
-        if g not in per_giorno:
+def stats():
+    today = time.strftime("%Y-%m-%d")
+    days = [time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400 * i)) for i in range(6, -1, -1)]
+    by_day = {g: 0 for g in days}
+    kinds, services, notices = collections.Counter(), collections.Counter(), collections.Counter()
+    count = collections.Counter()
+    for v in read_log():
+        g, ev = v.get("stamp", "")[:10], v.get("event", "")
+        if g not in by_day:
             continue
-        sost = sum((v.get("sostituzioni") or {}).values())
-        if ev == "mascherata":
-            per_giorno[g] += 1
-            servizi[v.get("servizio", "?")] += 1
-            tipi.update(v.get("sostituzioni") or {})
-            if g == oggi:
-                conta["messaggi"] += 1
-                conta["sostituzioni"] += sost
-        elif ev.startswith("BLOCCAT") or ev == "file bloccato":
-            conta["bloccate"] += g == oggi
-            avvisi["bloccate"] += 1
+        sost = sum((v.get("replacements") or {}).values())
+        if ev == "masked":
+            by_day[g] += 1
+            services[v.get("service", "?")] += 1
+            kinds.update(v.get("replacements") or {})
+            if g == today:
+                count["messages"] += 1
+                count["replacements"] += sost
+        elif ev.startswith("blocked") or ev == "file_blocked":
+            count["blocked"] += g == today
+            notices["blocked"] += 1
         elif "nessun campo" in ev:
-            avvisi["non_riconosciute"] += 1
-        elif ev == "file NON mascherato":
-            avvisi["file_non_mascherati"] += 1
+            notices["unrecognized"] += 1
+        elif ev == "file_not_masked":
+            notices["unmasked_files"] += 1
         if v.get("VALORI_IN_CHIARO"):
-            avvisi["valori_in_chiaro"] += 1
-    return {"oggi": {"messaggi": conta["messaggi"], "sostituzioni": conta["sostituzioni"], "bloccate": conta["bloccate"]},
-            "giorni": [{"giorno": g, "n": per_giorno[g]} for g in giorni], "tipi": tipi.most_common(), "servizi": servizi.most_common(),
-            "avvisi": [{"codice": k, "n": n} for k, n in avvisi.most_common()]}
+            notices["clear_values"] += 1
+    return {"today": {"messages": count["messages"], "replacements": count["replacements"], "blocked": count["blocked"]},
+            "days": [{"day": g, "n": by_day[g]} for g in days], "kinds": kinds.most_common(), "services": services.most_common(),
+            "notices": [{"code": k, "n": n} for k, n in notices.most_common()]}
 
 
-def contatti(giorni=30):
-    f = DATI / "contacts.sqlite"
+def contacts(days=30):
+    f = DATA / "contacts.sqlite"
     if not f.exists():
         return {}
-    da = time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400 * giorni))
+    da = time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400 * days))
     try:
         db = sqlite3.connect(f"file:{f.as_posix()}?mode=ro", uri=True)
-        righe = db.execute("SELECT servizio, esito, SUM(n), MAX(ultimo) FROM contatti WHERE giorno >= ? GROUP BY servizio, esito", (da,)).fetchall()
+        lines = db.execute("SELECT service, outcome, SUM(n), MAX(last) FROM contacts WHERE day >= ? GROUP BY service, outcome", (da,)).fetchall()
         db.close()
     except sqlite3.Error:
         return {}
     out = {}
-    for servizio, esito, n, ultimo in righe:
-        v = out.setdefault(servizio, {"n": 0, "ultimo": "", "esiti": {}})
+    for service, outcome, n, last in lines:
+        v = out.setdefault(service, {"n": 0, "last": "", "outcomes": {}})
         v["n"] += n
-        v["ultimo"] = max(v["ultimo"], ultimo or "")
-        v["esiti"][esito] = n
+        v["last"] = max(v["last"], last or "")
+        v["outcomes"][outcome] = n
     return out
 
 
-def servizi():
-    imp, cont = settings.leggi(), contatti()
-    return [{"id": s["id"], "nome": s["nome"], "fornitore": s["fornitore"], "tipo": s["tipo"], "domini": s["domini"],
-             "lettura": "radar" if s["radar"] else STATO_LETTURA[s["adattatore"]], "radar": s["radar"], "leggibile": bool(s["adattatore"]),
-             "politica": settings.politica(s, imp),
-             "predefinita": catalog.politica_predefinita(s), "contatti": cont.get(s["id"], {}).get("n", 0),
-             "ultimo": cont.get(s["id"], {}).get("ultimo", "")} for s in catalog.SERVIZI]
+def services():
+    cfg, cont = settings.read(), contacts()
+    return [{"id": s["id"], "name": s["name"], "vendor": s["vendor"], "kind": s["kind"], "domains": s["domains"],
+             "reading": "radar" if s["radar"] else READING_STATUS[s["adapter"]], "radar": s["radar"], "readable": bool(s["adapter"]),
+             "policy": settings.policy(s, cfg),
+             "default": catalog.default_policy(s), "contacts": cont.get(s["id"], {}).get("n", 0),
+             "last": cont.get(s["id"], {}).get("last", "")} for s in catalog.SERVICES]
 
 
-def inventario():
+def inventory_status():
     """L'inventario degli strumenti AI con, per ogni voce legata a un servizio del catalogo, la scelta fatta nelle Regole."""
-    r, imp = inventory.riepilogo(), settings.leggi()
-    for e in r["elementi"]:
-        s = catalog.PER_ID.get(e["servizio"])
-        e["politica"] = settings.politica(s, imp) if s else None
-    ogni, ultima = OGNI.get(imp.get("analisi")), r["analisi"][0]["ora"] if r["analisi"] else ""
-    prossima = ""
-    if ogni and ultima:
-        prossima = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.mktime(time.strptime(ultima, "%Y-%m-%d %H:%M:%S")) + ogni))
-    return {**r, "ogni": imp.get("analisi"), "prossima": prossima}
+    r, cfg = inventory.summary(), settings.read()
+    for e in r["items"]:
+        s = catalog.PER_ID.get(e["service"])
+        e["policy"] = settings.policy(s, cfg) if s else None
+    every, latest = EVERY.get(cfg.get("scan")), r["scan"][0]["stamp"] if r["scan"] else ""
+    upcoming = ""
+    if every and latest:
+        upcoming = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.mktime(time.strptime(latest, "%Y-%m-%d %H:%M:%S")) + every))
+    return {**r, "every": cfg.get("scan"), "upcoming": upcoming}
 
 
-def analizza(origine):
+def analyze(origin):
     """Fotografa il PC e la rete, salva l'analisi e restituisce le novita' rispetto alla precedente."""
-    return inventory.registra(scan.pc(), scan.rete(), origine)
+    return inventory.record(scan.pc(), scan.network(), origin)
 
 
-def sorveglia():
+def watch():
     """In sottofondo: ripete l'analisi degli strumenti AI con la cadenza scelta e, se chiesto, alleggerisce l'archivio."""
     time.sleep(120)   # non subito: all'avvio il PC ha gia' da fare
-    pulito = ""
+    clean = ""
     while True:
         try:
-            imp = settings.leggi()
-            ogni, ultima = OGNI.get(imp.get("analisi")), inventory.ultima()
-            passati = time.time() - time.mktime(time.strptime(ultima, "%Y-%m-%d %H:%M:%S")) if ultima else None
-            if ogni and (passati is None or passati >= ogni):
-                novita = analizza("automatica")
-                if novita["nuovi"] and AVVISA:
-                    nomi = ", ".join(sorted({e["nome"] for e in novita["nuovi"]})[:3])
-                    AVVISA(i18n.t("inventario.avviso_nuovi", n=len(novita["nuovi"]), nomi=nomi))
-            giorni, oggi = int(imp.get("archivio_giorni") or 0), time.strftime("%Y-%m-%d")
-            if giorni > 0 and pulito != oggi and SUP.fase == "attiva":
-                motore("/vault/delete", {"fermi_da_giorni": giorni})
-                pulito = oggi
+            cfg = settings.read()
+            every, latest = EVERY.get(cfg.get("scan")), inventory.latest()
+            passed = time.time() - time.mktime(time.strptime(latest, "%Y-%m-%d %H:%M:%S")) if latest else None
+            if every and (passed is None or passed >= every):
+                news = analyze("automatic")
+                if news["new_items"] and NOTIFY:
+                    names = ", ".join(sorted({e["name"] for e in news["new_items"]})[:3])
+                    NOTIFY(i18n.t("inventory.new_notice", n=len(news["new_items"]), names=names))
+            days, today = int(cfg.get("vault_days") or 0), time.strftime("%Y-%m-%d")
+            if days > 0 and clean != today and SUP.phase == "active":
+                engine("/vault/delete", {"idle_days": days})
+                clean = today
         except Exception:   # noqa: BLE001  (un giro andato male non deve fermare i successivi)
             pass
         time.sleep(600)
 
 
-def scorciatoie():
+def shortcuts():
     """Le scorciatoie da tastiera e il loro stato (attiva, oppure presa da un altro programma)."""
-    volute = clipboard.scelte(settings.leggi())
-    stato = SCORCIATOIE.stato if SCORCIATOIE is not None else {}
-    return {"disponibili": SCORCIATOIE is not None, "predefinite": clipboard.PREDEFINITE,
-            "voci": [{"nome": nome, "combinazione": c, "scritta": clipboard.scritta(c), "attiva": bool(stato.get(nome, {}).get("attiva")),
-                      "errore": stato.get(nome, {}).get("errore", "") if c else ""} for nome, c in volute.items()]}
+    wanted = clipboard.choices(settings.read())
+    status = SHORTCUTS.status if SHORTCUTS is not None else {}
+    return {"available": SHORTCUTS is not None, "defaults": clipboard.DEFAULTS,
+            "entries": [{"name": name, "combo": c, "caption": clipboard.caption(c), "active": bool(status.get(name, {}).get("active")),
+                      "error": status.get(name, {}).get("error", "") if c else ""} for name, c in wanted.items()]}
 
 
-def leggi_liste():
-    def f(nome):
-        p = LISTE / nome
+def read_lists():
+    def f(name):
+        p = LISTS / name
         return [r.strip() for r in p.read_text(encoding="utf-8").splitlines() if r.strip() and not r.lstrip().startswith("#")] if p.exists() else []
-    return {"sempre": f("always.txt"), "mai": f("never.txt")}
+    return {"always": f("always.txt"), "never": f("never.txt")}
 
 
-def scrivi_liste(dati):
-    testate = {"always.txt": "# Termini da mascherare SEMPRE, uno per riga (maiuscole e minuscole non contano).\n",
+def write_lists(data):
+    tested = {"always.txt": "# Termini da mascherare SEMPRE, uno per riga (maiuscole e minuscole non contano).\n",
                "never.txt": "# Termini da NON mascherare mai, uno per riga (maiuscole e minuscole non contano).\n"}
-    LISTE.mkdir(parents=True, exist_ok=True)
-    for nome, chiave in (("always.txt", "sempre"), ("never.txt", "mai")):
-        voci = [str(x).strip()[:200] for x in dati.get(chiave, []) if str(x).strip() and not str(x).lstrip().startswith("#")][:5000]
-        (LISTE / nome).write_text(testate[nome] + "\n".join(voci) + ("\n" if voci else ""), encoding="utf-8")
+    LISTS.mkdir(parents=True, exist_ok=True)
+    for name, key in (("always.txt", "always"), ("never.txt", "never")):
+        entries = [str(x).strip()[:200] for x in data.get(key, []) if str(x).strip() and not str(x).lstrip().startswith("#")][:5000]
+        (LISTS / name).write_text(tested[name] + "\n".join(entries) + ("\n" if entries else ""), encoding="utf-8")
     try:
-        motore("/lists", {})
+        engine("/lists", {})
     except Exception:   # noqa: BLE001  (motore spento: le leggera' al prossimo avvio)
         pass
-    return leggi_liste()
+    return read_lists()
 
 
-def certificato(azione=None):
-    cer = DATI / "ca" / "mitmproxy-ca-cert.cer"
-    if azione == "installa" and cer.exists():
-        subprocess.run(["certutil", "-user", "-addstore", "Root", str(cer)], capture_output=True, timeout=120, creationflags=SENZA_FINESTRA)
-    elif azione == "rimuovi":
-        subprocess.run(["certutil", "-user", "-delstore", "Root", "mitmproxy"], capture_output=True, timeout=120, creationflags=SENZA_FINESTRA)
-    r = subprocess.run(["certutil", "-user", "-store", "Root", "mitmproxy"], capture_output=True, timeout=30, creationflags=SENZA_FINESTRA)
-    return {"esiste": cer.exists(), "installato": r.returncode == 0 and b"mitmproxy" in r.stdout}
+def certificate(action=None):
+    cer = DATA / "ca" / "mitmproxy-ca-cert.cer"
+    if action == "install" and cer.exists():
+        subprocess.run(["certutil", "-user", "-addstore", "Root", str(cer)], capture_output=True, timeout=120, creationflags=NO_WINDOW)
+    elif action == "remove":
+        subprocess.run(["certutil", "-user", "-delstore", "Root", "mitmproxy"], capture_output=True, timeout=120, creationflags=NO_WINDOW)
+    r = subprocess.run(["certutil", "-user", "-store", "Root", "mitmproxy"], capture_output=True, timeout=30, creationflags=NO_WINDOW)
+    return {"exists": cer.exists(), "installed": r.returncode == 0 and b"mitmproxy" in r.stdout}
 
 
 # ------------------------------------------------------------------ servizio web locale
 
-# Gli indirizzi in italiano di prima della rinomina restano validi: una scheda del pannello rimasta aperta, o uno
-# script che li usa, continuano a funzionare. (Scritti a pezzi perche' lo script della rinomina non li tocchi.)
-OLD_PATHS = {"/api/" + old: "/api/" + new for old, new in (
-    ("arch" + "ivio", "vault"), ("arch" + "ivio/elimina", "vault/delete"), ("arch" + "ivio/svuota", "vault/clear"),
-    ("invent" + "ario", "inventory"), ("invent" + "ario/analizza", "inventory/scan"), ("invent" + "ario/dimentica", "inventory/forget"),
-    ("invent" + "ario/giudizio", "inventory/verdict"), ("invent" + "ario/svuota", "inventory/clear"), ("invent" + "ario/csv", "inventory/csv"),
-    ("cart" + "ella/apri", "folder/open"), ("cart" + "ella/scegli", "folder/choose"), ("docum" + "enti/percorso", "documents/path"),
-    ("docum" + "enti/file", "documents/file"), ("li" + "ste", "lists"), ("li" + "ste/aggiungi", "lists/add"), ("aggiorn" + "amenti", "updates"),
-    ("app" + "unti", "clipboard"), ("categ" + "orie", "categories"), ("certif" + "icato", "certificate"), ("compat" + "ibilita", "compatibility"),
-    ("estens" + "ione", "extension"), ("impost" + "azioni", "settings"), ("lin" + "gue", "languages"), ("protez" + "ione", "protection"),
-    ("pro" + "va", "try"), ("regi" + "stro", "activity"), ("riprist" + "ina", "restore"), ("scorc" + "iatoie", "shortcuts"),
-    ("serv" + "izi", "services"), ("shadow/re" + "te", "shadow/network"), ("st" + "ato", "status"), ("vi" + "sta", "view"))}
-
-
-def nuovo_indirizzo(percorso):
-    indirizzo, punto, domanda = percorso.partition("?")
-    if indirizzo.startswith("/inter" + "no/"):
-        indirizzo = "/internal/" + {"alleg" + "ato": "attachment"}.get(indirizzo[9:], indirizzo[9:])
-    return OLD_PATHS.get(indirizzo, indirizzo) + punto + domanda
-
-
-class Gestore(BaseHTTPRequestHandler):
+class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _rispondi(self, codice, oggetto, tipo="application/json; charset=utf-8"):
-        corpo = oggetto if isinstance(oggetto, bytes) else json.dumps(oggetto, ensure_ascii=False).encode("utf-8")
-        self.send_response(codice)
-        self.send_header("Content-Type", tipo)
-        self.send_header("Content-Length", str(len(corpo)))
+    def _respond(self, code, obj, kind="application/json; charset=utf-8"):
+        body = obj if isinstance(obj, bytes) else json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", POLITICA_PAGINA)
+        self.send_header("Content-Security-Policy", POLICY_PAGE)
         self.end_headers()
-        self.wfile.write(corpo)
+        self.wfile.write(body)
 
-    def _lecito(self):
+    def _allowed(self):
         """Solo questo PC (niente nomi host estranei) e, per i dati, solo chi ha il codice della pagina."""
         if self.headers.get("Host", "").split(":")[0] not in ("127.0.0.1", "localhost"):
-            self._rispondi(403, {"errore": "host non ammesso"})
+            self._respond(403, {"error": "host non ammesso"})
             return False
-        if self.path.startswith("/api/") and not secrets.compare_digest(self.headers.get("X-Pannello", ""), CODICE):
-            self._rispondi(403, {"errore": "codice mancante"})
+        if self.path.startswith("/api/") and not secrets.compare_digest(self.headers.get("X-Panel", ""), CODE):
+            self._respond(403, {"error": "codice mancante"})
             return False
         if self.path.startswith("/internal/"):   # chiamate del motore (stesso PC), con il suo codice
             try:
-                atteso = (DATI / "token.txt").read_text(encoding="utf-8").strip()
+                expected = (DATA / "token.txt").read_text(encoding="utf-8").strip()
             except OSError:
-                atteso = ""
-            if not atteso or not secrets.compare_digest(self.headers.get("X-Token", ""), atteso):
-                self._rispondi(403, {"errore": "codice mancante"})
+                expected = ""
+            if not expected or not secrets.compare_digest(self.headers.get("X-Token", ""), expected):
+                self._respond(403, {"error": "codice mancante"})
                 return False
         return True
 
     def do_GET(self):
-        self.path = nuovo_indirizzo(self.path)
-        if not self._lecito():
+        if not self._allowed():
             return
         u = urllib.parse.urlparse(self.path)
         q = dict(urllib.parse.parse_qsl(u.query))
         try:
             if u.path == "/":
-                pagina = (PAGINA / "index.html").read_text(encoding="utf-8").replace("__CODICE__", CODICE).replace("__LINGUA__", i18n.attiva())
-                self._rispondi(200, pagina.encode("utf-8"), "text/html; charset=utf-8")
-            elif u.path in STATICI or RX_LINGUA.fullmatch(u.path):
-                self._rispondi(200, (PAGINA / u.path.lstrip("/")).read_bytes(), STATICI.get(u.path, "application/json; charset=utf-8"))
+                page = (PAGE / "index.html").read_text(encoding="utf-8").replace("__CODICE__", CODE).replace("__LINGUA__", i18n.active())
+                self._respond(200, page.encode("utf-8"), "text/html; charset=utf-8")
+            elif u.path in STATIC or RX_LANGUAGE.fullmatch(u.path):
+                self._respond(200, (PAGE / u.path.lstrip("/")).read_bytes(), STATIC.get(u.path, "application/json; charset=utf-8"))
             elif u.path == "/api/compatibility":
                 try:
-                    verificati = json.loads((QUI / "compatibility.json").read_text(encoding="utf-8"))
+                    verified_ones = json.loads((HERE / "compatibility.json").read_text(encoding="utf-8"))
                 except (OSError, ValueError):
-                    verificati = {"voci": []}
-                nomi = {s["id"]: s["nome"] for s in catalog.SERVIZI}
-                self._rispondi(200, {"visti": [{**g, "nome": nomi.get(g["servizio"], g["servizio"])} for g in activity.compatibilita()],
-                                     "verificati": [{**v, "nome": nomi.get(v.get("servizio"), v.get("servizio"))} for v in verificati.get("voci", [])],
-                                     "aggiornato": verificati.get("aggiornato", "")})
+                    verified_ones = {"entries": []}
+                names = {s["id"]: s["name"] for s in catalog.SERVICES}
+                self._respond(200, {"sightings": [{**g, "name": names.get(g["service"], g["service"])} for g in activity.compatibility()],
+                                     "verified_ones": [{**v, "name": names.get(v.get("service"), v.get("service"))} for v in verified_ones.get("entries", [])],
+                                     "updated": verified_ones.get("updated", "")})
             elif u.path == "/api/languages":
-                self._rispondi(200, {"scelta": i18n.scelta(), "attiva": i18n.attiva(), "disponibili": i18n.disponibili()})
+                self._respond(200, {"choice": i18n.choice(), "active": i18n.active(), "available": i18n.available()})
             elif u.path == "/api/status":
-                self._rispondi(200, {**SUP.stato(), "statistiche": statistiche()})
+                self._respond(200, {**SUP.status(), "stats": stats()})
             elif u.path == "/api/activity":
-                self._rispondi(200, leggi_registro(int(q.get("n", 300)))[::-1])
+                self._respond(200, read_log(int(q.get("n", 300)))[::-1])
             elif u.path == "/api/services":
-                self._rispondi(200, servizi())
+                self._respond(200, services())
             elif u.path == "/api/settings":
-                self._rispondi(200, {**settings.leggi(), "certificato": certificato()})
+                self._respond(200, {**settings.read(), "certificate": certificate()})
             elif u.path == "/api/lists":
-                self._rispondi(200, leggi_liste())
+                self._respond(200, read_lists())
             elif u.path == "/api/app":
-                self._rispondi(200, app_desktop())
+                self._respond(200, app_desktop())
             elif u.path == "/api/view":
-                self._rispondi(200, {"vista": settings.leggi().get("vista", "semplice")})
+                self._respond(200, {"view": settings.read().get("view", "simple")})
             elif u.path == "/api/gateway":
                 g = SUP.gateway
-                self._rispondi(200, {"attivo": g is not None, "porta": paths.PORTA_GATEWAY, "errore": SUP.errore_gateway,
-                                     "conteggi": dict(g.conteggi) if g else None, "rotte": sorted(gateway.rotte())})
+                self._respond(200, {"is_active": g is not None, "port": paths.GATEWAY_PORT, "error": SUP.gateway_error,
+                                     "counts": dict(g.counts) if g else None, "routes": sorted(gateway.routes())})
             elif u.path == "/api/extension":
-                f = DATI / "token_extension.txt"
-                self._rispondi(200, {"cartella": str(QUI / "extension"), "porta": PORTA_MOTORE,
+                f = DATA / "token_extension.txt"
+                self._respond(200, {"folder": str(HERE / "extension"), "port": ENGINE_PORT,
                                      "token": f.read_text(encoding="utf-8").strip() if f.exists() else ""})
             elif u.path == "/api/categories":   # le categorie in piu' che il modello in uso conosce, e quelle accese
                 try:
-                    self._rispondi(200, motore("/profile", {}))
+                    self._respond(200, engine("/profile", {}))
                 except Exception:   # noqa: BLE001
-                    self._rispondi(200, {"conosciute": [], "accese": settings.leggi().get("categorie", [])})
+                    self._respond(200, {"known": [], "enabled": settings.read().get("categories", [])})
             elif u.path == "/api/shortcuts":
-                self._rispondi(200, scorciatoie())
+                self._respond(200, shortcuts())
             elif u.path == "/api/inventory":
-                self._rispondi(200, inventario())
+                self._respond(200, inventory_status())
             elif u.path == "/api/inventory/csv":
-                testo = inventory.csv([i18n.t(f"inventario.colonna.{c}") for c in ("categoria", "nome", "dettaglio", "versione", "primo", "ultimo", "presente", "giudizio", "nota")],
-                                      lambda c: i18n.t(f"inventario.categoria.{c}"), lambda g: i18n.t(f"inventario.giudizio.{g or 'da_valutare'}"))
-                self._rispondi(200, testo.encode("utf-8"), "text/csv; charset=utf-8")
+                text = inventory.csv([i18n.t(f"inventory.column.{c}") for c in ("category", "name", "detail", "version", "first", "last", "present", "verdict", "note")],
+                                      lambda c: i18n.t(f"inventory.category.{c}"), lambda g: i18n.t(f"inventory.verdict.{g or 'to_review'}"))
+                self._respond(200, text.encode("utf-8"), "text/csv; charset=utf-8")
             elif u.path == "/api/shadow/pc":
-                self._rispondi(200, scan.pc())
+                self._respond(200, scan.pc())
             elif u.path == "/api/shadow/network":
-                nomi = {s["id"]: s["nome"] for s in catalog.SERVIZI}
-                self._rispondi(200, {**scan.rete(), "proxy": [{"servizio": nomi.get(k, k), **v} for k, v in
-                                                                   sorted(contatti().items(), key=lambda kv: -kv[1]["n"])]})
+                names = {s["id"]: s["name"] for s in catalog.SERVICES}
+                self._respond(200, {**scan.network(), "proxy": [{"service": names.get(k, k), **v} for k, v in
+                                                                   sorted(contacts().items(), key=lambda kv: -kv[1]["n"])]})
             else:
-                self._rispondi(404, {"errore": i18n.t("programma.non_trovato")})
+                self._respond(404, {"error": i18n.t("program.not_found")})
         except FileNotFoundError:
-            self._rispondi(404, {"errore": i18n.t("programma.non_trovato")})
+            self._respond(404, {"error": i18n.t("program.not_found")})
         except Exception as ex:   # noqa: BLE001
-            self._rispondi(500, {"errore": f"{type(ex).__name__}: {ex}"})
+            self._respond(500, {"error": f"{type(ex).__name__}: {ex}"})
 
     def do_POST(self):
-        self.path = nuovo_indirizzo(self.path)
-        if not self._lecito():
+        if not self._allowed():
             return
         try:
-            dati = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8") or "{}")
+            data = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8") or "{}")
             p = self.path
             if p == "/internal/attachment":   # il motore non ha le librerie per i documenti: li legge questo processo
                 try:
-                    nome, nuovo, conteggi = documents.elabora(Path(str(dati.get("nome", "file"))).name, base64.b64decode(dati.get("dati", "")), "anonimizza")
-                except documents.Errore as ex:
-                    self._rispondi(422, {"errore": str(ex), "codice": ex.codice})
+                    name, fresh, counts = documents.work_on(Path(str(data.get("name", "file"))).name, base64.b64decode(data.get("data", "")), "anonymize")
+                except documents.Error as ex:
+                    self._respond(422, {"error": str(ex), "code": ex.code})
                     return
-                self._rispondi(200, {"nome": nome, "dati": base64.b64encode(nuovo).decode("ascii"), "conteggi": conteggi})
+                self._respond(200, {"name": name, "data": base64.b64encode(fresh).decode("ascii"), "counts": counts})
             elif p == "/api/protection":
-                if dati.get("azione") == "ferma":
-                    SUP.ferma()
+                if data.get("action") == "stop":
+                    SUP.stop()
                 else:
-                    if dati.get("azione") == "riavvia":
-                        SUP.ferma()
-                    SUP.avvia()
-                self._rispondi(200, SUP.stato())
+                    if data.get("action") == "restart":
+                        SUP.stop()
+                    SUP.launch()
+                self._respond(200, SUP.status())
             elif p == "/api/settings":
-                nuove = settings.scrivi({**settings.leggi(), **{k: v for k, v in dati.items() if k in settings.PREDEFINITE}})
-                if "scorciatoie" in dati and SCORCIATOIE is not None:
-                    SCORCIATOIE.imposta(clipboard.scelte(nuove))
-                if "categorie" in dati:   # il motore rilegge quali categorie in piu' sostituire
+                new_ones = settings.write({**settings.read(), **{k: v for k, v in data.items() if k in settings.DEFAULTS}})
+                if "shortcuts" in data and SHORTCUTS is not None:
+                    SHORTCUTS.configure(clipboard.choices(new_ones))
+                if "categories" in data:   # il motore rilegge quali categorie in piu' sostituire
                     try:
-                        motore("/profile", {})
+                        engine("/profile", {})
                     except Exception:   # noqa: BLE001  (motore spento: le leggera' all'avvio)
                         pass
-                self._rispondi(200, {**nuove, "da_riavviare": SUP.da_riavviare()})
+                self._respond(200, {**new_ones, "restart_needed": SUP.restart_needed()})
             elif p == "/api/services":
-                imp = settings.leggi()
-                politiche = dict(imp["politiche"])
-                politiche[str(dati["id"])] = str(dati["politica"])
-                settings.scrivi({**imp, "politiche": politiche})
-                self._rispondi(200, {"da_riavviare": SUP.da_riavviare()})
+                cfg = settings.read()
+                policies = dict(cfg["policies"])
+                policies[str(data["id"])] = str(data["policy"])
+                settings.write({**cfg, "policies": policies})
+                self._respond(200, {"restart_needed": SUP.restart_needed()})
             elif p == "/api/lists":
-                self._rispondi(200, scrivi_liste(dati))
+                self._respond(200, write_lists(data))
             elif p == "/api/app":
-                chiave = str(dati.get("id", ""))
-                if chiave not in connector.APP:
-                    raise Rifiuto(i18n.t("programma.app_sconosciuta"))
-                vecchio = CONNETTORI.pop(chiave, None)
-                if vecchio is not None:
-                    vecchio.chiudi()
-                if dati.get("azione") == "avvia":
-                    if SUP.fase != "attiva":
-                        raise Rifiuto(i18n.t("programma.app_serve_protezione"))
-                    CONNETTORI[chiave] = connector.avvia_app(chiave)
-                self._rispondi(200, app_desktop())
+                key = str(data.get("id", ""))
+                if key not in connector.APP:
+                    raise Refusal(i18n.t("program.app_unknown"))
+                old = CONNECTORS.pop(key, None)
+                if old is not None:
+                    old.close()
+                if data.get("action") == "launch":
+                    if SUP.phase != "active":
+                        raise Refusal(i18n.t("program.app_needs_protection"))
+                    CONNECTORS[key] = connector.launch_app(key)
+                self._respond(200, app_desktop())
             elif p == "/api/updates":
-                azione = dati.get("azione")
-                if azione == "controlla":
-                    updates.controlla()
-                elif azione == "scarica":
-                    if updates.STATO["fase"] != "disponibile":
-                        raise Rifiuto(i18n.t("programma.aggiornamento_niente_da_scaricare"))
-                    threading.Thread(target=updates.scarica, daemon=True).start()
+                action = data.get("action")
+                if action == "check":
+                    updates.check()
+                elif action == "download":
+                    if updates.STATUS["phase"] != "available":
+                        raise Refusal(i18n.t("program.update_nothing_to_download"))
+                    threading.Thread(target=updates.download, daemon=True).start()
                     time.sleep(0.3)
-                elif azione == "installa":
-                    versione = updates.installa()
-                    if versione is None:
-                        raise Rifiuto(i18n.t("programma.aggiornamento_niente_pronto"))
-                    spegni()
-                self._rispondi(200, updates.stato())
+                elif action == "install":
+                    version = updates.install()
+                    if version is None:
+                        raise Refusal(i18n.t("program.update_nothing_ready"))
+                    turn_off()
+                self._respond(200, updates.status())
             elif p == "/api/try":
-                testo = str(dati.get("testo", ""))
-                if len(testo) > clipboard.MAX_TESTO:   # mai tagliare in silenzio: il pezzo tagliato sembrerebbe controllato
-                    raise Rifiuto(i18n.t("programma.testo_troppo_lungo", n=clipboard.MAX_TESTO))
+                text = str(data.get("text", ""))
+                if len(text) > clipboard.MAX_TEXT:   # mai tagliare in silenzio: il pezzo tagliato sembrerebbe controllato
+                    raise Refusal(i18n.t("program.text_too_long", n=clipboard.MAX_TEXT))
                 # le correzioni fatte a mano su questo testo: cosa lasciare in chiaro e cosa mascherare comunque
-                mai = [str(x)[:200] for x in dati.get("mai") or []][:200]
-                anche = {str(k)[:200]: str(v) for k, v in list((dati.get("anche") or {}).items())[:200]}
-                self._rispondi(200, motore("/mask", {"testi": [testo], "mai": mai, "anche": anche}))
+                never = [str(x)[:200] for x in data.get("never") or []][:200]
+                also = {str(k)[:200]: str(v) for k, v in list((data.get("also") or {}).items())[:200]}
+                self._respond(200, engine("/mask", {"texts": [text], "never": never, "also": also}))
             elif p == "/api/lists/add":   # da Testo: «non mascherare mai» e «maschera sempre», senza passare dalle Impostazioni
-                lista, termine = ("mai" if dati.get("lista") == "mai" else "sempre"), str(dati.get("termine", "")).strip()[:200]
-                if len(termine) < 2 or "\n" in termine or termine.startswith("#"):
-                    raise Rifiuto(i18n.t("programma.termine_non_valido"))
-                liste = leggi_liste()
-                if termine.casefold() not in {x.casefold() for x in liste[lista]}:
-                    liste[lista].append(termine)
-                    liste = scrivi_liste(liste)
-                self._rispondi(200, liste)
+                list_name, term = ("never" if data.get("list_name") == "never" else "always"), str(data.get("term", "")).strip()[:200]
+                if len(term) < 2 or "\n" in term or term.startswith("#"):
+                    raise Refusal(i18n.t("program.term_not_valid"))
+                lists = read_lists()
+                if term.casefold() not in {x.casefold() for x in lists[list_name]}:
+                    lists[list_name].append(term)
+                    lists = write_lists(lists)
+                self._respond(200, lists)
             elif p == "/api/restore":
-                testo = str(dati.get("testo", ""))
-                if len(testo) > clipboard.MAX_TESTO:
-                    raise Rifiuto(i18n.t("programma.testo_troppo_lungo", n=clipboard.MAX_TESTO))
-                trovati = sorted({m.group() for m in restore.RX_SEGNAPOSTO.finditer(testo)})
-                mappa = motore("/values", {"segnaposto": trovati})["mappa"] if trovati else {}
-                self._rispondi(200, {"testo": restore.ripristina(testo, mappa.get), "ripristinati": len(mappa),
-                                     "sconosciuti": len(trovati) - len(mappa)})
+                text = str(data.get("text", ""))
+                if len(text) > clipboard.MAX_TEXT:
+                    raise Refusal(i18n.t("program.text_too_long", n=clipboard.MAX_TEXT))
+                found_items = sorted({m.group() for m in restore.RX_PLACEHOLDER.finditer(text)})
+                mapping = engine("/values", {"placeholder": found_items})["mapping"] if found_items else {}
+                self._respond(200, {"text": restore.restore(text, mapping.get), "restored": len(mapping),
+                                     "unknown": len(found_items) - len(mapping)})
             elif p == "/api/clipboard":
-                self._rispondi(200, {"esito": clipboard.trasforma("ripristina" if dati.get("azione") == "ripristina" else "maschera", motore)})
+                self._respond(200, {"outcome": clipboard.transform("restore" if data.get("action") == "restore" else "mask", engine)})
             elif p == "/api/documents/path":
-                azione = "ripristina" if dati.get("azione") == "ripristina" else "anonimizza"
-                esito = documents.percorso(str(dati.get("percorso", "")), azione)
-                CARTELLE.add(os.path.normcase(os.path.abspath(str(esito.get("destinazione", "")))))
-                self._rispondi(200, esito)
+                action = "restore" if data.get("action") == "restore" else "anonymize"
+                outcome = documents.path(str(data.get("path", "")), action)
+                FOLDERS.add(os.path.normcase(os.path.abspath(str(outcome.get("destination", "")))))
+                self._respond(200, outcome)
             elif p == "/api/documents/file":
-                azione = dati.get("azione") if dati.get("azione") in ("anonimizza", "ripristina") else "auto"
-                azione, nome, nuovo, conteggi = documents.elabora_auto(Path(str(dati.get("nome", "file"))).name, base64.b64decode(dati.get("contenuto", "")), azione)
-                self._rispondi(200, {"azione": azione, "nome": nome, "contenuto": base64.b64encode(nuovo).decode("ascii"), "conteggi": conteggi})
+                action = data.get("action") if data.get("action") in ("anonymize", "restore") else "auto"
+                action, name, fresh, counts = documents.work_on_auto(Path(str(data.get("name", "file"))).name, base64.b64decode(data.get("content", "")), action)
+                self._respond(200, {"action": action, "name": name, "content": base64.b64encode(fresh).decode("ascii"), "counts": counts})
             elif p == "/api/vault":
-                self._rispondi(200, motore("/vault", {"limite": 500, "in_chiaro": bool(dati.get("in_chiaro")), "cerca": str(dati.get("cerca") or "")[:200],
-                                                         "etichetta": str(dati.get("etichetta") or "")[:40], "ordine": str(dati.get("ordine") or "recenti")}))
+                self._respond(200, engine("/vault", {"limit": 500, "reveal": bool(data.get("reveal")), "search": str(data.get("search") or "")[:200],
+                                                         "label": str(data.get("label") or "")[:40], "order": str(data.get("order") or "recent")}))
             elif p == "/api/vault/delete":   # voci scelte una per una, oppure per tipo e/o non usate da N giorni
-                giorni = dati.get("fermi_da_giorni")
-                self._rispondi(200, motore("/vault/delete", {"segnaposto": [str(s) for s in dati.get("segnaposto") or []][:500],
-                                                                 "etichetta": str(dati.get("etichetta") or "")[:40],
-                                                                 "fermi_da_giorni": None if giorni in (None, "") else max(0.0, float(giorni)),
-                                                                 "solo_conta": bool(dati.get("solo_conta"))}))
+                days = data.get("idle_days")
+                self._respond(200, engine("/vault/delete", {"placeholder": [str(s) for s in data.get("placeholder") or []][:500],
+                                                                 "label": str(data.get("label") or "")[:40],
+                                                                 "idle_days": None if days in (None, "") else max(0.0, float(days)),
+                                                                 "count_only": bool(data.get("count_only"))}))
             elif p == "/api/inventory/scan":
-                novita = analizza("manuale")
-                self._rispondi(200, {"novita": novita, **inventario()})
+                news = analyze("manual")
+                self._respond(200, {"news": news, **inventory_status()})
             elif p == "/api/inventory/verdict":
-                inventory.giudica(str(dati.get("chiave", "")), dati.get("giudizio"), dati.get("nota"))
-                self._rispondi(200, {})
+                inventory.judge(str(data.get("key", "")), data.get("verdict"), data.get("note"))
+                self._respond(200, {})
             elif p == "/api/inventory/forget":
-                self._rispondi(200, {"tolte": inventory.dimentica(), **inventario()})
+                self._respond(200, {"dropped": inventory.forget(), **inventory_status()})
             elif p == "/api/inventory/clear":
-                inventory.svuota()
-                self._rispondi(200, inventario())
+                inventory.clear()
+                self._respond(200, inventory_status())
             elif p == "/api/folder/choose":   # la finestra di Windows per scegliere una cartella, al posto del percorso scritto a mano
-                scelta = folders.scegli(i18n.t("documenti.cartella.finestra"), str(dati.get("iniziale") or ""))
-                if scelta is None:
-                    raise Rifiuto(i18n.t("programma.finestra_gia_aperta"))
-                if scelta:
-                    CARTELLE.add(os.path.normcase(os.path.abspath(scelta)))
-                self._rispondi(200, {"percorso": scelta})
+                choice = folders.choose(i18n.t("documents.folder.win"), str(data.get("initial") or ""))
+                if choice is None:
+                    raise Refusal(i18n.t("program.window_already_opened"))
+                if choice:
+                    FOLDERS.add(os.path.normcase(os.path.abspath(choice)))
+                self._respond(200, {"path": choice})
             elif p == "/api/folder/open":
-                percorso = os.path.normcase(os.path.abspath(str(dati.get("percorso", ""))))
-                if percorso not in CARTELLE or not folders.apri(percorso):
-                    raise Rifiuto(i18n.t("programma.cartella_non_apribile"))
-                self._rispondi(200, {})
+                path = os.path.normcase(os.path.abspath(str(data.get("path", ""))))
+                if path not in FOLDERS or not folders.open_up(path):
+                    raise Refusal(i18n.t("program.folder_not_openable"))
+                self._respond(200, {})
             elif p == "/api/vault/clear":
-                self._rispondi(200, motore("/vault/clear", {}))
+                self._respond(200, engine("/vault/clear", {}))
             elif p == "/api/certificate":
-                self._rispondi(200, certificato(dati.get("azione")))
+                self._respond(200, certificate(data.get("action")))
             elif p == "/api/browser":
-                indirizzo = str(dati.get("indirizzo", "https://claude.ai"))
-                if not indirizzo.startswith("https://") or catalog.trova(urllib.parse.urlparse(indirizzo).hostname or "") is None:
-                    raise Rifiuto(i18n.t("programma.indirizzo_fuori_catalogo"))
-                r = subprocess.run([sys.executable, str(QUI / "browser_window.py"), indirizzo], capture_output=True, timeout=30,
-                                   creationflags=SENZA_FINESTRA)
-                self._rispondi(200, {"esito": r.stdout.decode("utf-8", errors="replace").strip() or r.stderr.decode("utf-8", errors="replace").strip()})
+                address = str(data.get("address", "https://claude.ai"))
+                if not address.startswith("https://") or catalog.find(urllib.parse.urlparse(address).hostname or "") is None:
+                    raise Refusal(i18n.t("program.address_outside_catalog"))
+                r = subprocess.run([sys.executable, str(HERE / "browser_window.py"), address], capture_output=True, timeout=30,
+                                   creationflags=NO_WINDOW)
+                self._respond(200, {"outcome": r.stdout.decode("utf-8", errors="replace").strip() or r.stderr.decode("utf-8", errors="replace").strip()})
             else:
-                self._rispondi(404, {"errore": i18n.t("programma.non_trovato")})
-        except (documents.Errore, connector.Errore, Rifiuto) as ex:
-            self._rispondi(422, {"errore": str(ex)})
+                self._respond(404, {"error": i18n.t("program.not_found")})
+        except (documents.Error, connector.Error, Refusal) as ex:
+            self._respond(422, {"error": str(ex)})
         except urllib.error.URLError:
-            self._rispondi(503, {"errore": i18n.t("programma.protezione_non_attiva")})
+            self._respond(503, {"error": i18n.t("program.protection_not_active")})
         except Exception as ex:   # noqa: BLE001
-            self._rispondi(500, {"errore": f"{type(ex).__name__}: {ex}"})
+            self._respond(500, {"error": f"{type(ex).__name__}: {ex}"})
 
 
-def icona(server):
+def icon(server):
     """Icona vicino all'orologio. Se le librerie mancano il programma funziona lo stesso dalla pagina."""
     try:
         import pystray
@@ -688,130 +665,130 @@ def icona(server):
     except ImportError:
         return None
 
-    def disegno(attiva):
+    def drawing(active):
         im = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        colore = (16, 122, 107, 255) if attiva else (140, 140, 140, 255)
-        d.polygon([(32, 4), (58, 14), (58, 34), (32, 60), (6, 34), (6, 14)], fill=colore)
+        color = (16, 122, 107, 255) if active else (140, 140, 140, 255)
+        d.polygon([(32, 4), (58, 14), (58, 34), (32, 60), (6, 34), (6, 14)], fill=color)
         d.line([(20, 32), (29, 41), (45, 23)], fill=(255, 255, 255, 255), width=6)
         return im
 
-    def apri(*_):
-        webbrowser.open(f"http://127.0.0.1:{PORTA_PANNELLO}/")
+    def open_up(*_):
+        webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
 
-    def cambia(ic, _):
-        SUP.ferma() if SUP.fase == "attiva" else SUP.avvia()
+    def change(ic, _):
+        SUP.stop() if SUP.phase == "active" else SUP.launch()
 
-    def esci(ic, _):
-        SUP.ferma()
+    def exit_app(ic, _):
+        SUP.stop()
         ic.stop()
         threading.Thread(target=server.shutdown, daemon=True).start()
 
-    def con_tasti(nome):   # «Maschera gli appunti  (Ctrl+Alt+M)»: la combinazione compare solo se e' attiva
-        voce = (SCORCIATOIE.stato if SCORCIATOIE else {}).get(nome, {})
-        return i18n.t(f"icona.{nome}") + (f"  ({clipboard.scritta(voce['combinazione'])})" if voce.get("attiva") else "")
+    def with_keystrokes(name):   # «Maschera gli appunti  (Ctrl+Alt+M)»: la combinazione compare solo se e' attiva
+        entry = (SHORTCUTS.status if SHORTCUTS else {}).get(name, {})
+        return i18n.t(f"icon.{name}") + (f"  ({clipboard.caption(entry['combo'])})" if entry.get("active") else "")
 
-    def sugli_appunti(azione):
-        def esegui(icona_, _):
+    def on_clipboard(action):
+        def run(icon_, _):
             try:
-                avvisa(clipboard.trasforma(azione, motore))
+                notify(clipboard.transform(action, engine))
             except Exception:   # noqa: BLE001
-                avvisa(i18n.t("programma.protezione_non_attiva"))
-        return esegui
+                notify(i18n.t("program.protection_not_active"))
+        return run
 
-    ic = pystray.Icon("omissis", disegno(False), "Omissis", menu=pystray.Menu(
+    ic = pystray.Icon("omissis", drawing(False), "Omissis", menu=pystray.Menu(
         # i testi sono funzioni: il menu segue la lingua scelta nelle Impostazioni senza riavviare il programma
-        pystray.MenuItem(lambda _: i18n.t("icona.apri"), apri, default=True),
-        pystray.MenuItem(lambda _: con_tasti("maschera"), sugli_appunti("maschera")),
-        pystray.MenuItem(lambda _: con_tasti("ripristina"), sugli_appunti("ripristina")),
+        pystray.MenuItem(lambda _: i18n.t("icon.open_up"), open_up, default=True),
+        pystray.MenuItem(lambda _: with_keystrokes("mask"), on_clipboard("mask")),
+        pystray.MenuItem(lambda _: with_keystrokes("restore"), on_clipboard("restore")),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem(lambda _: i18n.t("icona.ferma" if SUP.fase == "attiva" else "icona.avvia"), cambia),
-        pystray.MenuItem(lambda _: i18n.t("icona.esci"), esci)))
+        pystray.MenuItem(lambda _: i18n.t("icon.stop" if SUP.phase == "active" else "icon.launch"), change),
+        pystray.MenuItem(lambda _: i18n.t("icon.exit_app"), exit_app)))
 
-    def aggiorna():
-        ultima, avvisato = None, ""
-        while ic.visible or ultima is None:
-            if SUP.fase != ultima:
-                ultima = SUP.fase
-                ic.icon = disegno(ultima == "attiva")
-                ic.title = i18n.t(f"icona.stato.{ultima if ultima in ('attiva', 'avvio', 'errore', 'modello') else 'ferma'}")
-            agg = updates.STATO
-            if agg["fase"] == "pronto" and avvisato != agg["versione"]:
-                avvisato = agg["versione"]
-                avvisa(i18n.t("icona.aggiornamento_pronto", v=avvisato))
+    def refresh():
+        latest, notified = None, ""
+        while ic.visible or latest is None:
+            if SUP.phase != latest:
+                latest = SUP.phase
+                ic.icon = drawing(latest == "active")
+                ic.title = i18n.t(f"icon.status.{latest if latest in ('active', 'startup', 'error', 'model') else 'stop'}")
+            agg = updates.STATUS
+            if agg["phase"] == "ready_now" and notified != agg["version"]:
+                notified = agg["version"]
+                notify(i18n.t("icon.update_ready", v=notified))
             time.sleep(1)
 
-    threading.Thread(target=aggiorna, daemon=True).start()
+    threading.Thread(target=refresh, daemon=True).start()
 
-    def avvisa(messaggio):   # esito delle scorciatoie sugli appunti, come notifica di Windows
+    def notify(message):   # esito delle scorciatoie sugli appunti, come notifica di Windows
         try:
-            ic.notify(messaggio, "Omissis")
+            ic.notify(message, "Omissis")
         except Exception:   # noqa: BLE001
             pass
 
-    global SCORCIATOIE, AVVISA
-    AVVISA = avvisa
-    SCORCIATOIE = clipboard.scorciatoie(motore, avvisa)
-    in_uso, cambiate = clipboard.sistema(SCORCIATOIE, clipboard.scelte(settings.leggi()))
-    if cambiate:   # una combinazione era gia' di un altro programma: si tiene quella libera e lo si dice, a icona comparsa
-        settings.scrivi({**settings.leggi(), "scorciatoie": in_uso})
-        elenco = ", ".join(f"{clipboard.scritta(vecchia)} → {clipboard.scritta(nuova)}" for vecchia, nuova in cambiate.values())
-        threading.Timer(8, lambda: avvisa(i18n.t("scorciatoie.cambiate", elenco=elenco))).start()
+    global SHORTCUTS, NOTIFY
+    NOTIFY = notify
+    SHORTCUTS = clipboard.shortcuts(engine, notify)
+    in_use, changed = clipboard.system(SHORTCUTS, clipboard.choices(settings.read()))
+    if changed:   # una combinazione era gia' di un altro programma: si tiene quella libera e lo si dice, a icona comparsa
+        settings.write({**settings.read(), "shortcuts": in_use})
+        listing = ", ".join(f"{clipboard.caption(old_one)} → {clipboard.caption(new_one)}" for old_one, new_one in changed.values())
+        threading.Timer(8, lambda: notify(i18n.t("shortcuts.changed", listing=listing))).start()
     return ic
 
 
 def main():
     global SUP
     ap = argparse.ArgumentParser()
-    ap.add_argument("--no-tray", dest="senza_icona", action="store_true")
-    ap.add_argument("--no-browser", dest="senza_browser", action="store_true")
-    ap.add_argument("--no-start", dest="non_avviare", action="store_true", help="apre il pannello senza avviare la protezione")
-    ap.add_argument("--test", dest="prova", action="store_true", help="accetta anche il servizio finto in locale")
+    ap.add_argument("--no-tray", dest="without_icon", action="store_true")
+    ap.add_argument("--no-browser", dest="without_browser", action="store_true")
+    ap.add_argument("--no-start", dest="do_not_launch", action="store_true", help="apre il pannello senza avviare la protezione")
+    ap.add_argument("--test", dest="test", action="store_true", help="accetta anche il servizio finto in locale")
     a = ap.parse_args()
-    DATI.mkdir(parents=True, exist_ok=True)
-    if porta_aperta(PORTA_PANNELLO):   # gia' acceso: si apre solo il pannello
-        print(f"Omissis è già acceso: apro il pannello su http://127.0.0.1:{PORTA_PANNELLO}/", flush=True)
-        if not a.senza_browser:
-            webbrowser.open(f"http://127.0.0.1:{PORTA_PANNELLO}/")
+    DATA.mkdir(parents=True, exist_ok=True)
+    if opened_port(PANEL_PORT):   # gia' acceso: si apre solo il pannello
+        print(f"Omissis è già acceso: apro il pannello su http://127.0.0.1:{PANEL_PORT}/", flush=True)
+        if not a.without_browser:
+            webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
         return
-    if updates.modalita() == "automatici":
-        versione = updates.installa(automatico=True)   # un aggiornamento gia' scaricato e verificato si installa ora
-        if versione:
-            print(f"installo la versione {versione}: il programma si riapre da solo", flush=True)
+    if updates.mode() == "automatic":
+        version = updates.install(automatic=True)   # un aggiornamento gia' scaricato e verificato si installa ora
+        if version:
+            print(f"installo la versione {version}: il programma si riapre da solo", flush=True)
             return
-    if paths.INSTALLATA is not None and not LISTE.exists():   # le liste personali partono da quelle di esempio
-        shutil.copytree(paths.cartella_modello() / "lists", LISTE)
-    SUP = Supervisore(prova=a.prova)
-    if a.prova:   # un'app di prova per il connettore: il Chromium usato dalle prove, senza estensione
-        chrome = paths.browser_di_prova()
+    if paths.INSTALLED is not None and not LISTS.exists():   # le liste personali partono da quelle di esempio
+        shutil.copytree(paths.model_folder() / "lists", LISTS)
+    SUP = Supervisor(test=a.test)
+    if a.test:   # un'app di prova per il connettore: il Chromium usato dalle prove, senza estensione
+        chrome = paths.test_browser()
         if chrome:
             os.environ["OMISSIS_TEST"] = "1"
-            connector.APP["prova"] = {"nome": "App di prova", "comando": str(chrome), "porta": 9560,
-                                       "argomenti": ["--headless=new", "--no-first-run", f"--user-data-dir={DATI / 'test_app'}",
+            connector.APP["test"] = {"name": "App di prova", "command": str(chrome), "port": 9560,
+                                       "arguments": ["--headless=new", "--no-first-run", f"--user-data-dir={DATA / 'test_app'}",
                                                      "about:blank"]}
-    class Servizio(ThreadingHTTPServer):
+    class Service(ThreadingHTTPServer):
         allow_reuse_address = False   # una seconda copia del programma deve accorgersi che la prima e' gia' accesa
 
     try:
-        server = Servizio(("127.0.0.1", PORTA_PANNELLO), Gestore)
+        server = Service(("127.0.0.1", PANEL_PORT), Handler)
     except OSError:
-        print(f"Omissis è già acceso: apro il pannello su http://127.0.0.1:{PORTA_PANNELLO}/", flush=True)
-        if not a.senza_browser:
-            webbrowser.open(f"http://127.0.0.1:{PORTA_PANNELLO}/")
+        print(f"Omissis è già acceso: apro il pannello su http://127.0.0.1:{PANEL_PORT}/", flush=True)
+        if not a.without_browser:
+            webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    threading.Thread(target=updates.ciclo, daemon=True).start()
-    if not a.prova:   # nelle prove niente analisi in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
-        threading.Thread(target=sorveglia, daemon=True).start()
-    if not a.non_avviare:
-        SUP.avvia()
-    indirizzo = f"http://127.0.0.1:{PORTA_PANNELLO}/"
-    print(f"pannello su {indirizzo}", flush=True)
-    if not a.senza_browser:
-        webbrowser.open(indirizzo)
+    threading.Thread(target=updates.loop, daemon=True).start()
+    if not a.test:   # nelle prove niente analisi in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
+        threading.Thread(target=watch, daemon=True).start()
+    if not a.do_not_launch:
+        SUP.launch()
+    address = f"http://127.0.0.1:{PANEL_PORT}/"
+    print(f"pannello su {address}", flush=True)
+    if not a.without_browser:
+        webbrowser.open(address)
     try:
-        global ICONA
-        ICONA = ic = None if a.senza_icona else icona(server)
+        global ICON
+        ICON = ic = None if a.without_icon else icon(server)
         if ic is not None:
             ic.run()
         else:
@@ -820,7 +797,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        SUP.ferma()
+        SUP.stop()
 
 
 if __name__ == "__main__":

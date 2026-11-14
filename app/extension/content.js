@@ -4,176 +4,176 @@
 (() => {
   'use strict';
   const RX = /\[[A-Z][A-Z_]{1,22}_\d{1,7}\]/g;
-  const cima = window.top === window;
+  const topmost = window.top === window;
   // dentro un'app desktop le finestre hanno un indirizzo interno: il connettore dice a quale servizio appartengono
-  const OSPITE = globalThis.MSP_OSPITE || location.hostname;
-  const canale = globalThis.mspCanale || null;
-  let stato = null, sospesa = false, avvisi = true;
+  const HOST_SITE = globalThis.MSP_HOST_SITE || location.hostname;
+  const channel = globalThis.mspChannel || null;
+  let status = null, suspended = false, notices = true;
 
-  const invia = m => chrome.runtime.sendMessage(m);
-  const viva = () => { try { return !!chrome.runtime.id; } catch (e) { return false; } };
+  const send = m => chrome.runtime.sendMessage(m);
+  const alive = () => { try { return !!chrome.runtime.id; } catch (e) { return false; } };
 
-  function politica(host) {
-    for (const s of (stato && stato.servizi) || []) {
-      if (s.domini.some(d => host === d || host.endsWith('.' + d))) return s.politica === 'proteggi' && !s.leggibile ? 'registra' : s.politica;
+  function policy(host) {
+    for (const s of (status && status.services) || []) {
+      if (s.domains.some(d => host === d || host.endsWith('.' + d))) return s.policy === 'protect' && !s.readable ? 'record' : s.policy;
     }
     return null;
   }
 
-  function riassunto() {
-    const domini = [];
-    if (!sospesa) for (const s of (stato && stato.servizi) || []) if (s.politica === 'proteggi' && s.leggibile) domini.push(...s.domini);
+  function summary() {
+    const domains = [];
+    if (!suspended) for (const s of (status && status.services) || []) if (s.policy === 'protect' && s.readable) domains.push(...s.domains);
     // ospite: solo dentro un'app desktop, il servizio a cui appartengono le sue finestre interne
-    return {domini, ripristina: !sospesa && !!(stato && stato.ripristina), ospite: (!sospesa && globalThis.MSP_OSPITE) || ''};
+    return {domains, restore: !suspended && !!(status && status.restore), host_site: (!suspended && globalThis.MSP_HOST_SITE) || ''};
   }
 
-  async function carica() {
+  async function load() {
     let d = {};
-    try { d = await chrome.storage.local.get(['stato', 'sospesa', 'avvisi']); } catch (e) { /* estensione ricaricata */ }
-    stato = d.stato || globalThis.MSP_PREDEFINITI;
-    sospesa = !!d.sospesa;
-    avvisi = d.avvisi !== false;
-    if (canale) canale.pronta.then(p => p.postMessage({stato: riassunto()}));
-    testoPagina();
+    try { d = await chrome.storage.local.get(['status', 'suspended', 'notices']); } catch (e) { /* estensione ricaricata */ }
+    status = d.status || globalThis.MSP_DEFAULTS;
+    suspended = !!d.suspended;
+    notices = d.notices !== false;
+    if (channel) channel.ready.then(p => p.postMessage({status: summary()}));
+    pageText();
   }
 
   // ---------------------------------------------------------------- avvisi nella pagina
-  let ospite = null, ultimo = {testo: '', quando: 0}, chiusura = 0;
-  function avviso(testo, grave) {
-    const ora = Date.now();
-    if (testo === ultimo.testo && ora - ultimo.quando < (grave ? 20000 : 1500)) return;
-    ultimo = {testo, quando: ora};
-    if (!cima || !document.documentElement) return;
-    if (ospite) ospite.remove();
-    ospite = document.createElement('div');
-    ospite.setAttribute('data-msp-pii', '');
-    ospite.style.cssText = 'all:initial;position:fixed;z-index:2147483647;right:16px;bottom:16px;';
-    const ombra = ospite.attachShadow({mode: 'closed'});
-    const riquadro = document.createElement('div');
+  let host_site = null, last = {text: '', when: 0}, closing = 0;
+  function notice(text, serious) {
+    const stamp = Date.now();
+    if (text === last.text && stamp - last.when < (serious ? 20000 : 1500)) return;
+    last = {text, when: stamp};
+    if (!topmost || !document.documentElement) return;
+    if (host_site) host_site.remove();
+    host_site = document.createElement('div');
+    host_site.setAttribute('data-msp-pii', '');
+    host_site.style.cssText = 'all:initial;position:fixed;z-index:2147483647;right:16px;bottom:16px;';
+    const shadow = host_site.attachShadow({mode: 'closed'});
+    const tile = document.createElement('div');
     // stesso aspetto del pannello: scuro, bordo sottile, un punto colorato che dice se e' andata bene
-    riquadro.style.cssText = 'font:13px/1.45 system-ui,Segoe UI,sans-serif;max-width:340px;padding:10px 14px;border-radius:8px;' +
-      'box-shadow:0 8px 30px rgba(0,0,0,.28);color:#ededed;background:#0a0a0a;border:1px solid ' + (grave ? '#ff6369' : '#333');
-    riquadro.setAttribute('role', grave ? 'alert' : 'status');
-    const punto = document.createElement('span');
-    punto.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:' + (grave ? '#ff6369' : '#5fc27a');
-    const titolo = document.createElement('b');
-    titolo.textContent = 'Omissis';
-    riquadro.append(punto, titolo, document.createElement('br'), testo);
-    ombra.append(riquadro);
-    document.documentElement.append(ospite);
-    clearTimeout(chiusura);
-    const questo = ospite;
-    chiusura = setTimeout(() => questo.remove(), grave ? 12000 : 3500);
+    tile.style.cssText = 'font:13px/1.45 system-ui,Segoe UI,sans-serif;max-width:340px;padding:10px 14px;border-radius:8px;' +
+      'box-shadow:0 8px 30px rgba(0,0,0,.28);color:#ededed;background:#0a0a0a;border:1px solid ' + (serious ? '#ff6369' : '#333');
+    tile.setAttribute('role', serious ? 'alert' : 'status');
+    const point = document.createElement('span');
+    point.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:' + (serious ? '#ff6369' : '#5fc27a');
+    const title = document.createElement('b');
+    title.textContent = 'Omissis';
+    tile.append(point, title, document.createElement('br'), text);
+    shadow.append(tile);
+    document.documentElement.append(host_site);
+    clearTimeout(closing);
+    const this_one = host_site;
+    closing = setTimeout(() => this_one.remove(), serious ? 12000 : 3500);
   }
 
   // Le frasi: nell'estensione le da' il browser (_locales/<lingua>/messages.json), dentro un'app desktop le porta il
   // connettore (MSP_TESTI). Si leggono tutte subito: quando l'estensione viene aggiornata il browser non le da' piu',
   // ed e' proprio allora che serve dire «ricarica la pagina».
-  const T = (chiave, ...valori) => {
+  const T = (key, ...values) => {
     try {
-      const portate = globalThis.MSP_TESTI;
-      if (portate) return (portate[chiave] || chiave).replace(/\$(\d)/g, (m, n) => valori[n - 1] ?? m);
-      return chrome.i18n.getMessage(chiave, valori.map(String)) || chiave;
-    } catch (e) { return chiave; }
+      const carried = globalThis.MSP_TEXTS;
+      if (carried) return (carried[key] || key).replace(/\$(\d)/g, (m, n) => values[n - 1] ?? m);
+      return chrome.i18n.getMessage(key, values.map(String)) || key;
+    } catch (e) { return key; }
   };
-  const MOTIVI = {motore: T('avviso_motore'), 'non collegata': T('avviso_non_collegata'), file: T('avviso_file'),
-    ricarica: T('avviso_ricarica'), estensione: T('avviso_estensione')};
-  const FRASI = {uno: T('avviso_uno'), molti: T('avviso_molti', '\u0001'), premi: T('avviso_premi_invio'), casella: T('avviso_casella'),
-    allegato_lavoro: T('allegato_lavoro'), allegato_fatto: T('allegato_fatto', '\u0001', '\u0002'), allegato_testo: T('allegato_testo'),
-    allegato_bloccato: T('allegato_bloccato', '\u0001')};
-  const sostituiti = n => (n === 1 ? FRASI.uno : FRASI.molti.replace('\u0001', n));
+  const REASONS = {engine: T('engine_notice'), 'non collegata': T('notice_not_connected'), file: T('file_notice'),
+    reload: T('reload_notice'), extension: T('extension_notice')};
+  const PHRASES = {one: T('one_notice'), many: T('many_notice', '\u0001'), press: T('notice_press_enter'), box: T('box_notice'),
+    attachment_work: T('attachment_work'), attachment_done: T('attachment_done', '\u0001', '\u0002'), attachment_text: T('attachment_text'),
+    attachment_blocked: T('attachment_blocked', '\u0001')};
+  const replaced = n => (n === 1 ? PHRASES.one : PHRASES.many.replace('\u0001', n));
 
   // ---------------------------------------------------------------- allegati
   // Il file che l'utente sceglie, trascina o incolla viene fermato prima che la pagina lo riceva, mandato al programma
   // sul PC e sostituito con la copia anonimizzata (un PDF o un'immagine diventano un file di testo). Come per la casella
   // di scrittura, non dipende da come il sito carica poi il file.
-  const ALLEGATO_MAX = globalThis.MSP_OSPITE ? 8e6 : 20e6;   // dentro un'app il passaggio e' piu' stretto
-  const nostri = new WeakSet();   // gli eventi che rimettiamo in circolo noi
+  const ATTACHMENT_MAX = globalThis.MSP_HOST_SITE ? 8e6 : 20e6;   // dentro un'app il passaggio e' piu' stretto
+  const ours = new WeakSet();   // gli eventi che rimettiamo in circolo noi
   // Nella stessa pagina possono esserci due copie di questo codice (una rimasta da prima di un aggiornamento, o estensione e
   // connettore insieme): mentre una consegna le copie dei file lo segna sulla pagina, cosi' l'altra non le ferma di nuovo.
-  const SEGNO = 'data-omissis-allegato';
-  const nostro = ev => nostri.has(ev) || document.documentElement.hasAttribute(SEGNO);
-  const consegna = (bersaglio, e) => { nostri.add(e); document.documentElement.setAttribute(SEGNO, ''); try { bersaglio.dispatchEvent(e); } finally { document.documentElement.removeAttribute(SEGNO); } };
-  const allegatiAttivi = () => cima !== null && !sospesa && politica(OSPITE) === 'proteggi' && (!stato || stato.allegati !== false);
+  const SIGN = 'data-omissis-attachment';
+  const our_own = ev => ours.has(ev) || document.documentElement.hasAttribute(SIGN);
+  const deliver = (target, e) => { ours.add(e); document.documentElement.setAttribute(SIGN, ''); try { target.dispatchEvent(e); } finally { document.documentElement.removeAttribute(SIGN); } };
+  const activeAttachments = () => topmost !== null && !suspended && policy(HOST_SITE) === 'protect' && (!status || status.attachments !== false);
   const inB64 = async file => { let s = ''; const u = new Uint8Array(await file.arrayBuffer()); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
-  const daB64 = testo => Uint8Array.from(atob(testo), c => c.charCodeAt(0));
+  const daB64 = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
 
   /** I file da consegnare alla pagina al posto di quelli scelti. null = nessuno deve passare (e l'avviso e' gia' a schermo). */
-  async function anonimizzati(file) {
-    const pronti = [];
-    let sostituiti = 0, dati = 0, convertiti = 0;
-    avviso(FRASI.allegato_lavoro, false);
+  async function anonymized(file) {
+    const ready_ones = [];
+    let replaced = 0, data = 0, converted_ones = 0;
+    notice(PHRASES.attachment_work, false);
     for (const f of file) {
       let r;
-      try { r = await invia(f.size > ALLEGATO_MAX ? {t: 'allegato', host: OSPITE, nome: f.name, byte: f.size} : {t: 'allegato', host: OSPITE, nome: f.name, byte: f.size, dati: await inB64(f)}); }
-      catch (e) { r = {azione: 'blocca', motivo: viva() ? 'estensione' : 'ricarica'}; }
-      if (r && r.azione === 'sostituisci') {
-        pronti.push(new File([daB64(r.dati)], r.nome, {type: r.tipo, lastModified: f.lastModified}));
-        sostituiti++; dati += r.sostituzioni || 0; convertiti += r.convertito ? 1 : 0;
-      } else if (r && r.azione === 'passa') pronti.push(f);
-      else { avviso(r && r.motivo === 'file' ? FRASI.allegato_bloccato.replace('\u0001', f.name) : (MOTIVI[r && r.motivo] || MOTIVI.estensione), true); return null; }
+      try { r = await send(f.size > ATTACHMENT_MAX ? {t: 'attachment', host: HOST_SITE, name: f.name, byte: f.size} : {t: 'attachment', host: HOST_SITE, name: f.name, byte: f.size, data: await inB64(f)}); }
+      catch (e) { r = {action: 'block', reason: alive() ? 'extension' : 'reload'}; }
+      if (r && r.action === 'replace') {
+        ready_ones.push(new File([daB64(r.data)], r.name, {type: r.kind, lastModified: f.lastModified}));
+        replaced++; data += r.replacements || 0; converted_ones += r.converted ? 1 : 0;
+      } else if (r && r.action === 'passthrough') ready_ones.push(f);
+      else { notice(r && r.reason === 'file' ? PHRASES.attachment_blocked.replace('\u0001', f.name) : (REASONS[r && r.reason] || REASONS.extension), true); return null; }
     }
-    if (sostituiti && avvisi) avviso(FRASI.allegato_fatto.replace('\u0001', sostituiti).replace('\u0002', dati) + (convertiti ? ' ' + FRASI.allegato_testo : ''), false);
-    return pronti;
+    if (replaced && notices) notice(PHRASES.attachment_done.replace('\u0001', replaced).replace('\u0002', data) + (converted_ones ? ' ' + PHRASES.attachment_text : ''), false);
+    return ready_ones;
   }
-  const carico = file => { const dt = new DataTransfer(); for (const f of file) dt.items.add(f); return dt; };
+  const loading = file => { const dt = new DataTransfer(); for (const f of file) dt.items.add(f); return dt; };
 
   // scelta dal pulsante: «input» e «change» arrivano uno dopo l'altro con i file veri, e vanno fermati tutti e due
-  const inLavoro = new WeakSet();
-  for (const tipo of ['input', 'change']) {
-    window.addEventListener(tipo, ev => {
+  const inWork = new WeakSet();
+  for (const kind of ['input', 'change']) {
+    window.addEventListener(kind, ev => {
       const el = ev.target;
-      if (nostro(ev) || !(el instanceof HTMLInputElement) || el.type !== 'file') return;
-      if (inLavoro.has(el)) { ev.stopImmediatePropagation(); return; }   // il secondo dei due eventi, o una scelta mentre lavoriamo
-      if (!el.files || !el.files.length || !allegatiAttivi()) return;
+      if (our_own(ev) || !(el instanceof HTMLInputElement) || el.type !== 'file') return;
+      if (inWork.has(el)) { ev.stopImmediatePropagation(); return; }   // il secondo dei due eventi, o una scelta mentre lavoriamo
+      if (!el.files || !el.files.length || !activeAttachments()) return;
       ev.stopImmediatePropagation();
-      inLavoro.add(el);
-      const scelti = [...el.files];
+      inWork.add(el);
+      const chosen = [...el.files];
       el.value = '';   // finche' la copia non e' pronta la pagina non deve trovare i file veri
-      anonimizzati(scelti).then(pronti => {
-        if (!pronti || !pronti.length) return;
-        el.files = carico(pronti).files;
-        for (const t of ['input', 'change']) consegna(el, new Event(t, {bubbles: true}));
-      }).finally(() => setTimeout(() => inLavoro.delete(el), 0));
+      anonymized(chosen).then(ready_ones => {
+        if (!ready_ones || !ready_ones.length) return;
+        el.files = loading(ready_ones).files;
+        for (const t of ['input', 'change']) deliver(el, new Event(t, {bubbles: true}));
+      }).finally(() => setTimeout(() => inWork.delete(el), 0));
     }, true);
   }
 
   // trascinamento e incolla: l'evento vero viene fermato e rifatto uguale, con le copie al posto dei file
-  function rifai(ev, costruisci) {
+  function redo(ev, build) {
     const dt = ev.dataTransfer || ev.clipboardData;
-    if (nostro(ev) || !dt || !dt.files || !dt.files.length || !allegatiAttivi()) return;
+    if (our_own(ev) || !dt || !dt.files || !dt.files.length || !activeAttachments()) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
-    const bersaglio = ev.target, testi = {};
-    for (const t of ['text/plain', 'text/html']) { const v = dt.getData(t); if (v) testi[t] = v; }
-    anonimizzati([...dt.files]).then(pronti => {
-      if (!pronti || !pronti.length) return;
-      const nuovo = carico(pronti);
-      for (const [t, v] of Object.entries(testi)) nuovo.setData(t, v);
-      consegna(bersaglio && bersaglio.isConnected ? bersaglio : document.body, costruisci(nuovo));
+    const target = ev.target, texts = {};
+    for (const t of ['text/plain', 'text/html']) { const v = dt.getData(t); if (v) texts[t] = v; }
+    anonymized([...dt.files]).then(ready_ones => {
+      if (!ready_ones || !ready_ones.length) return;
+      const fresh = loading(ready_ones);
+      for (const [t, v] of Object.entries(texts)) fresh.setData(t, v);
+      deliver(target && target.isConnected ? target : document.body, build(fresh));
     });
   }
-  window.addEventListener('drop', ev => rifai(ev, dt => new DragEvent('drop', {bubbles: true, cancelable: true, composed: true, dataTransfer: dt,
+  window.addEventListener('drop', ev => redo(ev, dt => new DragEvent('drop', {bubbles: true, cancelable: true, composed: true, dataTransfer: dt,
     clientX: ev.clientX, clientY: ev.clientY, screenX: ev.screenX, screenY: ev.screenY})), true);
-  window.addEventListener('paste', ev => rifai(ev, dt => new ClipboardEvent('paste', {bubbles: true, cancelable: true, composed: true, clipboardData: dt})), true);
+  window.addEventListener('paste', ev => redo(ev, dt => new ClipboardEvent('paste', {bubbles: true, cancelable: true, composed: true, clipboardData: dt})), true);
 
   // ---------------------------------------------------------------- tramite per page.js
-  if (canale) {
-    canale.pronta.then(p => {
+  if (channel) {
+    channel.ready.then(p => {
       p.onmessage = async ev => {
         const {n, m} = ev.data || {};
         if (!m) return;
         let r;
         try {
-          r = await invia(m);
-          if (!r) throw new Error('vuota');
+          r = await send(m);
+          if (!r) throw new Error('empty');
         } catch (e) {
-          r = m.t === 'richiesta' ? {azione: 'blocca', motivo: viva() ? 'estensione' : 'ricarica'} : {};
+          r = m.t === 'request' ? {action: 'block', reason: alive() ? 'extension' : 'reload'} : {};
         }
-        if (m.t === 'richiesta') {
-          if (r.azione === 'blocca') avviso(MOTIVI[r.motivo] || MOTIVI.estensione, true);
-          else if (r.azione === 'sostituisci' && avvisi) {
-            avviso(sostituiti(r.sostituzioni), false);
+        if (m.t === 'request') {
+          if (r.action === 'block') notice(REASONS[r.reason] || REASONS.extension, true);
+          else if (r.action === 'replace' && notices) {
+            notice(replaced(r.replacements), false);
           }
         }
         p.postMessage({n, r});
@@ -184,100 +184,100 @@
   // ---------------------------------------------------------------- valori veri nel testo della pagina
   // Rete di sicurezza per cio' che non passa da fetch (XMLHttpRequest, WebSocket, testo incollato gia'
   // mascherato): dove nel testo visibile compare un segnaposto conosciuto, mostra il valore.
-  const noti = new Map(), coda = new Set();
-  let osservatore = null, timer = 0;
+  const well_known = new Map(), queue = new Set();
+  let observer = null, timer = 0;
 
   // Alcune pagine scrivono un segnaposto spezzato in piu' pezzi di testo vicini ("[PERSONA" + "_" + "3]").
-  const RX_APRE = /\[(?:[A-Z][A-Z_]{0,22}\d{0,7})?$/, RX_INTERO = /^\[[A-Z][A-Z_]{1,22}_\d{1,7}\]/, RX_PARTE = /^\[(?:[A-Z][A-Z_]{0,23}\d{0,7})?$/;
-  const bloccoDi = t => (t.parentElement && t.parentElement.closest('p, li, td, th, h1, h2, h3, h4, h5, h6, pre, blockquote, div')) || t.parentElement;
+  const RX_OPENS = /\[(?:[A-Z][A-Z_]{0,22}\d{0,7})?$/, RX_WHOLE = /^\[[A-Z][A-Z_]{1,22}_\d{1,7}\]/, RX_PART = /^\[(?:[A-Z][A-Z_]{0,23}\d{0,7})?$/;
+  const blockOf = t => (t.parentElement && t.parentElement.closest('p, li, td, th, h1, h2, h3, h4, h5, h6, pre, blockquote, div')) || t.parentElement;
 
-  function unPezzo(t) {
-    if (t.data.includes('[')) { coda.add(t); return; }
+  function aChunk(t) {
+    if (t.data.includes('[')) { queue.add(t); return; }
     if (t.data.length > 40 || !/[\]_\d]/.test(t.data)) return;
-    const blocco = bloccoDi(t);   // puo' essere la chiusura di un segnaposto spezzato: si riesamina il pezzo che lo apre
-    if (!blocco) return;
-    const w = document.createTreeWalker(blocco, NodeFilter.SHOW_TEXT);
+    const block = blockOf(t);   // puo' essere la chiusura di un segnaposto spezzato: si riesamina il pezzo che lo apre
+    if (!block) return;
+    const w = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
     w.currentNode = t;
-    for (let p = w.previousNode(), i = 0; p && i < 8; p = w.previousNode(), i++) if (p.data.includes('[')) { coda.add(p); return; }
+    for (let p = w.previousNode(), i = 0; p && i < 8; p = w.previousNode(), i++) if (p.data.includes('[')) { queue.add(p); return; }
   }
 
-  function esamina(nodo) {
-    if (nodo.nodeType === 3) { unPezzo(nodo); return; }
-    if (nodo.nodeType !== 1) return;
-    const w = document.createTreeWalker(nodo, NodeFilter.SHOW_TEXT);
-    for (let t = w.nextNode(); t; t = w.nextNode()) unPezzo(t);
+  function examine(node) {
+    if (node.nodeType === 3) { aChunk(node); return; }
+    if (node.nodeType !== 1) return;
+    const w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    for (let t = w.nextNode(); t; t = w.nextNode()) aChunk(t);
   }
 
   // Se il pezzo finisce con l'inizio di un segnaposto e i pezzi seguenti lo completano: {seg, pezzi: [[nodo, da, a], ...]}
-  function spezzato(t) {
-    const m = RX_APRE.exec(t.data);
-    const blocco = m && bloccoDi(t);
-    if (!blocco) return null;
-    const w = document.createTreeWalker(blocco, NodeFilter.SHOW_TEXT);
+  function split(t) {
+    const m = RX_OPENS.exec(t.data);
+    const block = m && blockOf(t);
+    if (!block) return null;
+    const w = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
     w.currentNode = t;
-    let testo = t.data.slice(m.index);
-    const pezzi = [[t, m.index, t.data.length]];
+    let text = t.data.slice(m.index);
+    const chunks = [[t, m.index, t.data.length]];
     for (let n = w.nextNode(), i = 0; n && i < 8; n = w.nextNode(), i++) {
-      const prima = testo.length;
-      testo += n.data;
-      const intero = RX_INTERO.exec(testo);
-      if (intero) { pezzi.push([n, 0, intero[0].length - prima]); return {seg: intero[0], pezzi}; }
-      if (!RX_PARTE.test(testo)) return null;
-      pezzi.push([n, 0, n.data.length]);
+      const before = text.length;
+      text += n.data;
+      const entire = RX_WHOLE.exec(text);
+      if (entire) { chunks.push([n, 0, entire[0].length - before]); return {seg: entire[0], chunks}; }
+      if (!RX_PART.test(text)) return null;
+      chunks.push([n, 0, n.data.length]);
     }
     return null;
   }
 
-  function intoccabile(t) {
+  function untouchable(t) {
     const p = t.parentElement;
     return !p || p.isContentEditable || /^(SCRIPT|STYLE|TEXTAREA|NOSCRIPT|TITLE)$/.test(p.tagName) || !!p.closest('[data-msp-pii]');
   }
 
-  async function svuota() {
+  async function clear() {
     timer = 0;
-    const nodi = [...coda].filter(t => t.isConnected);
-    coda.clear();
-    const ora = Date.now(), servono = new Set();
-    for (const t of nodi) {
-      const s2 = spezzato(t);
+    const nodes = [...queue].filter(t => t.isConnected);
+    queue.clear();
+    const stamp = Date.now(), needed = new Set();
+    for (const t of nodes) {
+      const s2 = split(t);
       for (const s of (t.data.match(RX) || []).concat(s2 ? [s2.seg] : [])) {
-        const v = noti.get(s);
-        if (!v || (v.valore === null && ora - v.quando > 30000)) servono.add(s);
+        const v = well_known.get(s);
+        if (!v || (v.value === null && stamp - v.when > 30000)) needed.add(s);
       }
     }
-    if (servono.size) {
-      let mappa;
-      try { mappa = (await invia({t: 'valori', segnaposto: [...servono].slice(0, 500)})).mappa || {}; } catch (e) { return; }
-      for (const s of servono) noti.set(s, {valore: typeof mappa[s] === 'string' ? mappa[s] : null, quando: ora});
+    if (needed.size) {
+      let mapping;
+      try { mapping = (await send({t: 'values', placeholder: [...needed].slice(0, 500)})).mapping || {}; } catch (e) { return; }
+      for (const s of needed) well_known.set(s, {value: typeof mapping[s] === 'string' ? mapping[s] : null, when: stamp});
     }
-    for (const t of nodi) {
-      if (!t.isConnected || intoccabile(t)) continue;
-      const nuovo = t.data.replace(RX, s => { const v = noti.get(s); return v && v.valore !== null ? v.valore : s; });
-      if (nuovo !== t.data) t.data = nuovo;
-      const s2 = spezzato(t);   // il valore va nel primo pezzo, gli altri perdono la loro parte di segnaposto
-      const v2 = s2 && noti.get(s2.seg);
-      if (v2 && v2.valore !== null && !s2.pezzi.some(([n]) => intoccabile(n))) {
-        s2.pezzi.forEach(([n, da, a], i) => { n.data = i === 0 ? n.data.slice(0, da) + v2.valore : n.data.slice(a); });
+    for (const t of nodes) {
+      if (!t.isConnected || untouchable(t)) continue;
+      const fresh = t.data.replace(RX, s => { const v = well_known.get(s); return v && v.value !== null ? v.value : s; });
+      if (fresh !== t.data) t.data = fresh;
+      const s2 = split(t);   // il valore va nel primo pezzo, gli altri perdono la loro parte di segnaposto
+      const v2 = s2 && well_known.get(s2.seg);
+      if (v2 && v2.value !== null && !s2.chunks.some(([n]) => untouchable(n))) {
+        s2.chunks.forEach(([n, da, a], i) => { n.data = i === 0 ? n.data.slice(0, da) + v2.value : n.data.slice(a); });
       }
     }
   }
 
-  function testoPagina() {
-    const pol = politica(OSPITE);
-    const attivo = !sospesa && !!(stato && stato.ripristina) && (pol === 'proteggi' || pol === 'registra');
-    if (attivo && !osservatore) {
-      osservatore = new MutationObserver(lista => {
-        for (const r of lista) {
-          if (r.type === 'characterData') esamina(r.target);
-          else for (const x of r.addedNodes) esamina(x);
+  function pageText() {
+    const pol = policy(HOST_SITE);
+    const is_active = !suspended && !!(status && status.restore) && (pol === 'protect' || pol === 'record');
+    if (is_active && !observer) {
+      observer = new MutationObserver(list_name => {
+        for (const r of list_name) {
+          if (r.type === 'characterData') examine(r.target);
+          else for (const x of r.addedNodes) examine(x);
         }
-        if (coda.size && !timer) timer = setTimeout(svuota, 80);
+        if (queue.size && !timer) timer = setTimeout(clear, 80);
       });
-      osservatore.observe(document, {subtree: true, childList: true, characterData: true});
-      if (document.body) { esamina(document.body); if (coda.size && !timer) timer = setTimeout(svuota, 80); }
-    } else if (!attivo && osservatore) {
-      osservatore.disconnect();
-      osservatore = null;
+      observer.observe(document, {subtree: true, childList: true, characterData: true});
+      if (document.body) { examine(document.body); if (queue.size && !timer) timer = setTimeout(clear, 80); }
+    } else if (!is_active && observer) {
+      observer.disconnect();
+      observer = null;
     }
   }
 
@@ -287,121 +287,121 @@
   // clic sul pulsante di invio) il testo viene sostituito NELLA CASELLA prima che l'app lo legga; i valori veri
   // tornano poi nel testo della pagina. Dentro le app (MSP_OSPITE) e' l'unica difesa; nel browser e' la prima, perche'
   // non dipende dal formato delle richieste, che i siti cambiano senza preavviso (si spegne dalle impostazioni).
-  const CASELLA = true;
-  const RX_INVIO = /send|invia|submit|inoltra/i;
-  let approvato = null, lavoro = false, ultimaCasella = null, lasciaClic = null;
-  const piatto = t => String(t).replace(/\s+/g, ' ').trim();
+  const BOX = true;
+  const RX_SENDING = /send|invia|submit|inoltra/i;
+  let approved = null, work = false, latestBox = null, leaveClick = null;
+  const flat = t => String(t).replace(/\s+/g, ' ').trim();
 
-  function casellaDi(da) {
+  function boxOf(da) {
     const el = da && da.nodeType === 1 ? da : da && da.parentElement;
     if (!el || !el.closest) return null;
     if (el.tagName === 'TEXTAREA') return el;
     return el.closest('[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]');
   }
-  const leggi = el => el.tagName === 'TEXTAREA' ? el.value : el.innerText;
+  const read = el => el.tagName === 'TEXTAREA' ? el.value : el.innerText;
 
-  function scrivi(el, testo) {
+  function write(el, text) {
     el.focus();
     if (el.tagName === 'TEXTAREA') {
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, testo);
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, text);
       el.dispatchEvent(new Event('input', {bubbles: true}));
-      return piatto(leggi(el)) === piatto(testo);
+      return flat(read(el)) === flat(text);
     }
-    const scegliTutto = () => { const s = getSelection(), r = document.createRange(); r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r); };
-    scegliTutto();   // gli editor ricchi accettano un "incolla": conserva gli a capo
+    const chooseAll = () => { const s = getSelection(), r = document.createRange(); r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r); };
+    chooseAll();   // gli editor ricchi accettano un "incolla": conserva gli a capo
     const dt = new DataTransfer();
-    dt.setData('text/plain', testo);
+    dt.setData('text/plain', text);
     el.dispatchEvent(new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true}));
-    if (piatto(leggi(el)) === piatto(testo)) return true;
-    scegliTutto();
-    document.execCommand('insertText', false, testo);
-    return piatto(leggi(el)) === piatto(testo);
+    if (flat(read(el)) === flat(text)) return true;
+    chooseAll();
+    document.execCommand('insertText', false, text);
+    return flat(read(el)) === flat(text);
   }
 
-  function pulsanteInvio(da) {
+  function sendButton(da) {
     const b = da && da.closest ? da.closest('button, [role="button"], input[type="submit"]') : null;
     if (!b || b.closest('[data-msp-pii]')) return null;
-    const scritte = [b.getAttribute('aria-label'), b.getAttribute('data-testid'), b.getAttribute('title'), b.id, b.type === 'submit' ? 'submit' : ''].join(' ');
-    return RX_INVIO.test(scritte) ? b : null;
+    const captions = [b.getAttribute('aria-label'), b.getAttribute('data-testid'), b.getAttribute('title'), b.id, b.type === 'submit' ? 'submit' : ''].join(' ');
+    return RX_SENDING.test(captions) ? b : null;
   }
 
-  function pulsanteVicino(el) {
+  function nearbyButton(el) {
     for (let n = el.parentElement, i = 0; n && i < 8; n = n.parentElement, i++) {
-      const b = [...n.querySelectorAll('button, [role="button"], input[type="submit"]')].filter(x => pulsanteInvio(x) && !x.disabled);
+      const b = [...n.querySelectorAll('button, [role="button"], input[type="submit"]')].filter(x => sendButton(x) && !x.disabled);
       if (b.length) return b[b.length - 1];
     }
     return null;
   }
 
-  const casellaAttiva = () => CASELLA && !sospesa && politica(OSPITE) === 'proteggi' && (!!globalThis.MSP_OSPITE || !stato || stato.casella !== false);
-  const giaApprovato = (el, testo) => !!approvato && approvato.el === el && approvato.testo === piatto(testo);
+  const activeBox = () => BOX && !suspended && policy(HOST_SITE) === 'protect' && (!!globalThis.MSP_HOST_SITE || !status || status.box !== false);
+  const alreadyApproved = (el, text) => !!approved && approved.el === el && approved.text === flat(text);
 
-  function spedisci(el, come, pulsante) {
-    if (come === 'pulsante' && pulsante && pulsante.isConnected) { lasciaClic = pulsante; pulsante.click(); return; }
-    for (const tipo of ['keydown', 'keypress', 'keyup']) {
-      el.dispatchEvent(new KeyboardEvent(tipo, {key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, composed: true}));
+  function dispatch(el, how, button) {
+    if (how === 'button' && button && button.isConnected) { leaveClick = button; button.click(); return; }
+    for (const kind of ['keydown', 'keypress', 'keyup']) {
+      el.dispatchEvent(new KeyboardEvent(kind, {key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, composed: true}));
     }
     setTimeout(() => {   // l'app non ha reagito al tasto simulato: si prova con il suo pulsante di invio
-      if (!el.isConnected || !piatto(leggi(el)) || !giaApprovato(el, leggi(el))) return;
-      const b = pulsanteVicino(el);
-      if (b) { lasciaClic = b; b.click(); } else avviso(FRASI.premi, false);
+      if (!el.isConnected || !flat(read(el)) || !alreadyApproved(el, read(el))) return;
+      const b = nearbyButton(el);
+      if (b) { leaveClick = b; b.click(); } else notice(PHRASES.press, false);
     }, 450);
   }
 
-  async function elabora(el, testo, come, pulsante) {
-    if (lavoro) return;
-    lavoro = true;
+  async function work_on(el, text, how, button) {
+    if (work) return;
+    work = true;
     try {
       let r = null;
-      try { r = await invia({t: 'testo', host: OSPITE, testo}); } catch (e) { r = {azione: 'blocca', motivo: viva() ? 'estensione' : 'ricarica'}; }
-      if (!r || (r.azione !== 'passa' && r.azione !== 'sostituisci')) { avviso(MOTIVI[r && r.motivo] || MOTIVI.estensione, true); return; }
-      let pronto = testo;
-      if (r.azione === 'sostituisci') {
-        if (!scrivi(el, r.testo)) { avviso(FRASI.casella, true); return; }
-        pronto = r.testo;
-        if (avvisi) avviso(sostituiti(r.sostituzioni), false);
+      try { r = await send({t: 'text', host: HOST_SITE, text}); } catch (e) { r = {action: 'block', reason: alive() ? 'extension' : 'reload'}; }
+      if (!r || (r.action !== 'passthrough' && r.action !== 'replace')) { notice(REASONS[r && r.reason] || REASONS.extension, true); return; }
+      let ready_now = text;
+      if (r.action === 'replace') {
+        if (!write(el, r.text)) { notice(PHRASES.box, true); return; }
+        ready_now = r.text;
+        if (notices) notice(replaced(r.replacements), false);
         await new Promise(ok => setTimeout(ok, 80));   // l'app deve accorgersi del testo nuovo
       }
-      approvato = {el, testo: piatto(pronto)};
-      spedisci(el, come, pulsante);
-    } finally { lavoro = false; }
+      approved = {el, text: flat(ready_now)};
+      dispatch(el, how, button);
+    } finally { work = false; }
   }
 
-  if (CASELLA) {
-    window.addEventListener('focusin', ev => { const el = casellaDi(ev.target); if (el) ultimaCasella = el; }, true);
+  if (BOX) {
+    window.addEventListener('focusin', ev => { const el = boxOf(ev.target); if (el) latestBox = el; }, true);
     window.addEventListener('keydown', ev => {
-      if (ev.key !== 'Enter' || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || ev.isComposing || !ev.isTrusted || !casellaAttiva()) return;
-      const el = casellaDi(ev.target);
+      if (ev.key !== 'Enter' || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || ev.isComposing || !ev.isTrusted || !activeBox()) return;
+      const el = boxOf(ev.target);
       if (!el) return;
-      const testo = leggi(el);
-      if (!piatto(testo) || giaApprovato(el, testo)) return;
+      const text = read(el);
+      if (!flat(text) || alreadyApproved(el, text)) return;
       ev.preventDefault();
       ev.stopImmediatePropagation();
-      elabora(el, testo, 'tasto', null);
+      work_on(el, text, 'keystroke', null);
     }, true);
     window.addEventListener('click', ev => {
-      if (!casellaAttiva()) return;
-      const b = pulsanteInvio(ev.target);
+      if (!activeBox()) return;
+      const b = sendButton(ev.target);
       if (!b) return;
-      if (lasciaClic === b) { lasciaClic = null; return; }
+      if (leaveClick === b) { leaveClick = null; return; }
       // la casella giusta: l'ultima in cui si e' scritto, altrimenti la piu' vicina al pulsante che contiene del testo
-      let el = ultimaCasella && ultimaCasella.isConnected && piatto(leggi(ultimaCasella)) ? ultimaCasella : null;
+      let el = latestBox && latestBox.isConnected && flat(read(latestBox)) ? latestBox : null;
       for (let n = b.parentElement, i = 0; n && i < 8 && !el; n = n.parentElement, i++) {
-        el = [...n.querySelectorAll('textarea, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]')].find(x => piatto(leggi(x))) || null;
+        el = [...n.querySelectorAll('textarea, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]')].find(x => flat(read(x))) || null;
       }
       if (!el) return;
-      const testo = leggi(el);
-      if (!piatto(testo) || giaApprovato(el, testo)) return;
+      const text = read(el);
+      if (!flat(text) || alreadyApproved(el, text)) return;
       ev.preventDefault();
       ev.stopImmediatePropagation();
-      elabora(el, testo, 'pulsante', b);
+      work_on(el, text, 'button', b);
     }, true);
   }
 
   // ---------------------------------------------------------------- avvio
   try {
-    chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && (c.stato || c.sospesa || c.avvisi)) carica(); });
+    chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && (c.status || c.suspended || c.notices)) load(); });
   } catch (e) { /* estensione ricaricata */ }
-  carica();
-  if (cima) invia({t: 'visita', host: OSPITE}).catch(() => {});
+  load();
+  if (topmost) send({t: 'visit', host: HOST_SITE}).catch(() => {});
 })();

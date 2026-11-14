@@ -1,55 +1,149 @@
 {
- "est_nome": {"message": "Omissis"},
- "est_descrizione": {"message": "Replaces personal data with labels before messages go to AI services and restores it in answers. Works with Omissis on your PC."},
-
- "icona_attiva": {"message": "Omissis: protection on"},
- "icona_sospesa": {"message": "Omissis: protection paused in this browser"},
- "icona_non_collegata": {"message": "Omissis: not connected to the program"},
- "icona_non_risponde": {"message": "Omissis: the program is not responding"},
-
- "stato_attiva": {"message": "on"},
- "stato_sospesa": {"message": "paused"},
- "stato_non_attiva": {"message": "off"},
- "guasto_non_collegata": {"message": "The extension is not connected to the program."},
- "guasto_codice": {"message": "The connection code is no longer valid: reconnect it from the panel."},
- "guasto_programma": {"message": "The protection program is not responding: start it from the icon next to the clock."},
- "collega_aiuto": {"message": "To connect it, open the program's panel, Connections section, and press \"Connect this browser\". Or paste here the code shown by the panel."},
- "collega_codice": {"message": "Connection code"},
- "collega": {"message": "Connect"},
- "sito_aperto": {"message": "Open site"},
- "sito_fuori_catalogo": {"message": "not an AI service in the catalogue"},
- "trattamento": {"message": "Handling"},
- "politica_proteggi": {"message": "Protected: data is replaced"},
- "politica_registra": {"message": "Logged only: no replacements"},
- "politica_blocca": {"message": "Blocked"},
- "politica_ignora": {"message": "Ignored"},
- "politica_sospeso": {"message": "$1 (paused now)"},
- "conta_messaggi": {"message": "Messages protected in this tab"},
- "conta_sostituzioni": {"message": "Values replaced"},
- "conta_bloccate": {"message": "Requests blocked"},
- "opzione_avvisi": {"message": "Show a notice on the page when I replace data"},
- "opzione_sospendi": {"message": "Pause protection in this browser"},
- "opzione_sospendi_nota": {"message": "Messages are sent without replacements."},
- "apri_pannello": {"message": "Open the panel"},
- "versione": {"message": "version $1"},
-
- "bloccato_scheda": {"message": "Service blocked"},
- "bloccato_questo": {"message": "This service"},
- "bloccato_titolo": {"message": "$1 is blocked"},
- "bloccato_testo": {"message": "Using this AI service is not allowed by the Omissis settings on this computer."},
- "bloccato_chiedi": {"message": "If you need it for work, ask whoever manages the system."},
-
- "avviso_uno": {"message": "1 value replaced before sending"},
- "avviso_molti": {"message": "$1 values replaced before sending"},
- "avviso_premi_invio": {"message": "Data replaced in the message box: press Enter again to send the message."},
- "avviso_casella": {"message": "Message not sent: I cannot replace the data in the message box."},
- "allegato_lavoro": {"message": "Anonymising the attachment…"},
- "allegato_fatto": {"message": "Attachments anonymised: $1 · values replaced: $2."},
- "allegato_testo": {"message": "PDFs and images became text files."},
- "allegato_bloccato": {"message": "\"$1\" cannot be anonymised: it was not attached."},
- "avviso_motore": {"message": "Message not sent: the protection program is not responding. Start it and try again."},
- "avviso_non_collegata": {"message": "Message not sent: the extension is not connected to the program. Open the panel and press \"Connect this browser\"."},
- "avviso_file": {"message": "File upload blocked by the settings."},
- "avviso_ricarica": {"message": "The extension has been updated: reload the page before writing."},
- "avviso_estensione": {"message": "Message not sent: the extension cannot protect it."}
+ "est_name": {
+  "message": "Omissis"
+ },
+ "est_description": {
+  "message": "Replaces personal data with labels before messages go to AI services and restores it in answers. Works with Omissis on your PC."
+ },
+ "active_icon": {
+  "message": "Omissis: protection on"
+ },
+ "suspended_icon": {
+  "message": "Omissis: protection paused in this browser"
+ },
+ "icon_not_connected": {
+  "message": "Omissis: not connected to the program"
+ },
+ "icon_not_responding": {
+  "message": "Omissis: the program is not responding"
+ },
+ "status_active": {
+  "message": "on"
+ },
+ "status_suspended": {
+  "message": "paused"
+ },
+ "status_not_active": {
+  "message": "off"
+ },
+ "fault_not_connected": {
+  "message": "The extension is not connected to the program."
+ },
+ "fault_code": {
+  "message": "The connection code is no longer valid: reconnect it from the panel."
+ },
+ "fault_program": {
+  "message": "The protection program is not responding: start it from the icon next to the clock."
+ },
+ "connect_help": {
+  "message": "To connect it, open the program's panel, Connections section, and press \"Connect this browser\". Or paste here the code shown by the panel."
+ },
+ "connect_code": {
+  "message": "Connection code"
+ },
+ "connect": {
+  "message": "Connect"
+ },
+ "site_opened": {
+  "message": "Open site"
+ },
+ "site_outside_catalog": {
+  "message": "not an AI service in the catalogue"
+ },
+ "handling": {
+  "message": "Handling"
+ },
+ "policy_protect": {
+  "message": "Protected: data is replaced"
+ },
+ "policy_record": {
+  "message": "Logged only: no replacements"
+ },
+ "policy_block": {
+  "message": "Blocked"
+ },
+ "policy_ignore": {
+  "message": "Ignored"
+ },
+ "policy_suspended": {
+  "message": "$1 (paused now)"
+ },
+ "count_messages": {
+  "message": "Messages protected in this tab"
+ },
+ "count_replacements": {
+  "message": "Values replaced"
+ },
+ "count_blocked": {
+  "message": "Requests blocked"
+ },
+ "option_notices": {
+  "message": "Show a notice on the page when I replace data"
+ },
+ "option_suspend": {
+  "message": "Pause protection in this browser"
+ },
+ "option_suspend_note": {
+  "message": "Messages are sent without replacements."
+ },
+ "open_panel": {
+  "message": "Open the panel"
+ },
+ "version": {
+  "message": "version $1"
+ },
+ "blocked_card": {
+  "message": "Service blocked"
+ },
+ "blocked_this_one": {
+  "message": "This service"
+ },
+ "blocked_title": {
+  "message": "$1 is blocked"
+ },
+ "blocked_text": {
+  "message": "Using this AI service is not allowed by the Omissis settings on this computer."
+ },
+ "blocked_ask": {
+  "message": "If you need it for work, ask whoever manages the system."
+ },
+ "one_notice": {
+  "message": "1 value replaced before sending"
+ },
+ "many_notice": {
+  "message": "$1 values replaced before sending"
+ },
+ "notice_press_enter": {
+  "message": "Data replaced in the message box: press Enter again to send the message."
+ },
+ "box_notice": {
+  "message": "Message not sent: I cannot replace the data in the message box."
+ },
+ "attachment_work": {
+  "message": "Anonymising the attachment…"
+ },
+ "attachment_done": {
+  "message": "Attachments anonymised: $1 · values replaced: $2."
+ },
+ "attachment_text": {
+  "message": "PDFs and images became text files."
+ },
+ "attachment_blocked": {
+  "message": "\"$1\" cannot be anonymised: it was not attached."
+ },
+ "engine_notice": {
+  "message": "Message not sent: the protection program is not responding. Start it and try again."
+ },
+ "notice_not_connected": {
+  "message": "Message not sent: the extension is not connected to the program. Open the panel and press \"Connect this browser\"."
+ },
+ "file_notice": {
+  "message": "File upload blocked by the settings."
+ },
+ "reload_notice": {
+  "message": "The extension has been updated: reload the page before writing."
+ },
+ "extension_notice": {
+  "message": "Message not sent: the extension cannot protect it."
+ }
 }

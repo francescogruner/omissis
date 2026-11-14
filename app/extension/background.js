@@ -2,200 +2,200 @@
 // 127.0.0.1), tiene aggiornate le politiche dei servizi e applica i blocchi.
 importScripts('defaults.js');
 
-const PORTA = 8765;
-const VERSIONE = chrome.runtime.getManifest().version;
-let ultimoControllo = 0;
+const PORT = 8765;
+const VERSION = chrome.runtime.getManifest().version;
+let lastCheck = 0;
 
-const conf = () => chrome.storage.local.get({token: '', porta: PORTA, sospesa: false, avvisi: true});
+const conf = () => chrome.storage.local.get({token: '', port: PORT, suspended: false, notices: true});
 
 // Il browser e la sua versione: il programma li annota accanto a ogni messaggio protetto, per sapere con quali versioni funziona.
-let CLIENTE = '';
+let CLIENT = '';
 (async () => {
   try {
     const d = navigator.userAgentData;
-    const marche = (d && (await d.getHighEntropyValues(['fullVersionList'])).fullVersionList) || (d && d.brands) || [];
-    const m = marche.find(x => !/chromium|not.?a.?brand/i.test(x.brand)) || marche.find(x => /chromium/i.test(x.brand));
-    CLIENTE = m ? `${m.brand} ${m.version}` : '';
+    const brands = (d && (await d.getHighEntropyValues(['fullVersionList'])).fullVersionList) || (d && d.brands) || [];
+    const m = brands.find(x => !/chromium|not.?a.?brand/i.test(x.brand)) || brands.find(x => /chromium/i.test(x.brand));
+    CLIENT = m ? `${m.brand} ${m.version}` : '';
   } catch (e) { /* resta vuoto: il programma lo segna come sconosciuto */ }
 })();
 
-async function motore(azione, dati, attesa) {
+async function engine(action, data, timeout) {
   const c = await conf();
   if (!c.token) throw new Error('non collegata');
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), attesa || 90000);
+  const t = setTimeout(() => ctl.abort(), timeout || 90000);
   try {
-    const r = await fetch(`http://127.0.0.1:${c.porta}/bridge/${azione}`, {
+    const r = await fetch(`http://127.0.0.1:${c.port}/bridge/${action}`, {
       method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': c.token},
-      body: JSON.stringify({...(dati || {}), cliente: CLIENTE}), signal: ctl.signal, cache: 'no-store'});
-    if (!r.ok) throw new Error(r.status === 403 ? 'codice non valido' : 'errore ' + r.status);
+      body: JSON.stringify({...(data || {}), client: CLIENT}), signal: ctl.signal, cache: 'no-store'});
+    if (!r.ok) throw new Error(r.status === 403 ? 'codice non valido' : 'error ' + r.status);
     return await r.json();
   } finally { clearTimeout(t); }
 }
 
 // ---------------------------------------------------------------- politiche e blocchi
-async function regole(stato) {
-  const vecchie = (await chrome.declarativeNetRequest.getDynamicRules()).map(r => r.id);
-  const nuove = [];
+async function rules(status) {
+  const old_ones = (await chrome.declarativeNetRequest.getDynamicRules()).map(r => r.id);
+  const new_ones = [];
   let id = 1;
-  for (const s of stato.servizi) {
-    if (s.politica !== 'blocca') continue;
+  for (const s of status.services) {
+    if (s.policy !== 'block') continue;
     if (s.radar) {   // servizio del radar: sui suoi siti non abbiamo accesso, quindi niente pagina di avviso, solo il blocco
-      nuove.push({id: id++, priority: 1, condition: {requestDomains: s.domini,
+      new_ones.push({id: id++, priority: 1, condition: {requestDomains: s.domains,
         resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest', 'websocket', 'script', 'ping', 'media', 'image', 'font', 'stylesheet', 'other']},
         action: {type: 'block'}});
       continue;
     }
-    nuove.push({id: id++, priority: 2, condition: {requestDomains: s.domini, resourceTypes: ['main_frame']},
-      action: {type: 'redirect', redirect: {extensionPath: '/blocked.html?s=' + encodeURIComponent(s.nome) + '&h=' + encodeURIComponent(s.domini[0])}}});
-    nuove.push({id: id++, priority: 1, condition: {requestDomains: s.domini,
+    new_ones.push({id: id++, priority: 2, condition: {requestDomains: s.domains, resourceTypes: ['main_frame']},
+      action: {type: 'redirect', redirect: {extensionPath: '/blocked.html?s=' + encodeURIComponent(s.name) + '&h=' + encodeURIComponent(s.domains[0])}}});
+    new_ones.push({id: id++, priority: 1, condition: {requestDomains: s.domains,
       resourceTypes: ['sub_frame', 'xmlhttprequest', 'websocket', 'script', 'ping', 'media', 'image', 'font', 'stylesheet', 'other']},
       action: {type: 'block'}});
   }
-  await chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds: vecchie, addRules: nuove});
+  await chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds: old_ones, addRules: new_ones});
 }
 
 // Le frasi nella lingua del browser, lette dal file dell'estensione (qui il browser non le traduce da solo).
-let frasi = null;
-async function T(chiave) {
-  if (!frasi) {
-    const leggi = async lingua => (await fetch(chrome.runtime.getURL(`_locales/${lingua}/messages.json`))).json();
-    try { frasi = await leggi((chrome.i18n.getUILanguage() || 'en').split('-')[0]); } catch (e) { frasi = await leggi('en'); }
+let phrases = null;
+async function T(key) {
+  if (!phrases) {
+    const read = async language => (await fetch(chrome.runtime.getURL(`_locales/${language}/messages.json`))).json();
+    try { phrases = await read((chrome.i18n.getUILanguage() || 'en').split('-')[0]); } catch (e) { phrases = await read('en'); }
   }
-  return (frasi[chiave] || {}).message || chiave;
+  return (phrases[key] || {}).message || key;
 }
 
-async function segnale() {
-  const {token, sospesa, salute} = await chrome.storage.local.get(['token', 'sospesa', 'salute']);
-  const guasto = !token || !(salute && salute.ok);
-  await chrome.action.setBadgeBackgroundColor({color: guasto ? '#c50f1f' : sospesa ? '#8f8f8f' : '#0a7a33'});
-  await chrome.action.setBadgeText({text: guasto ? '!' : sospesa ? 'off' : ''});
-  await chrome.action.setTitle({title: await T(!token ? 'icona_non_collegata' : guasto ? 'icona_non_risponde' : sospesa ? 'icona_sospesa' : 'icona_attiva')});
+async function signal() {
+  const {token, suspended, health} = await chrome.storage.local.get(['token', 'suspended', 'health']);
+  const fault = !token || !(health && health.ok);
+  await chrome.action.setBadgeBackgroundColor({color: fault ? '#c50f1f' : suspended ? '#8f8f8f' : '#0a7a33'});
+  await chrome.action.setBadgeText({text: fault ? '!' : suspended ? 'off' : ''});
+  await chrome.action.setTitle({title: await T(!token ? 'icon_not_connected' : fault ? 'icon_not_responding' : suspended ? 'suspended_icon' : 'active_icon')});
 }
 
-async function aggiorna(forza) {
-  if (!forza && Date.now() - ultimoControllo < 15000) return;
-  ultimoControllo = Date.now();
-  let salute;
+async function refresh(force) {
+  if (!force && Date.now() - lastCheck < 15000) return;
+  lastCheck = Date.now();
+  let health;
   try {
-    const r = await motore('stato', {versione: VERSIONE}, 5000);
-    const nuovo = {servizi: r.servizi, ripristina: !!r.ripristina, blocca_file: !!r.blocca_file, casella: r.casella !== false};
-    const {stato} = await chrome.storage.local.get('stato');
-    if (JSON.stringify(stato) !== JSON.stringify(nuovo)) await chrome.storage.local.set({stato: nuovo});
-    await regole(nuovo);
-    salute = {ok: true, quando: Date.now()};
+    const r = await engine('status', {version: VERSION}, 5000);
+    const fresh = {services: r.services, restore: !!r.restore, block_files: !!r.block_files, box: r.box !== false};
+    const {status} = await chrome.storage.local.get('status');
+    if (JSON.stringify(status) !== JSON.stringify(fresh)) await chrome.storage.local.set({status: fresh});
+    await rules(fresh);
+    health = {ok: true, when: Date.now()};
   } catch (e) {
-    salute = {ok: false, quando: Date.now(), motivo: String((e && e.message) || e)};
+    health = {ok: false, when: Date.now(), reason: String((e && e.message) || e)};
   }
-  await chrome.storage.local.set({salute});
-  await segnale();
+  await chrome.storage.local.set({health});
+  await signal();
 }
 
 // ---------------------------------------------------------------- conteggi per scheda
-async function conta(scheda, r) {
-  if (!scheda || scheda.id == null) return;
-  const chiave = 'c' + scheda.id;
-  const c = (await chrome.storage.session.get(chiave))[chiave] || {messaggi: 0, sostituzioni: 0, bloccate: 0};
-  if (r.azione === 'sostituisci') { c.messaggi++; c.sostituzioni += r.sostituzioni || 0; }
-  else if (r.azione === 'blocca') c.bloccate++;
+async function count(card, r) {
+  if (!card || card.id == null) return;
+  const key = 'c' + card.id;
+  const c = (await chrome.storage.session.get(key))[key] || {messages: 0, replacements: 0, blocked: 0};
+  if (r.action === 'replace') { c.messages++; c.replacements += r.replacements || 0; }
+  else if (r.action === 'block') c.blocked++;
   else return;
-  await chrome.storage.session.set({[chiave]: c});
-  if (c.sostituzioni) {
-    chrome.action.setBadgeBackgroundColor({tabId: scheda.id, color: '#107a6b'});
-    chrome.action.setBadgeText({tabId: scheda.id, text: String(c.sostituzioni)});
+  await chrome.storage.session.set({[key]: c});
+  if (c.replacements) {
+    chrome.action.setBadgeBackgroundColor({tabId: card.id, color: '#107a6b'});
+    chrome.action.setBadgeText({tabId: card.id, text: String(c.replacements)});
   }
 }
 chrome.tabs.onRemoved.addListener(id => chrome.storage.session.remove('c' + id));
 
-function trova(stato, host) {
-  for (const s of (stato && stato.servizi) || []) if (s.domini.some(d => host === d || host.endsWith('.' + d))) return s;
+function find(status, host) {
+  for (const s of (status && status.services) || []) if (s.domains.some(d => host === d || host.endsWith('.' + d))) return s;
   return null;
 }
 
 // ---------------------------------------------------------------- messaggi
 // vero se il messaggio viene da una pagina dell'estensione stessa (la finestrella), non da un sito
-const interno = mitt => !mitt.tab || String(mitt.url || '').startsWith(chrome.runtime.getURL(''));
+const internal = sender => !sender.tab || String(sender.url || '').startsWith(chrome.runtime.getURL(''));
 
-async function gestisci(m, mitt) {
+async function handle(m, sender) {
   switch (m && m.t) {
-    case 'richiesta': {
+    case 'request': {
       const c = await conf();
-      if (c.sospesa) return {azione: 'passa'};
-      if (!c.token) return {azione: 'blocca', motivo: 'non collegata'};
+      if (c.suspended) return {action: 'passthrough'};
+      if (!c.token) return {action: 'block', reason: 'non collegata'};
       let r;
-      try { r = await motore('richiesta', m); } catch (e) {
-        aggiorna(true);
-        r = {azione: 'blocca', motivo: e && e.message === 'codice non valido' ? 'non collegata' : 'motore'};
+      try { r = await engine('request', m); } catch (e) {
+        refresh(true);
+        r = {action: 'block', reason: e && e.message === 'codice non valido' ? 'non collegata' : 'engine'};
       }
-      conta(mitt.tab, r);
+      count(sender.tab, r);
       return r;
     }
-    case 'testo': {   // la casella di scrittura: stesse regole di una richiesta
+    case 'text': {   // la casella di scrittura: stesse regole di una richiesta
       const c = await conf();
-      if (c.sospesa) return {azione: 'passa'};
-      if (!c.token) return {azione: 'blocca', motivo: 'non collegata'};
-      try { return await motore('testo', m); } catch (e) { return {azione: 'blocca', motivo: 'motore'}; }
+      if (c.suspended) return {action: 'passthrough'};
+      if (!c.token) return {action: 'block', reason: 'non collegata'};
+      try { return await engine('text', m); } catch (e) { return {action: 'block', reason: 'engine'}; }
     }
-    case 'allegato': {   // un file che sta per essere allegato: torna la copia anonimizzata
+    case 'attachment': {   // un file che sta per essere allegato: torna la copia anonimizzata
       const c = await conf();
-      if (c.sospesa) return {azione: 'passa'};
-      if (!c.token) return {azione: 'blocca', motivo: 'non collegata'};
+      if (c.suspended) return {action: 'passthrough'};
+      if (!c.token) return {action: 'block', reason: 'non collegata'};
       try {
-        const r = await motore('allegato', m, 300000);
-        if (r.azione === 'sostituisci') conta(mitt.tab, {azione: 'sostituisci', sostituzioni: r.sostituzioni});
+        const r = await engine('attachment', m, 300000);
+        if (r.action === 'replace') count(sender.tab, {action: 'replace', replacements: r.replacements});
         return r;
-      } catch (e) { return {azione: 'blocca', motivo: 'motore'}; }
+      } catch (e) { return {action: 'block', reason: 'engine'}; }
     }
-    case 'apri': case 'pezzo': case 'intera': case 'valori': case 'websocket':
-      return motore(m.t, m, 30000);
-    case 'visita':
-      await aggiorna(false);
-      return motore('visita', {host: String(m.host || '')}, 5000).catch(() => ({}));
-    case 'collega': {   // dal pannello del programma (stessa macchina) oppure a mano dalla finestrella
-      const daPannello = !!(mitt.tab && mitt.url && /^http:\/\/(127\.0\.0\.1|localhost):8766\//.test(mitt.url));
-      if (!daPannello && !interno(mitt)) return {ok: false};
-      await chrome.storage.local.set({token: String(m.token || '').trim(), porta: Number(m.porta) || PORTA});
-      await aggiorna(true);
-      const {salute} = await chrome.storage.local.get('salute');
-      return {ok: !!(salute && salute.ok), motivo: salute && salute.motivo, versione: VERSIONE};
+    case 'open_up': case 'chunk': case 'whole': case 'values': case 'websocket':
+      return engine(m.t, m, 30000);
+    case 'visit':
+      await refresh(false);
+      return engine('visit', {host: String(m.host || '')}, 5000).catch(() => ({}));
+    case 'connect': {   // dal pannello del programma (stessa macchina) oppure a mano dalla finestrella
+      const fromPanel = !!(sender.tab && sender.url && /^http:\/\/(127\.0\.0\.1|localhost):8766\//.test(sender.url));
+      if (!fromPanel && !internal(sender)) return {ok: false};
+      await chrome.storage.local.set({token: String(m.token || '').trim(), port: Number(m.port) || PORT});
+      await refresh(true);
+      const {health} = await chrome.storage.local.get('health');
+      return {ok: !!(health && health.ok), reason: health && health.reason, version: VERSION};
     }
-    case 'presente': {
-      const {token, salute} = await chrome.storage.local.get(['token', 'salute']);
-      return {versione: VERSIONE, collegata: !!token, ok: !!(salute && salute.ok)};
+    case 'present': {
+      const {token, health} = await chrome.storage.local.get(['token', 'health']);
+      return {version: VERSION, connected: !!token, ok: !!(health && health.ok)};
     }
-    case 'imposta': {
-      if (!interno(mitt)) return {};
-      const nuove = {};
-      if ('sospesa' in m) nuove.sospesa = !!m.sospesa;
-      if ('avvisi' in m) nuove.avvisi = !!m.avvisi;
-      await chrome.storage.local.set(nuove);
-      await segnale();
+    case 'configure': {
+      if (!internal(sender)) return {};
+      const new_ones = {};
+      if ('suspended' in m) new_ones.suspended = !!m.suspended;
+      if ('notices' in m) new_ones.notices = !!m.notices;
+      await chrome.storage.local.set(new_ones);
+      await signal();
       return {};
     }
-    case 'finestra': {
-      if (!interno(mitt)) return {};
-      await aggiorna(true);
-      const d = await chrome.storage.local.get(['token', 'porta', 'salute', 'stato', 'sospesa', 'avvisi']);
-      const [scheda] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
+    case 'win': {
+      if (!internal(sender)) return {};
+      await refresh(true);
+      const d = await chrome.storage.local.get(['token', 'port', 'health', 'status', 'suspended', 'notices']);
+      const [card] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
       let host = '';
-      try { host = new URL(scheda.url).hostname; } catch (e) { /* scheda senza indirizzo leggibile */ }
-      const s = trova(d.stato || MSP_PREDEFINITI, host);
-      const chiave = 'c' + (scheda ? scheda.id : '');
-      return {versione: VERSIONE, collegata: !!d.token, salute: d.salute || {ok: false}, sospesa: !!d.sospesa, avvisi: d.avvisi !== false,
-        ripristina: !!(d.stato && d.stato.ripristina), host, servizio: s && {nome: s.nome, politica: s.politica, leggibile: s.leggibile},
-        conteggi: (await chrome.storage.session.get(chiave))[chiave] || null};
+      try { host = new URL(card.url).hostname; } catch (e) { /* scheda senza indirizzo leggibile */ }
+      const s = find(d.status || MSP_DEFAULTS, host);
+      const key = 'c' + (card ? card.id : '');
+      return {version: VERSION, connected: !!d.token, health: d.health || {ok: false}, suspended: !!d.suspended, notices: d.notices !== false,
+        restore: !!(d.status && d.status.restore), host, service: s && {name: s.name, policy: s.policy, readable: s.readable},
+        counts: (await chrome.storage.session.get(key))[key] || null};
     }
-    case 'bloccato':
-      return motore('visita', {host: String(m.host || '')}, 5000).catch(() => ({}));
+    case 'blocked':
+      return engine('visit', {host: String(m.host || '')}, 5000).catch(() => ({}));
   }
   return {};
 }
 
-chrome.runtime.onMessage.addListener((m, mitt, rispondi) => {
-  gestisci(m, mitt).then(rispondi, () => rispondi(m && m.t === 'richiesta' ? {azione: 'blocca', motivo: 'estensione'} : {}));
+chrome.runtime.onMessage.addListener((m, sender, respond) => {
+  handle(m, sender).then(respond, () => respond(m && m.t === 'request' ? {action: 'block', reason: 'extension'} : {}));
   return true;
 });
 
-chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create('stato', {periodInMinutes: 1}); aggiorna(true); });
-chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('stato', {periodInMinutes: 1}); aggiorna(true); });
-chrome.alarms.onAlarm.addListener(a => { if (a.name === 'stato') aggiorna(true); });
+chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create('status', {periodInMinutes: 1}); refresh(true); });
+chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('status', {periodInMinutes: 1}); refresh(true); });
+chrome.alarms.onAlarm.addListener(a => { if (a.name === 'status') refresh(true); });

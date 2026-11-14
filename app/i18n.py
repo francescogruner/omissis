@@ -20,29 +20,29 @@ from pathlib import Path
 
 import settings
 
-CARTELLA = Path(__file__).resolve().parent / "panel" / "locales"
-RIFERIMENTO = "it"
+FOLDER = Path(__file__).resolve().parent / "panel" / "locales"
+REFERENCE = "it"
 _cache = {}
 
 
-def _leggi(codice):
-    f = CARTELLA / f"{codice}.json"
+def _read(code):
+    f = FOLDER / f"{code}.json"
     try:
         m = f.stat().st_mtime
     except OSError:
         return {}
-    if _cache.get(codice, (None, None))[0] != m:
+    if _cache.get(code, (None, None))[0] != m:
         try:
-            _cache[codice] = (m, json.loads(f.read_text(encoding="utf-8")))
+            _cache[code] = (m, json.loads(f.read_text(encoding="utf-8")))
         except ValueError:
-            _cache[codice] = (m, {})
-    return _cache[codice][1]
+            _cache[code] = (m, {})
+    return _cache[code][1]
 
 
-def disponibili():
+def available():
     """[{"codice": "it", "nome": "Italiano"}, ...] in ordine di nome."""
-    out = [{"codice": f.stem, "nome": _leggi(f.stem).get("_lingua", f.stem)} for f in CARTELLA.glob("*.json") if re.fullmatch(r"[a-z]{2,3}(-[A-Za-z]{2,4})?", f.stem)]
-    return sorted(out, key=lambda x: x["nome"].lower())
+    out = [{"code": f.stem, "name": _read(f.stem).get("_language", f.stem)} for f in FOLDER.glob("*.json") if re.fullmatch(r"[a-z]{2,3}(-[A-Za-z]{2,4})?", f.stem)]
+    return sorted(out, key=lambda x: x["name"].lower())
 
 
 def di_windows():
@@ -52,29 +52,29 @@ def di_windows():
     try:
         import ctypes
         import locale
-        nome = locale.windows_locale.get(ctypes.windll.kernel32.GetUserDefaultUILanguage())
-        return nome.split("_")[0].lower() if nome else None
+        name = locale.windows_locale.get(ctypes.windll.kernel32.GetUserDefaultUILanguage())
+        return name.split("_")[0].lower() if name else None
     except Exception:   # noqa: BLE001
         return None
 
 
-def scelta():
-    return str(os.environ.get("OMISSIS_LANG") or settings.leggi().get("lingua") or "auto")
+def choice():
+    return str(os.environ.get("OMISSIS_LANG") or settings.read().get("language") or "auto")
 
 
-def attiva():
+def active():
     """Il codice della lingua da usare adesso."""
-    codici = {x["codice"] for x in disponibili()}
-    voluta = scelta()
-    if voluta in codici:
-        return voluta
-    sistema = di_windows()
-    if sistema in codici:
-        return sistema
-    return "en" if "en" in codici else RIFERIMENTO
+    codes = {x["code"] for x in available()}
+    wanted = choice()
+    if wanted in codes:
+        return wanted
+    system = di_windows()
+    if system in codes:
+        return system
+    return "en" if "en" in codes else REFERENCE
 
 
-def t(chiave, **valori):
+def t(key, **values):
     """La frase per una chiave nella lingua attiva, con i valori tra graffe sostituiti."""
-    frase = _leggi(attiva()).get(chiave) or _leggi(RIFERIMENTO).get(chiave) or chiave
-    return re.sub(r"\{(\w+)\}", lambda m: str(valori[m.group(1)]) if m.group(1) in valori else m.group(), frase) if valori else frase
+    phrase = _read(active()).get(key) or _read(REFERENCE).get(key) or key
+    return re.sub(r"\{(\w+)\}", lambda m: str(values[m.group(1)]) if m.group(1) in values else m.group(), phrase) if values else phrase

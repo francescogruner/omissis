@@ -1,8 +1,8 @@
 {
- "origine": "https://huggingface.co/francescogruner/{nome}/resolve/{revisione}/{file}",
- "modelli": {
+ "origin": "https://huggingface.co/francescogruner/{name}/resolve/{revision}/{file}",
+ "models": {
   "omissis-base": {
-   "revisione": "main",
+   "revision": "main",
    "file": {
     "config.json": {
      "byte": 5759,
@@ -27,7 +27,7 @@
    }
   },
   "omissis-small": {
-   "revisione": "main",
+   "revision": "main",
    "file": {
     "config.json": {
      "byte": 5758,

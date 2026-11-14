@@ -40,7 +40,7 @@ aggiunge le sezioni per chi lo gestisce. Tutte le sezioni:
 
 ## Il pannello
 
-La pagina sta nella cartella `pannello`: `index.html` (lo scheletro), `style.css`, `app.js` e le
+La pagina sta nella cartella `panel`: `index.html` (lo scheletro), `style.css`, `app.js` e le
 frasi in `locales\<codice>.json`. Nessuna libreria e nessun file caricato da fuori; la pagina vieta
 a se stessa qualunque codice che non venga dai suoi file (intestazione Content-Security-Policy).
 
@@ -62,7 +62,7 @@ Le sezioni, senza doppioni:
 messaggi d'errore) sta in `panel\locales\it.json` e `en.json`, con le stesse chiavi; il codice
 contiene solo le chiavi. «Automatica» segue la lingua di Windows (inglese se non è tra quelle
 presenti). Per aggiungere una lingua: copiare `it.json` con il codice della lingua (`de.json`),
-tradurre i valori e cambiare `_lingua`: compare da sola nelle Impostazioni. `check_languages.py`
+tradurre i valori e cambiare `_language`: compare da sola nelle Impostazioni. `check_languages.py`
 dice cosa manca, cosa avanza e dove le parole tra graffe non coincidono. Gli eventi vengono scritti
 nel registro in italiano: la pagina traduce quelli noti.
 
@@ -144,7 +144,7 @@ la protezione attiva.
 - **Documenti**: nella sezione Documenti si trascinano i file (Word, Excel, PowerPoint, testo, PDF
   con testo) oppure si sceglie una cartella intera con «Sfoglia». Per Cowork e simili: si
   anonimizza la cartella (`Pratica` → `Pratica.anon`), si fa lavorare l'AI sulla copia, poi si
-  ripristina (`Pratica.anon` → `Pratica.ripristinato`). «Apri la cartella» mostra il risultato in
+  ripristina (`Pratica.anon` → `Pratica.restored`). «Apri la cartella» mostra il risultato in
   Esplora file. Da terminale: `documents.py anonimizza <percorso>`.
 
 **Correggere il risultato.** Nessun riconoscimento è perfetto, quindi nella sezione Testo il
@@ -161,7 +161,7 @@ sotto il risultato e si tolgono con un clic. Un testo oltre 200.000 caratteri vi
 un messaggio, mai tagliato in silenzio: per quelli si usa un file in Documenti.
 
 **Scorciatoie.** Le tre combinazioni si cambiano (la lettera da premere con `Ctrl+Alt`) o si
-spengono in Impostazioni → Generali; nel file delle impostazioni (`scorciatoie`) si può scrivere
+spengono in Impostazioni → Generali; nel file delle impostazioni (`shortcuts`) si può scrivere
 qualunque combinazione, anche con `shift` o un tasto funzione. Sono registrate con la funzione di
 Windows per le scorciatoie globali: Windows consegna al programma **solo quelle combinazioni**,
 gli altri tasti premuti non li vede (prima si usava una libreria che ascoltava tutta la tastiera:
@@ -208,7 +208,7 @@ paziente ha il diabete», «la riunione è il 3 marzo»), e una volta tolto chi 
 più riferibili a nessuno. Chi ha bisogno della protezione più stretta le accende, un gruppo per
 volta, in Impostazioni → Riconoscimento → Categorie in più; l'effetto è immediato e vale per tutti
 i collegamenti. Tecnicamente: le categorie spente sono elencate in `omissis.json` accanto ai pesi
-del modello, quelle accese stanno nell'impostazione `categorie`, e la probabilità che il modello
+del modello, quelle accese stanno nell'impostazione `categories`, e la probabilità che il modello
 assegna a una categoria spenta viene contata come «non sensibile», così spegnerle non cambia le
 decisioni sulle altre. Con un modello della versione 1 la scheda non compare.
 
@@ -263,7 +263,7 @@ manda il testo al programma su questo PC (solo `127.0.0.1`), fa partire la versi
 segnaposto e riscrive la risposta mentre arriva. Chi scrive vede sempre i valori veri.
 
 Installazione di prova: `chrome://extensions` → Modalità sviluppatore → Carica estensione non
-pacchettizzata → cartella `estensione`. Poi nel pannello, aperto in quel browser, sezione Browser →
+pacchettizzata → cartella `extension`. Poi nel pannello, aperto in quel browser, sezione Browser →
 Collega questo browser. Finché non è collegata, o se la protezione è ferma, sui servizi protetti i
 messaggi **non partono** (compare un avviso rosso nella pagina); dalla finestrella dell'icona si
 può sospendere la protezione in quel browser.
@@ -385,7 +385,7 @@ aveva già mandato il suo primo messaggio (da 1 a 5 finestre su 20, a seconda de
 macchina; il giorno prima, sulla stessa macchina, zero). Accesa sul browser intero, la barriera
 trattiene anche il caricamento della pagina finché il connettore non risponde, e a quel punto
 l'aggancio è completo: 160 finestre su 160 partono mascherate. Se il browser di un'app non lo
-permette il connettore lo annota (`avvisi`) e resta la barriera finestra per finestra, con quel
+permette il connettore lo annota (`notices`) e resta la barriera finestra per finestra, con quel
 limite. Sull'app vera questa parte non è ancora stata provata.
 
 Da sapere:
@@ -466,13 +466,13 @@ serve sapere **con quale programma e quale versione** ha funzionato l'ultima vol
 mostra in Collegamenti → Compatibilità, in due elenchi.
 
 **Visto su questo PC.** Si compila da solo mentre si lavora. Ogni riga del registro delle attività
-che dice qualcosa sulla protezione aggiorna una tabella (`compatibilita`, in `data\contacts.sqlite`)
+che dice qualcosa sulla protezione aggiorna una tabella (`compatibility`, in `data\contacts.sqlite`)
 con: servizio, strada (estensione, app desktop, gateway, proxy), programma e versione, metodo
 (casella di scrittura, rete, allegato, API) ed esito:
 
 - `ok`: dei dati sono stati sostituiti prima dell'invio;
-- `ripristino`: dei valori sono stati rimessi nella risposta;
-- `non_letto`: il servizio ha usato un formato che Omissis non ha riconosciuto.
+- `restoring`: dei valori sono stati rimessi nella risposta;
+- `unread`: il servizio ha usato un formato che Omissis non ha riconosciuto.
 
 Per ogni combinazione restano solo i conteggi e le date della prima e dell'ultima volta: **nessun
 testo, nessun valore**. Il pannello riassume così: *funziona* se l'ultima cosa successa è una
@@ -487,8 +487,8 @@ collegamento, gateway e proxy la prendono dall'intestazione `User-Agent` della r
 esempio `claude-cli 2.1.0`). Tutto resta sul PC: la tabella non viene spedita da nessuna parte.
 
 **Verificato dall'autore.** È il file `compatibility.json`, distribuito con il programma: le
-combinazioni provate di persona, con la data e il livello della prova (`dal_vivo` = servizio vero
-con dati inventati, `servizio_finto` = prove automatiche contro il servizio simulato). Va
+combinazioni provate di persona, con la data e il livello della prova (`live` = servizio vero
+con dati inventati, `fake_service` = prove automatiche contro il servizio simulato). Va
 aggiornato a mano dopo ogni prova vera; una riga senza versione vuol dire che la versione non è
 stata annotata.
 
@@ -500,12 +500,12 @@ scrittura (che non dipende dal formato interno del sito).
 
 Nella sezione Attività (o in `data\activity.jsonl`):
 
-- `mascherata` = tutto regolare;
-- `nessun campo di testo riconosciuto` = il servizio usa un formato che il proxy non conosce:
+- `masked` = tutto regolare;
+- `no_text_field` = il servizio usa un formato che il proxy non conosce:
   la richiesta è partita **non mascherata**. La riga riporta la struttura (senza valori), che
   serve per adattarlo;
 - `VALORI_IN_CHIARO` = un dato già mascherato compare in chiaro in un'altra richiesta;
-- `file NON mascherato` = è stato caricato un file.
+- `file_not_masked` = è stato caricato un file.
 
 ## Limiti noti
 
@@ -534,7 +534,7 @@ dell'utente (archivio dei valori, impostazioni, registro, liste personali, certi
 modello) sta invece in `%LOCALAPPDATA%\Omissis`: un aggiornamento riscrive la cartella del
 programma e non tocca i dati. La disinstallazione chiede se eliminare anche i dati (e in quel caso
 toglie il certificato del proxy da Windows); altrimenti restano dove sono.
-Una copia lanciata dai sorgenti continua a tenere i dati in `dati`, accanto al codice.
+Una copia lanciata dai sorgenti continua a tenere i dati in `data`, accanto al codice.
 
 **Il modello** non sta nell'installer. Al primo avvio il programma scarica i pesi dalla pagina
 pubblica del modello (537 MB o 1,2 GB, secondo la scelta nelle Impostazioni) e mostra l'avanzamento

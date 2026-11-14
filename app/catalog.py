@@ -24,45 +24,45 @@ from pathlib import Path
 
 import paths
 
-TIPI = {"chat": "Assistente in chat", "api": "API per sviluppatori", "codice": "Assistente per il codice",
-        "media": "Immagini, audio e video", "testo": "Scrittura e traduzione", "riunioni": "Trascrizione di riunioni",
-        "ricerca": "Ricerca", "ufficio": "AI dentro le suite da ufficio", "agenti": "Agenti e automazione"}
+KINDS = {"chat": "Assistente in chat", "api": "API per sviluppatori", "code": "Assistente per il codice",
+        "media": "Immagini, audio e video", "text": "Scrittura e traduzione", "meetings": "Trascrizione di riunioni",
+        "research": "Ricerca", "office": "AI dentro le suite da ufficio", "agents": "Agenti e automazione"}
 
 
-def _s(id, nome, fornitore, tipo, domini, adattatore=None, app=None):
-    return dict(id=id, nome=nome, fornitore=fornitore, tipo=tipo, domini=domini.split(), adattatore=adattatore, app=app, radar=False)
+def _s(id, name, vendor, kind, domains, adapter=None, app=None):
+    return dict(id=id, name=name, vendor=vendor, kind=kind, domains=domains.split(), adapter=adapter, app=app, radar=False)
 
 
-SERVIZI = [
+SERVICES = [
     _s("claude", "Claude", "Anthropic", "chat", "claude.ai", "claude", r"\bclaude\b"),
     _s("chatgpt", "ChatGPT", "OpenAI", "chat", "chatgpt.com chat.openai.com", "chatgpt", r"chatgpt|openai"),
     _s("anthropic-api", "API Anthropic", "Anthropic", "api", "api.anthropic.com", "anthropic"),
     _s("openai-api", "API OpenAI", "OpenAI", "api", "api.openai.com", "openai"),
     _s("gemini", "Gemini", "Google", "chat", "gemini.google.com", "gemini", r"\bgemini\b"),
-    _s("gemini-api", "API Gemini", "Google", "api", "generativelanguage.googleapis.com", "generico"),
-    _s("copilot", "Microsoft Copilot", "Microsoft", "chat", "copilot.microsoft.com copilot.com", "generico", r"microsoft\.?copilot|\bcopilot\b"),
-    _s("copilot-365", "Copilot per Microsoft 365", "Microsoft", "ufficio", "m365.cloud.microsoft copilot.cloud.microsoft"),
-    _s("perplexity", "Perplexity", "Perplexity", "chat", "perplexity.ai", "generico", r"perplexity"),
-    _s("deepseek", "DeepSeek", "DeepSeek", "chat", "chat.deepseek.com", "generico", r"deepseek"),
+    _s("gemini-api", "API Gemini", "Google", "api", "generativelanguage.googleapis.com", "generic"),
+    _s("copilot", "Microsoft Copilot", "Microsoft", "chat", "copilot.microsoft.com copilot.com", "generic", r"microsoft\.?copilot|\bcopilot\b"),
+    _s("copilot-365", "Copilot per Microsoft 365", "Microsoft", "office", "m365.cloud.microsoft copilot.cloud.microsoft"),
+    _s("perplexity", "Perplexity", "Perplexity", "chat", "perplexity.ai", "generic", r"perplexity"),
+    _s("deepseek", "DeepSeek", "DeepSeek", "chat", "chat.deepseek.com", "generic", r"deepseek"),
     _s("deepseek-api", "API DeepSeek", "DeepSeek", "api", "api.deepseek.com", "openai"),
-    _s("kimi", "Kimi", "Moonshot AI", "chat", "kimi.com kimi.moonshot.cn kimi.ai", "generico", r"\bkimi\b"),
+    _s("kimi", "Kimi", "Moonshot AI", "chat", "kimi.com kimi.moonshot.cn kimi.ai", "generic", r"\bkimi\b"),
     _s("kimi-api", "API Moonshot", "Moonshot AI", "api", "api.moonshot.cn api.moonshot.ai", "openai"),
-    _s("mistral", "Le Chat", "Mistral AI", "chat", "chat.mistral.ai", "generico", r"le ?chat|mistral"),
+    _s("mistral", "Le Chat", "Mistral AI", "chat", "chat.mistral.ai", "generic", r"le ?chat|mistral"),
     _s("mistral-api", "API Mistral", "Mistral AI", "api", "api.mistral.ai", "openai"),
-    _s("grok", "Grok", "xAI", "chat", "grok.com", "generico", r"\bgrok\b"),
+    _s("grok", "Grok", "xAI", "chat", "grok.com", "generic", r"\bgrok\b"),
     _s("grok-api", "API xAI", "xAI", "api", "api.x.ai", "openai"),
-    _s("meta-ai", "Meta AI", "Meta", "chat", "meta.ai", "generico"),
-    _s("poe", "Poe", "Quora", "chat", "poe.com", "generico", r"\bpoe\b"),
-    _s("you", "You.com", "You.com", "chat", "you.com", "generico"),
-    _s("qwen", "Qwen", "Alibaba", "chat", "chat.qwen.ai tongyi.aliyun.com qianwen.aliyun.com", "generico"),
+    _s("meta-ai", "Meta AI", "Meta", "chat", "meta.ai", "generic"),
+    _s("poe", "Poe", "Quora", "chat", "poe.com", "generic", r"\bpoe\b"),
+    _s("you", "You.com", "You.com", "chat", "you.com", "generic"),
+    _s("qwen", "Qwen", "Alibaba", "chat", "chat.qwen.ai tongyi.aliyun.com qianwen.aliyun.com", "generic"),
     # formato OpenAI su /compatible-mode/v1; il primo indirizzo (Singapore) e' quello usato fuori dalla Cina
     _s("qwen-api", "API Qwen (Alibaba Cloud)", "Alibaba", "api", "dashscope-intl.aliyuncs.com dashscope.aliyuncs.com dashscope-us.aliyuncs.com", "openai"),
-    _s("doubao", "Doubao", "ByteDance", "chat", "doubao.com", "generico"),
-    _s("zai", "Z.ai / ChatGLM", "Zhipu AI", "chat", "chat.z.ai chatglm.cn", "generico"),
-    _s("manus", "Manus", "Manus", "chat", "manus.im", "generico", r"\bmanus\b"),
-    _s("genspark", "Genspark", "Genspark", "chat", "genspark.ai", "generico"),
+    _s("doubao", "Doubao", "ByteDance", "chat", "doubao.com", "generic"),
+    _s("zai", "Z.ai / ChatGLM", "Zhipu AI", "chat", "chat.z.ai chatglm.cn", "generic"),
+    _s("manus", "Manus", "Manus", "chat", "manus.im", "generic", r"\bmanus\b"),
+    _s("genspark", "Genspark", "Genspark", "chat", "genspark.ai", "generic"),
     _s("huggingchat", "Hugging Face", "Hugging Face", "chat", "huggingface.co hf.co"),
-    _s("notebooklm", "NotebookLM", "Google", "ricerca", "notebooklm.google.com"),
+    _s("notebooklm", "NotebookLM", "Google", "research", "notebooklm.google.com"),
     _s("aistudio", "Google AI Studio", "Google", "api", "aistudio.google.com"),
     _s("character", "Character.AI", "Character.AI", "chat", "character.ai"),
     _s("pi", "Pi", "Inflection", "chat", "pi.ai"),
@@ -72,15 +72,15 @@ SERVIZI = [
     _s("fireworks", "Fireworks AI", "Fireworks", "api", "api.fireworks.ai", "openai"),
     _s("cohere", "Cohere", "Cohere", "api", "api.cohere.com api.cohere.ai cohere.com"),
     _s("replicate", "Replicate", "Replicate", "api", "replicate.com api.replicate.com"),
-    _s("github-copilot", "GitHub Copilot", "GitHub", "codice", "githubcopilot.com copilot-proxy.githubusercontent.com", None, r"github ?copilot"),
-    _s("cursor", "Cursor", "Anysphere", "codice", "cursor.sh cursor.com", None, r"\bcursor\b"),
-    _s("windsurf", "Windsurf / Codeium", "Codeium", "codice", "codeium.com windsurf.com", None, r"windsurf|codeium"),
-    _s("antigravity", "Antigravity", "Google", "codice", "antigravity.google", None, r"antigravity"),
-    _s("tabnine", "Tabnine", "Tabnine", "codice", "tabnine.com", None, r"tabnine"),
-    _s("replit", "Replit", "Replit", "codice", "replit.com"),
-    _s("lovable", "Lovable", "Lovable", "codice", "lovable.dev"),
-    _s("bolt", "Bolt", "StackBlitz", "codice", "bolt.new"),
-    _s("v0", "v0", "Vercel", "codice", "v0.dev v0.app"),
+    _s("github-copilot", "GitHub Copilot", "GitHub", "code", "githubcopilot.com copilot-proxy.githubusercontent.com", None, r"github ?copilot"),
+    _s("cursor", "Cursor", "Anysphere", "code", "cursor.sh cursor.com", None, r"\bcursor\b"),
+    _s("windsurf", "Windsurf / Codeium", "Codeium", "code", "codeium.com windsurf.com", None, r"windsurf|codeium"),
+    _s("antigravity", "Antigravity", "Google", "code", "antigravity.google", None, r"antigravity"),
+    _s("tabnine", "Tabnine", "Tabnine", "code", "tabnine.com", None, r"tabnine"),
+    _s("replit", "Replit", "Replit", "code", "replit.com"),
+    _s("lovable", "Lovable", "Lovable", "code", "lovable.dev"),
+    _s("bolt", "Bolt", "StackBlitz", "code", "bolt.new"),
+    _s("v0", "v0", "Vercel", "code", "v0.dev v0.app"),
     _s("midjourney", "Midjourney", "Midjourney", "media", "midjourney.com"),
     _s("leonardo", "Leonardo", "Leonardo.Ai", "media", "leonardo.ai"),
     _s("runway", "Runway", "Runway", "media", "runwayml.com"),
@@ -90,89 +90,89 @@ SERVIZI = [
     _s("synthesia", "Synthesia", "Synthesia", "media", "synthesia.io"),
     _s("ideogram", "Ideogram", "Ideogram", "media", "ideogram.ai"),
     _s("stability", "Stability AI", "Stability AI", "media", "stability.ai"),
-    _s("deepl", "DeepL", "DeepL", "testo", "deepl.com", None, r"deepl"),
-    _s("grammarly", "Grammarly", "Grammarly", "testo", "grammarly.com grammarly.io", None, r"grammarly"),
-    _s("quillbot", "QuillBot", "QuillBot", "testo", "quillbot.com"),
-    _s("jasper", "Jasper", "Jasper", "testo", "jasper.ai"),
-    _s("copyai", "Copy.ai", "Copy.ai", "testo", "copy.ai"),
-    _s("writesonic", "Writesonic", "Writesonic", "testo", "writesonic.com"),
-    _s("otter", "Otter", "Otter.ai", "riunioni", "otter.ai", None, r"\botter\b"),
-    _s("fireflies", "Fireflies", "Fireflies.ai", "riunioni", "fireflies.ai", None, r"fireflies"),
-    _s("tldv", "tl;dv", "tl;dv", "riunioni", "tldv.io"),
-    _s("readai", "Read AI", "Read AI", "riunioni", "read.ai"),
-    _s("fathom", "Fathom", "Fathom", "riunioni", "fathom.video"),
-    _s("phind", "Phind", "Phind", "ricerca", "phind.com"),
-    _s("consensus", "Consensus", "Consensus", "ricerca", "consensus.app"),
-    _s("elicit", "Elicit", "Elicit", "ricerca", "elicit.com"),
+    _s("deepl", "DeepL", "DeepL", "text", "deepl.com", None, r"deepl"),
+    _s("grammarly", "Grammarly", "Grammarly", "text", "grammarly.com grammarly.io", None, r"grammarly"),
+    _s("quillbot", "QuillBot", "QuillBot", "text", "quillbot.com"),
+    _s("jasper", "Jasper", "Jasper", "text", "jasper.ai"),
+    _s("copyai", "Copy.ai", "Copy.ai", "text", "copy.ai"),
+    _s("writesonic", "Writesonic", "Writesonic", "text", "writesonic.com"),
+    _s("otter", "Otter", "Otter.ai", "meetings", "otter.ai", None, r"\botter\b"),
+    _s("fireflies", "Fireflies", "Fireflies.ai", "meetings", "fireflies.ai", None, r"fireflies"),
+    _s("tldv", "tl;dv", "tl;dv", "meetings", "tldv.io"),
+    _s("readai", "Read AI", "Read AI", "meetings", "read.ai"),
+    _s("fathom", "Fathom", "Fathom", "meetings", "fathom.video"),
+    _s("phind", "Phind", "Phind", "research", "phind.com"),
+    _s("consensus", "Consensus", "Consensus", "research", "consensus.app"),
+    _s("elicit", "Elicit", "Elicit", "research", "elicit.com"),
 ]
 
 
 def _radar():
     """Le voci del radar (di base, piu' quello esteso se c'e') che non ripetono un servizio o un dominio gia' presente."""
-    voci = []
-    for f in (Path(__file__).resolve().parent / "radar.json", paths.DATI / "radar.json"):
+    entries = []
+    for f in (Path(__file__).resolve().parent / "radar.json", paths.DATA / "radar.json"):
         try:
-            voci += json.loads(f.read_text(encoding="utf-8"))["servizi"]
+            entries += json.loads(f.read_text(encoding="utf-8"))["services"]
         except (OSError, ValueError, KeyError, TypeError):
             pass
-    presi, nomi, out = {d for s in SERVIZI for d in s["domini"]}, {s["id"] for s in SERVIZI}, []
-    for voce in voci:
-        if len(voce) != 5 or voce[0] in nomi or voce[3] not in TIPI:
+    taken, names, out = {d for s in SERVICES for d in s["domains"]}, {s["id"] for s in SERVICES}, []
+    for entry in entries:
+        if len(entry) != 5 or entry[0] in names or entry[3] not in KINDS:
             continue
-        ident, nome, fornitore, tipo, domini = voce
-        liberi = [d for d in domini.lower().split() if d not in presi and not any(d.endswith("." + p) for p in presi)]
-        if liberi:
-            out.append({**_s(ident, nome, fornitore, tipo, " ".join(liberi)), "radar": True})
-            nomi.add(ident)
-            presi.update(liberi)
+        ident, name, vendor, kind, domains = entry
+        free = [d for d in domains.lower().split() if d not in taken and not any(d.endswith("." + p) for p in taken)]
+        if free:
+            out.append({**_s(ident, name, vendor, kind, " ".join(free)), "radar": True})
+            names.add(ident)
+            taken.update(free)
     return out
 
 
-SERVIZI += _radar()
-PER_ID = {s["id"]: s for s in SERVIZI}
-_PER_DOMINIO = {d: s for s in SERVIZI for d in s["domini"]}
+SERVICES += _radar()
+PER_ID = {s["id"]: s for s in SERVICES}
+_BY_DOMAIN = {d: s for s in SERVICES for d in s["domains"]}
 
 # Strumenti AI che girano sul PC (non hanno un dominio proprio): riconosciuti da nome, processo o porta locale
 # cosa: il codice della descrizione, tradotta nelle lingue (rilevati.cosa.<codice>)
-LOCALI = [
-    dict(id="ollama", nome="Ollama", cosa="modelli", app=r"\bollama\b", porte=[11434]),
-    dict(id="lmstudio", nome="LM Studio", cosa="modelli", app=r"lm ?studio", porte=[1234]),
-    dict(id="jan", nome="Jan", cosa="modelli", app=r"^jan$|\bjan\.ai\b|^jan \d", porte=[1337]),
-    dict(id="gpt4all", nome="GPT4All", cosa="modelli", app=r"gpt4all", porte=[4891]),
-    dict(id="anythingllm", nome="AnythingLLM", cosa="modelli", app=r"anythingllm", porte=[3001]),
-    dict(id="msty", nome="Msty", cosa="modelli", app=r"\bmsty\b", porte=[]),
-    dict(id="comfyui", nome="ComfyUI", cosa="immagini", app=r"comfyui", porte=[8188]),
-    dict(id="codex", nome="Codex", cosa="agente", app=r"\bcodex\b", porte=[]),
-    dict(id="claude-code", nome="Claude Code", cosa="agente", app=r"claude[- ]code", porte=[]),
-    dict(id="hermes", nome="Hermes Agent", cosa="agente_personale", app=r"hermes[- ]agent|^hermes$", porte=[]),
-    dict(id="openclaw", nome="OpenClaw", cosa="agente_personale", app=r"openclaw|clawdbot|moltbot", porte=[]),
+LOCAL = [
+    dict(id="ollama", name="Ollama", what="models", app=r"\bollama\b", ports=[11434]),
+    dict(id="lmstudio", name="LM Studio", what="models", app=r"lm ?studio", ports=[1234]),
+    dict(id="jan", name="Jan", what="models", app=r"^jan$|\bjan\.ai\b|^jan \d", ports=[1337]),
+    dict(id="gpt4all", name="GPT4All", what="models", app=r"gpt4all", ports=[4891]),
+    dict(id="anythingllm", name="AnythingLLM", what="models", app=r"anythingllm", ports=[3001]),
+    dict(id="msty", name="Msty", what="models", app=r"\bmsty\b", ports=[]),
+    dict(id="comfyui", name="ComfyUI", what="images", app=r"comfyui", ports=[8188]),
+    dict(id="codex", name="Codex", what="agent", app=r"\bcodex\b", ports=[]),
+    dict(id="claude-code", name="Claude Code", what="agent", app=r"claude[- ]code", ports=[]),
+    dict(id="hermes", name="Hermes Agent", what="agent_personal", app=r"hermes[- ]agent|^hermes$", ports=[]),
+    dict(id="openclaw", name="OpenClaw", what="agent_personal", app=r"openclaw|clawdbot|moltbot", ports=[]),
 ]
 # Estensioni del browser e dell'editor: parole che indicano una funzione AI
-RX_ESTENSIONE = re.compile(r"(?i)chat ?gpt|\bgpt\b|claude|copilot|gemini|perplexity|deepseek|\bai\b|a\.i\.|assistant|grammarly|deepl|"
+RX_EXTENSION = re.compile(r"(?i)chat ?gpt|\bgpt\b|claude|copilot|gemini|perplexity|deepseek|\bai\b|a\.i\.|assistant|grammarly|deepl|"
                            r"monica|sider|merlin|maxai|harpa|wiseone|jasper|quillbot|otter|fireflies|tl;?dv|read ai|compose|"
                            r"codeium|tabnine|cline|continue|cody|roo|kilo|windsurf|amazon q|llm|ollama|whisper|transcri|summar|riassun")
 RX_CLI = ["claude", "codex", "gemini", "ollama", "aider", "llm", "opencode", "qwen", "cursor-agent", "copilot", "goose", "lms", "hermes", "openclaw", "antigravity"]
 
-POLITICHE = ("proteggi", "registra", "blocca", "ignora")
+POLICIES = ("protect", "record", "block", "ignore")
 
 
-def trova(host):
+def find(host):
     """Servizio a cui appartiene un nome host (o None)."""
     host = host.lower().split(":")[0].rstrip(".")
-    parti = host.split(".")
-    for i in range(len(parti) - 1):
-        s = _PER_DOMINIO.get(".".join(parti[i:]))
+    parts = host.split(".")
+    for i in range(len(parts) - 1):
+        s = _BY_DOMAIN.get(".".join(parts[i:]))
         if s:
             return s
     return None
 
 
-def politica_predefinita(servizio):
+def default_policy(service):
     """Si protegge da subito solo cio' che e' stato provato; il resto si registra finche' non viene verificato."""
-    return "proteggi" if servizio["adattatore"] in ("claude", "chatgpt", "anthropic", "openai") and \
-        servizio["id"] in ("claude", "chatgpt", "anthropic-api", "openai-api") else "registra"
+    return "protect" if service["adapter"] in ("claude", "chatgpt", "anthropic", "openai") and \
+        service["id"] in ("claude", "chatgpt", "anthropic-api", "openai-api") else "record"
 
 
-def espressioni_host(servizi):
+def expressions_host(services):
     """Espressioni per --allow-hosts di mitmproxy: solo questi host vengono aperti."""
-    return [rf"(^|\.){re.escape(d)}(:\d+)?$" for s in servizi for d in s["domini"]]
+    return [rf"(^|\.){re.escape(d)}(:\d+)?$" for s in services for d in s["domains"]]

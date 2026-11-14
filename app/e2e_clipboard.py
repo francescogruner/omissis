@@ -10,22 +10,22 @@ import clipboard
 import documents
 
 sys.stdout.reconfigure(encoding="utf-8")
-prima = clipboard.leggi()
-if prima is None and ctypes.windll.user32.CountClipboardFormats() > 0:
+before = clipboard.read()
+if before is None and ctypes.windll.user32.CountClipboardFormats() > 0:
     sys.exit("negli appunti c'è qualcosa che non è testo: prova saltata per non cancellarlo")
-TESTO = "Scrivi una mail a Giulia Ferraresi (giulia.ferraresi@nevatek.example) per confermare l'appuntamento con Aldo Bruschi."
+TEXT = "Scrivi una mail a Giulia Ferraresi (giulia.ferraresi@nevatek.example) per confermare l'appuntamento con Aldo Bruschi."
 try:
-    clipboard.scrivi(TESTO)
-    print("maschera:  ", clipboard.trasforma("maschera", documents.motore))
-    mascherato = clipboard.leggi()
-    print("  negli appunti:", mascherato)
-    risposta = "Ecco la bozza per " + mascherato.split("a ", 1)[1].split(" (")[0] + ": gentile collega, confermo l'appuntamento."
-    clipboard.scrivi(risposta)
-    print("ripristina:", clipboard.trasforma("ripristina", documents.motore))
-    tornato = clipboard.leggi()
-    print("  negli appunti:", tornato)
-    ok = "Ferraresi" not in mascherato and "[PERSONA_" in mascherato and "Giulia Ferraresi" in tornato and "[" not in tornato
+    clipboard.write(TEXT)
+    print("maschera:  ", clipboard.transform("mask", documents.engine))
+    masked = clipboard.read()
+    print("  negli appunti:", masked)
+    response = "Ecco la bozza per " + masked.split("a ", 1)[1].split(" (")[0] + ": gentile collega, confermo l'appuntamento."
+    clipboard.write(response)
+    print("ripristina:", clipboard.transform("restore", documents.engine))
+    returned = clipboard.read()
+    print("  negli appunti:", returned)
+    ok = "Ferraresi" not in masked and "[PERSONA_" in masked and "Giulia Ferraresi" in returned and "[" not in returned
     print("OK" if ok else "ERRORE")
 finally:
-    clipboard.scrivi(prima) if prima is not None else None
+    clipboard.write(before) if before is not None else None
 sys.exit(0 if ok else 1)

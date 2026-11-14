@@ -19,139 +19,139 @@ from pathlib import Path
 
 import i18n
 import paths
-from version import VERSIONE
+from version import VERSION
 
-QUI = Path(__file__).resolve().parent
-PEZZO = 1 << 20
-STATO = {"fase": "fermo", "nome": "", "fatti": 0, "totale": 0, "errore": ""}   # fermo | scarico | verifica | pronto | errore
-_ferma = threading.Event()
-_lucchetto = threading.Lock()
+HERE = Path(__file__).resolve().parent
+CHUNK = 1 << 20
+STATUS = {"phase": "stopped", "name": "", "completed": 0, "total": 0, "error": ""}   # fermo | scarico | verifica | pronto | errore
+_stop = threading.Event()
+_lock = threading.Lock()
 
 
-class Errore(Exception):
+class Error(Exception):
     pass
 
 
-class Annullato(Errore):
+class Cancelled(Error):
     pass
 
 
-def elenco():
+def listing():
     try:
-        return json.loads((QUI / "weights.json").read_text(encoding="utf-8"))
+        return json.loads((HERE / "weights.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {"origine": "", "modelli": {}}
+        return {"origin": "", "models": {}}
 
 
-def manca(nome):
+def missing(name):
     """True se i pesi non ci sono (ne' in formato ONNX ne', per chi lavora dai sorgenti, in quello di PyTorch)."""
-    c = paths.modello(nome)
+    c = paths.model(name)
     return not ((c / "config.json").exists() and (c / "tokenizer.json").exists()
                 and ((c / "model.onnx").exists() or (c / "model.safetensors").exists()))
 
 
-def scaricabile(nome):
-    return nome in elenco()["modelli"]
+def downloadable(name):
+    return name in listing()["models"]
 
 
-def dimensione(nome):
-    return sum(v["byte"] for v in elenco()["modelli"].get(nome, {}).get("file", {}).values())
+def size(name):
+    return sum(v["byte"] for v in listing()["models"].get(name, {}).get("file", {}).values())
 
 
-def annulla():
-    _ferma.set()
+def cancel():
+    _stop.set()
 
 
-def _impronta(f):
-    h, letti = hashlib.sha256(), 0
+def _fingerprint(f):
+    h, read_items = hashlib.sha256(), 0
     with f.open("rb") as s:
         while True:
-            pezzo = s.read(PEZZO)
-            if not pezzo:
+            chunk = s.read(CHUNK)
+            if not chunk:
                 break
-            h.update(pezzo)
-            letti += len(pezzo)
-    return h, letti
+            h.update(chunk)
+            read_items += len(chunk)
+    return h, read_items
 
 
-def _indirizzo(origine, nome, voce, file):
+def _address(origin, name, entry, file):
     base = os.environ.get("OMISSIS_MODELS_URL")
     if base:
-        return f"{base.rstrip('/')}/{nome}/{file}"
-    return origine.format(nome=nome, revisione=voce.get("revisione", "main"), file=file)
+        return f"{base.rstrip('/')}/{name}/{file}"
+    return origin.format(name=name, revision=entry.get("revision", "main"), file=file)
 
 
-def un_file(indirizzo, destinazione, atteso, STATO=STATO, cosa="modello", ferma=None):
+def un_file(address, destination, expected, STATUS=STATUS, what="model", stop=None):
     """Scarica un file riprendendo la parte gia' presente; lo consegna solo se dimensione e impronta coincidono.
     L'avanzamento va in STATO["fatti"]. Lo usa anche il controllo degli aggiornamenti."""
-    if destinazione.exists() and destinazione.stat().st_size == atteso["byte"] and _impronta(destinazione)[0].hexdigest() == atteso["sha256"]:
-        STATO["fatti"] += atteso["byte"]
+    if destination.exists() and destination.stat().st_size == expected["byte"] and _fingerprint(destination)[0].hexdigest() == expected["sha256"]:
+        STATUS["completed"] += expected["byte"]
         return
-    parte = destinazione.with_name(destinazione.name + ".parte")
-    if parte.exists() and parte.stat().st_size > atteso["byte"]:
-        parte.unlink()
-    h, gia = _impronta(parte) if parte.exists() else (hashlib.sha256(), 0)
-    STATO["fatti"] += gia
-    if gia < atteso["byte"]:
-        if not indirizzo.startswith("https://") and not indirizzo.startswith("http://127.0.0.1"):
-            raise Errore(i18n.t("modelli.errore.indirizzo"))
-        rich = urllib.request.Request(indirizzo, headers={"User-Agent": f"Omissis/{VERSIONE}", **({"Range": f"bytes={gia}-"} if gia else {})})
+    part = destination.with_name(destination.name + ".part")
+    if part.exists() and part.stat().st_size > expected["byte"]:
+        part.unlink()
+    h, already = _fingerprint(part) if part.exists() else (hashlib.sha256(), 0)
+    STATUS["completed"] += already
+    if already < expected["byte"]:
+        if not address.startswith("https://") and not address.startswith("http://127.0.0.1"):
+            raise Error(i18n.t("models.error.address"))
+        req = urllib.request.Request(address, headers={"User-Agent": f"Omissis/{VERSION}", **({"Range": f"bytes={already}-"} if already else {})})
         try:
-            with urllib.request.urlopen(rich, timeout=60) as r, parte.open("ab" if gia and r.status == 206 else "wb") as s:
-                if gia and r.status != 206:   # il servizio non riprende: si ricomincia da capo
-                    STATO["fatti"] -= gia
-                    h, gia = hashlib.sha256(), 0
+            with urllib.request.urlopen(req, timeout=60) as r, part.open("ab" if already and r.status == 206 else "wb") as s:
+                if already and r.status != 206:   # il servizio non riprende: si ricomincia da capo
+                    STATUS["completed"] -= already
+                    h, already = hashlib.sha256(), 0
                 while True:
-                    if ferma is not None and ferma.is_set():
-                        raise Annullato(i18n.t("modelli.errore.interrotto"))
-                    pezzo = r.read(PEZZO)
-                    if not pezzo:
+                    if stop is not None and stop.is_set():
+                        raise Cancelled(i18n.t("models.error.interrupted"))
+                    chunk = r.read(CHUNK)
+                    if not chunk:
                         break
-                    s.write(pezzo)
-                    h.update(pezzo)
-                    gia += len(pezzo)
-                    STATO["fatti"] += len(pezzo)
-                    if gia > atteso["byte"]:
-                        raise Errore(i18n.t("modelli.errore.troppo_grande", file=destinazione.name))
+                    s.write(chunk)
+                    h.update(chunk)
+                    already += len(chunk)
+                    STATUS["completed"] += len(chunk)
+                    if already > expected["byte"]:
+                        raise Error(i18n.t("models.error.too_large", file=destination.name))
         except urllib.error.HTTPError as ex:
             if ex.code == 404:
-                raise Errore(i18n.t("modelli.errore.non_disponibile", cosa=i18n.t(f"modelli.cosa.{cosa}"))) from None
-            raise Errore(i18n.t("modelli.errore.risposta", codice=ex.code)) from None
+                raise Error(i18n.t("models.error.not_available", what=i18n.t(f"models.what.{what}"))) from None
+            raise Error(i18n.t("models.error.response", code=ex.code)) from None
         except (urllib.error.URLError, TimeoutError, ConnectionError) as ex:
-            raise Errore(i18n.t("modelli.errore.collegamento", motivo=getattr(ex, "reason", ex))) from None
-    if gia != atteso["byte"] or h.hexdigest() != atteso["sha256"]:
-        parte.unlink(missing_ok=True)
-        STATO["fatti"] -= gia
-        raise Errore(i18n.t("modelli.errore.impronta", file=destinazione.name))
-    parte.replace(destinazione)
+            raise Error(i18n.t("models.error.connection", reason=getattr(ex, "reason", ex))) from None
+    if already != expected["byte"] or h.hexdigest() != expected["sha256"]:
+        part.unlink(missing_ok=True)
+        STATUS["completed"] -= already
+        raise Error(i18n.t("models.error.fingerprint", file=destination.name))
+    part.replace(destination)
 
 
-def scarica(nome):
+def download(name):
     """Porta i pesi di <nome> nella cartella dei dati. Si blocca finche' non ha finito; l'avanzamento e' in STATO."""
-    voce = elenco()["modelli"].get(nome)
-    if voce is None:
-        raise Errore(i18n.t("modelli.errore.fuori_elenco", nome=nome))
-    if not _lucchetto.acquire(blocking=False):
-        raise Errore(i18n.t("modelli.errore.in_corso"))
+    entry = listing()["models"].get(name)
+    if entry is None:
+        raise Error(i18n.t("models.error.outside_listing", name=name))
+    if not _lock.acquire(blocking=False):
+        raise Error(i18n.t("models.error.pending"))
     try:
-        _ferma.clear()
-        STATO.update(fase="scarico", nome=nome, fatti=0, totale=sum(v["byte"] for v in voce["file"].values()), errore="")
-        cartella = paths.DATI / "models" / nome
-        cartella.mkdir(parents=True, exist_ok=True)
+        _stop.clear()
+        STATUS.update(phase="downloading", name=name, completed=0, total=sum(v["byte"] for v in entry["file"].values()), error="")
+        folder = paths.DATA / "models" / name
+        folder.mkdir(parents=True, exist_ok=True)
         # i file piccoli prima: se l'indirizzo e' sbagliato lo si scopre subito
-        for file, atteso in sorted(voce["file"].items(), key=lambda kv: kv[1]["byte"]):
-            un_file(_indirizzo(elenco()["origine"], nome, voce, file), cartella / file, atteso, ferma=_ferma)
-        STATO["fase"] = "pronto"
-        return cartella
-    except Errore as ex:
-        STATO.update(fase="fermo" if isinstance(ex, Annullato) else "errore", errore="" if isinstance(ex, Annullato) else str(ex))
+        for file, expected in sorted(entry["file"].items(), key=lambda kv: kv[1]["byte"]):
+            un_file(_address(listing()["origin"], name, entry, file), folder / file, expected, stop=_stop)
+        STATUS["phase"] = "ready_now"
+        return folder
+    except Error as ex:
+        STATUS.update(phase="stopped" if isinstance(ex, Cancelled) else "error", error="" if isinstance(ex, Cancelled) else str(ex))
         raise
     except OSError as ex:
-        STATO.update(fase="errore", errore=i18n.t("modelli.errore.scrittura", motivo=ex.strerror or ex))
-        raise Errore(STATO["errore"]) from None
+        STATUS.update(phase="error", error=i18n.t("models.error.writing", reason=ex.strerror or ex))
+        raise Error(STATUS["error"]) from None
     finally:
-        _lucchetto.release()
+        _lock.release()
 
 
-def stato(nome):
-    return {**STATO, "manca": manca(nome), "scaricabile": scaricabile(nome), "byte": dimensione(nome)}
+def status(name):
+    return {**STATUS, "missing": missing(name), "downloadable": downloadable(name), "byte": size(name)}

@@ -1,55 +1,149 @@
 {
- "est_nome": {"message": "Omissis"},
- "est_descrizione": {"message": "Sostituisce i dati personali con etichette prima dell'invio ai servizi AI e li rimette nella risposta. Lavora con Omissis sul PC."},
-
- "icona_attiva": {"message": "Omissis: protezione attiva"},
- "icona_sospesa": {"message": "Omissis: protezione sospesa in questo browser"},
- "icona_non_collegata": {"message": "Omissis: non collegata al programma"},
- "icona_non_risponde": {"message": "Omissis: il programma non risponde"},
-
- "stato_attiva": {"message": "attiva"},
- "stato_sospesa": {"message": "sospesa"},
- "stato_non_attiva": {"message": "non attiva"},
- "guasto_non_collegata": {"message": "L'estensione non è collegata al programma."},
- "guasto_codice": {"message": "Il codice di collegamento non è più valido: ricollegala dal pannello."},
- "guasto_programma": {"message": "Il programma di protezione non risponde: avvialo dall'icona vicino all'orologio."},
- "collega_aiuto": {"message": "Per collegarla apri il pannello del programma, sezione Collegamenti, e premi «Collega questo browser». In alternativa incolla qui il codice mostrato dal pannello."},
- "collega_codice": {"message": "Codice di collegamento"},
- "collega": {"message": "Collega"},
- "sito_aperto": {"message": "Sito aperto"},
- "sito_fuori_catalogo": {"message": "non è un servizio AI in catalogo"},
- "trattamento": {"message": "Trattamento"},
- "politica_proteggi": {"message": "Protetto: i dati vengono sostituiti"},
- "politica_registra": {"message": "Solo registrato: nessuna sostituzione"},
- "politica_blocca": {"message": "Bloccato"},
- "politica_ignora": {"message": "Ignorato"},
- "politica_sospeso": {"message": "$1 (ora sospeso)"},
- "conta_messaggi": {"message": "Messaggi protetti in questa scheda"},
- "conta_sostituzioni": {"message": "Dati sostituiti"},
- "conta_bloccate": {"message": "Richieste bloccate"},
- "opzione_avvisi": {"message": "Mostra un avviso nella pagina quando sostituisco dei dati"},
- "opzione_sospendi": {"message": "Sospendi la protezione in questo browser"},
- "opzione_sospendi_nota": {"message": "I messaggi partono senza sostituzioni."},
- "apri_pannello": {"message": "Apri il pannello"},
- "versione": {"message": "versione $1"},
-
- "bloccato_scheda": {"message": "Servizio bloccato"},
- "bloccato_questo": {"message": "Questo servizio"},
- "bloccato_titolo": {"message": "$1 è bloccato"},
- "bloccato_testo": {"message": "L'uso di questo servizio di intelligenza artificiale non è consentito dalle impostazioni di Omissis su questo computer."},
- "bloccato_chiedi": {"message": "Se ti serve per lavoro, chiedi a chi gestisce il sistema."},
-
- "avviso_uno": {"message": "1 dato sostituito prima dell'invio"},
- "avviso_molti": {"message": "$1 dati sostituiti prima dell'invio"},
- "avviso_premi_invio": {"message": "Dati sostituiti nella casella: premi di nuovo Invio per mandare il messaggio."},
- "avviso_casella": {"message": "Messaggio non inviato: non riesco a sostituire i dati nella casella di scrittura."},
- "allegato_lavoro": {"message": "Sto anonimizzando l'allegato…"},
- "allegato_fatto": {"message": "Allegati anonimizzati: $1 · dati sostituiti: $2."},
- "allegato_testo": {"message": "PDF e immagini sono diventati file di testo."},
- "allegato_bloccato": {"message": "«$1» non si può anonimizzare: non è stato allegato."},
- "avviso_motore": {"message": "Messaggio non inviato: il programma di protezione non risponde. Avvialo e riprova."},
- "avviso_non_collegata": {"message": "Messaggio non inviato: l'estensione non è collegata al programma. Apri il pannello e premi «Collega questo browser»."},
- "avviso_file": {"message": "Caricamento di file bloccato dalle impostazioni."},
- "avviso_ricarica": {"message": "L'estensione è stata aggiornata: ricarica la pagina prima di scrivere."},
- "avviso_estensione": {"message": "Messaggio non inviato: l'estensione non riesce a proteggerlo."}
+ "est_name": {
+  "message": "Omissis"
+ },
+ "est_description": {
+  "message": "Sostituisce i dati personali con etichette prima dell'invio ai servizi AI e li rimette nella risposta. Lavora con Omissis sul PC."
+ },
+ "active_icon": {
+  "message": "Omissis: protezione attiva"
+ },
+ "suspended_icon": {
+  "message": "Omissis: protezione sospesa in questo browser"
+ },
+ "icon_not_connected": {
+  "message": "Omissis: non collegata al programma"
+ },
+ "icon_not_responding": {
+  "message": "Omissis: il programma non risponde"
+ },
+ "status_active": {
+  "message": "attiva"
+ },
+ "status_suspended": {
+  "message": "sospesa"
+ },
+ "status_not_active": {
+  "message": "non attiva"
+ },
+ "fault_not_connected": {
+  "message": "L'estensione non è collegata al programma."
+ },
+ "fault_code": {
+  "message": "Il codice di collegamento non è più valido: ricollegala dal pannello."
+ },
+ "fault_program": {
+  "message": "Il programma di protezione non risponde: avvialo dall'icona vicino all'orologio."
+ },
+ "connect_help": {
+  "message": "Per collegarla apri il pannello del programma, sezione Collegamenti, e premi «Collega questo browser». In alternativa incolla qui il codice mostrato dal pannello."
+ },
+ "connect_code": {
+  "message": "Codice di collegamento"
+ },
+ "connect": {
+  "message": "Collega"
+ },
+ "site_opened": {
+  "message": "Sito aperto"
+ },
+ "site_outside_catalog": {
+  "message": "non è un servizio AI in catalogo"
+ },
+ "handling": {
+  "message": "Trattamento"
+ },
+ "policy_protect": {
+  "message": "Protetto: i dati vengono sostituiti"
+ },
+ "policy_record": {
+  "message": "Solo registrato: nessuna sostituzione"
+ },
+ "policy_block": {
+  "message": "Bloccato"
+ },
+ "policy_ignore": {
+  "message": "Ignorato"
+ },
+ "policy_suspended": {
+  "message": "$1 (ora sospeso)"
+ },
+ "count_messages": {
+  "message": "Messaggi protetti in questa scheda"
+ },
+ "count_replacements": {
+  "message": "Dati sostituiti"
+ },
+ "count_blocked": {
+  "message": "Richieste bloccate"
+ },
+ "option_notices": {
+  "message": "Mostra un avviso nella pagina quando sostituisco dei dati"
+ },
+ "option_suspend": {
+  "message": "Sospendi la protezione in questo browser"
+ },
+ "option_suspend_note": {
+  "message": "I messaggi partono senza sostituzioni."
+ },
+ "open_panel": {
+  "message": "Apri il pannello"
+ },
+ "version": {
+  "message": "versione $1"
+ },
+ "blocked_card": {
+  "message": "Servizio bloccato"
+ },
+ "blocked_this_one": {
+  "message": "Questo servizio"
+ },
+ "blocked_title": {
+  "message": "$1 è bloccato"
+ },
+ "blocked_text": {
+  "message": "L'uso di questo servizio di intelligenza artificiale non è consentito dalle impostazioni di Omissis su questo computer."
+ },
+ "blocked_ask": {
+  "message": "Se ti serve per lavoro, chiedi a chi gestisce il sistema."
+ },
+ "one_notice": {
+  "message": "1 dato sostituito prima dell'invio"
+ },
+ "many_notice": {
+  "message": "$1 dati sostituiti prima dell'invio"
+ },
+ "notice_press_enter": {
+  "message": "Dati sostituiti nella casella: premi di nuovo Invio per mandare il messaggio."
+ },
+ "box_notice": {
+  "message": "Messaggio non inviato: non riesco a sostituire i dati nella casella di scrittura."
+ },
+ "attachment_work": {
+  "message": "Sto anonimizzando l'allegato…"
+ },
+ "attachment_done": {
+  "message": "Allegati anonimizzati: $1 · dati sostituiti: $2."
+ },
+ "attachment_text": {
+  "message": "PDF e immagini sono diventati file di testo."
+ },
+ "attachment_blocked": {
+  "message": "«$1» non si può anonimizzare: non è stato allegato."
+ },
+ "engine_notice": {
+  "message": "Messaggio non inviato: il programma di protezione non risponde. Avvialo e riprova."
+ },
+ "notice_not_connected": {
+  "message": "Messaggio non inviato: l'estensione non è collegata al programma. Apri il pannello e premi «Collega questo browser»."
+ },
+ "file_notice": {
+  "message": "Caricamento di file bloccato dalle impostazioni."
+ },
+ "reload_notice": {
+  "message": "L'estensione è stata aggiornata: ricarica la pagina prima di scrivere."
+ },
+ "extension_notice": {
+  "message": "Messaggio non inviato: l'estensione non riesce a proteggerlo."
+ }
 }

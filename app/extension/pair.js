@@ -3,16 +3,16 @@
 (() => {
   'use strict';
   if (location.port !== '8766' || window.top !== window) return;
-  const rispondi = d => window.postMessage({msp_pii: 'estensione', ...d}, location.origin);
-  const presente = () => chrome.runtime.sendMessage({t: 'presente'}).then(rispondi, () => {});
+  const respond = d => window.postMessage({msp_pii: 'extension', ...d}, location.origin);
+  const present = () => chrome.runtime.sendMessage({t: 'present'}).then(respond, () => {});
   window.addEventListener('message', ev => {
     const d = ev.data;
     if (ev.source !== window || ev.origin !== location.origin || !d) return;
-    if (d.msp_pii === 'ci sei?') presente();
-    if (d.msp_pii === 'collega' && typeof d.token === 'string') {
-      chrome.runtime.sendMessage({t: 'collega', token: d.token, porta: d.porta})
-        .then(r => rispondi({versione: r.versione, collegata: true, ok: !!r.ok, motivo: r.motivo, appena: true}), () => {});
+    if (d.msp_pii === 'ci sei?') present();
+    if (d.msp_pii === 'connect' && typeof d.token === 'string') {
+      chrome.runtime.sendMessage({t: 'connect', token: d.token, port: d.port})
+        .then(r => respond({version: r.version, connected: true, ok: !!r.ok, reason: r.reason, just: true}), () => {});
     }
   });
-  presente();
+  present();
 })();

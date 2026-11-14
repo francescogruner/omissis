@@ -4,34 +4,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="omissis-codice" content="__CODICE__">
+<meta name="omissis-code" content="__CODICE__">
 <title>Omissis</title>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
 </head>
-<body class="semplice">
-<a class="salta" href="#contenuto" id="salta"></a>
-<div class="guscio">
-  <aside class="lato">
-    <a class="marchio" href="#/inizio">
-      <svg viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,4 58,14 58,34 32,60 6,34 6,14" fill="currentColor"/><polyline points="20,32 29,41 45,23" fill="none" stroke="var(--sfondo-2)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<body class="simple">
+<a class="skip" href="#content" id="skip"></a>
+<div class="shell">
+  <aside class="side">
+    <a class="brand" href="#/start">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,4 58,14 58,34 32,60 6,34 6,14" fill="currentColor"/><polyline points="20,32 29,41 45,23" fill="none" stroke="var(--background-2)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Omissis</span>
     </a>
     <nav class="menu" id="menu"></nav>
-    <div class="lato-piede">
-      <a class="lato-stato" href="#/inizio" id="latoStato"><span class="punto" id="latoPunto"></span><span id="latoTesto"></span></a>
-      <label class="riga"><span class="levetta"><input type="checkbox" id="avanzata" role="switch"><span></span></span><span id="avanzataTesto"></span></label>
-      <span class="versione" id="versione"></span>
+    <div class="side-footer">
+      <a class="side-status" href="#/start" id="sideStatus"><span class="point" id="sidePoint"></span><span id="sideText"></span></a>
+      <label class="line"><span class="toggle"><input type="checkbox" id="advanced" role="switch"><span></span></span><span id="advancedText"></span></label>
+      <span class="version" id="version"></span>
     </div>
   </aside>
-  <div class="corpo">
-    <main id="contenuto" tabindex="-1"></main>
+  <div class="body">
+    <main id="content" tabindex="-1"></main>
   </div>
 </div>
-<div class="avvisi" id="avvisi" role="status" aria-live="polite"></div>
-<dialog id="conferma" aria-labelledby="confermaTitolo">
-  <div class="dentro"><h2 id="confermaTitolo"></h2><p class="sfumato" id="confermaTesto"></p></div>
-  <form method="dialog" class="piede"><button class="bottone" value="no" id="confermaNo"></button><button class="bottone primario" value="si" id="confermaSi"></button></form>
+<div class="notices" id="notices" role="status" aria-live="polite"></div>
+<dialog id="confirm" aria-labelledby="confirmTitle">
+  <div class="inside"><h2 id="confirmTitle"></h2><p class="faded" id="confirmText"></p></div>
+  <form method="dialog" class="footer"><button class="button" value="no" id="confirmNo"></button><button class="button primary" value="yes" id="confirmYes"></button></form>
 </dialog>
 <noscript>Omissis: questa pagina ha bisogno di JavaScript. This page needs JavaScript.</noscript>
 <script src="/app.js" type="module"></script>

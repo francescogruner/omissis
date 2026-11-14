@@ -5,74 +5,74 @@
 <title>Omissis</title>
 <style>
   /* stesso stile del pannello del programma: bianco e nero, bordi sottili, un solo colore per gli stati */
-  :root { color-scheme: light dark; --sfondo: #fff; --sfondo-2: #fafafa; --testo: #171717; --testo-2: #5c5c5c; --bordo: #eaeaea; --bordo-2: #c9c9c9;
-    --ok: #0a7a33; --ok-sfondo: #e8f7ed; --errore: #c50f1f; --errore-sfondo: #ffecec; --anello: #0070f3; }
-  @media (prefers-color-scheme: dark) { :root { --sfondo: #0a0a0a; --sfondo-2: #111; --testo: #ededed; --testo-2: #a1a1a1; --bordo: #262626; --bordo-2: #454545;
-    --ok: #5fc27a; --ok-sfondo: #0e2916; --errore: #ff6369; --errore-sfondo: #361416; --anello: #52a8ff; } }
+  :root { color-scheme: light dark; --background: #fff; --background-2: #fafafa; --text: #171717; --text-2: #5c5c5c; --border: #eaeaea; --border-2: #c9c9c9;
+    --ok: #0a7a33; --ok-background: #e8f7ed; --error: #c50f1f; --error-background: #ffecec; --ring: #0070f3; }
+  @media (prefers-color-scheme: dark) { :root { --background: #0a0a0a; --background-2: #111; --text: #ededed; --text-2: #a1a1a1; --border: #262626; --border-2: #454545;
+    --ok: #5fc27a; --ok-background: #0e2916; --error: #ff6369; --error-background: #361416; --ring: #52a8ff; } }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; width: 340px; font: 13px/1.5 "Geist", "Inter", system-ui, "Segoe UI", sans-serif; color: var(--testo); background: var(--sfondo); }
-  :focus-visible { outline: 2px solid var(--anello); outline-offset: 2px; border-radius: 4px; }
-  header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--bordo); }
+  body { margin: 0; width: 340px; font: 13px/1.5 "Geist", "Inter", system-ui, "Segoe UI", sans-serif; color: var(--text); background: var(--background); }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+  header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
   header svg { width: 18px; height: 18px; }
   header b { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
-  .stato { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border: 1px solid var(--bordo); border-radius: 99px; font-size: 12px; color: var(--testo-2); }
-  .stato i { width: 7px; height: 7px; border-radius: 50%; background: var(--bordo-2); }
-  .stato[data-stato="attiva"] { color: var(--ok); background: var(--ok-sfondo); border-color: transparent; }
-  .stato[data-stato="attiva"] i { background: var(--ok); }
-  .stato[data-stato="non_attiva"] { color: var(--errore); background: var(--errore-sfondo); border-color: transparent; }
-  .stato[data-stato="non_attiva"] i { background: var(--errore); }
+  .status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 99px; font-size: 12px; color: var(--text-2); }
+  .status i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-2); }
+  .status[data-status="active"] { color: var(--ok); background: var(--ok-background); border-color: transparent; }
+  .status[data-status="active"] i { background: var(--ok); }
+  .status[data-status="not_active"] { color: var(--error); background: var(--error-background); border-color: transparent; }
+  .status[data-status="not_active"] i { background: var(--error); }
   main { display: grid; gap: 12px; padding: 14px 16px 16px; }
-  .sfumato { color: var(--testo-2); }
-  #guasto { padding: 8px 12px; border-radius: 6px; color: var(--errore); background: var(--errore-sfondo); }
-  #collegamento { display: grid; gap: 8px; }
+  .faded { color: var(--text-2); }
+  #fault { padding: 8px 12px; border-radius: 6px; color: var(--error); background: var(--error-background); }
+  #connection { display: grid; gap: 8px; }
   dl { margin: 0; display: grid; gap: 6px; }
   dl div { display: flex; justify-content: space-between; gap: 12px; }
-  dt { color: var(--testo-2); }
+  dt { color: var(--text-2); }
   dd { margin: 0; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
-  hr { border: 0; border-top: 1px solid var(--bordo); margin: 0; }
-  label.opzione { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; }
-  label.opzione small { grid-column: 1; color: var(--testo-2); font-size: 12px; }
-  .levetta { position: relative; width: 32px; height: 18px; grid-column: 2; grid-row: 1 / span 2; }
-  .levetta input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-  .levetta span { position: absolute; inset: 0; border-radius: 18px; background: var(--bordo-2); transition: background .15s; pointer-events: none; }
-  .levetta span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--sfondo); transition: transform .15s; }
-  .levetta input:checked + span { background: var(--testo); }
-  .levetta input:checked + span::after { transform: translateX(14px); }
-  .levetta input:focus-visible + span { outline: 2px solid var(--anello); outline-offset: 2px; }
-  textarea { width: 100%; height: 48px; resize: none; padding: 6px 8px; border: 1px solid var(--bordo); border-radius: 6px; background: var(--sfondo); color: var(--testo); font: 12px ui-monospace, "Cascadia Code", Consolas, monospace; }
-  .bottone { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--bordo); border-radius: 6px; background: var(--sfondo); color: var(--testo); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; }
-  .bottone:hover { border-color: var(--bordo-2); background: var(--sfondo-2); }
-  .bottone.primario { background: var(--testo); border-color: var(--testo); color: var(--sfondo); }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
+  label.option { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; }
+  label.option small { grid-column: 1; color: var(--text-2); font-size: 12px; }
+  .toggle { position: relative; width: 32px; height: 18px; grid-column: 2; grid-row: 1 / span 2; }
+  .toggle input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .toggle span { position: absolute; inset: 0; border-radius: 18px; background: var(--border-2); transition: background .15s; pointer-events: none; }
+  .toggle span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--background); transition: transform .15s; }
+  .toggle input:checked + span { background: var(--text); }
+  .toggle input:checked + span::after { transform: translateX(14px); }
+  .toggle input:focus-visible + span { outline: 2px solid var(--ring); outline-offset: 2px; }
+  textarea { width: 100%; height: 48px; resize: none; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text); font: 12px ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .button { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; }
+  .button:hover { border-color: var(--border-2); background: var(--background-2); }
+  .button.primary { background: var(--text); border-color: var(--text); color: var(--background); }
   footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
 <header>
-  <svg viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,4 58,14 58,34 32,60 6,34 6,14" fill="currentColor"/><polyline points="20,32 29,41 45,23" fill="none" stroke="var(--sfondo)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <svg viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,4 58,14 58,34 32,60 6,34 6,14" fill="currentColor"/><polyline points="20,32 29,41 45,23" fill="none" stroke="var(--background)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
   <b>Omissis</b>
-  <span class="stato" id="titolo" role="status"><i></i><span id="titoloTesto">…</span></span>
+  <span class="status" id="title" role="status"><i></i><span id="textTitle">…</span></span>
 </header>
 <main>
-  <div id="guasto" role="alert" hidden></div>
-  <div id="collegamento" hidden>
-    <div class="sfumato" data-t="collega_aiuto"></div>
-    <textarea id="codice" spellcheck="false" data-nome="collega_codice"></textarea>
-    <div><button class="bottone primario" id="collega" data-t="collega"></button></div>
+  <div id="fault" role="alert" hidden></div>
+  <div id="connection" hidden>
+    <div class="faded" data-t="connect_help"></div>
+    <textarea id="code" spellcheck="false" data-name="connect_code"></textarea>
+    <div><button class="button primary" id="connect" data-t="connect"></button></div>
   </div>
-  <dl id="sito">
-    <div><dt data-t="sito_aperto"></dt><dd id="servizio">—</dd></div>
-    <div><dt data-t="trattamento"></dt><dd id="politica">—</dd></div>
-    <div><dt data-t="conta_messaggi"></dt><dd id="messaggi">0</dd></div>
-    <div><dt data-t="conta_sostituzioni"></dt><dd id="sostituzioni">0</dd></div>
-    <div><dt data-t="conta_bloccate"></dt><dd id="bloccate">0</dd></div>
+  <dl id="site">
+    <div><dt data-t="site_opened"></dt><dd id="service">—</dd></div>
+    <div><dt data-t="handling"></dt><dd id="policy">—</dd></div>
+    <div><dt data-t="count_messages"></dt><dd id="messages">0</dd></div>
+    <div><dt data-t="count_replacements"></dt><dd id="replacements">0</dd></div>
+    <div><dt data-t="count_blocked"></dt><dd id="blocked">0</dd></div>
   </dl>
   <hr>
-  <label class="opzione"><span data-t="opzione_avvisi"></span><span class="levetta"><input type="checkbox" role="switch" id="avvisi"><span></span></span></label>
-  <label class="opzione"><span data-t="opzione_sospendi"></span><span class="levetta"><input type="checkbox" role="switch" id="sospesa"><span></span></span><small data-t="opzione_sospendi_nota"></small></label>
+  <label class="option"><span data-t="option_notices"></span><span class="toggle"><input type="checkbox" role="switch" id="notices"><span></span></span></label>
+  <label class="option"><span data-t="option_suspend"></span><span class="toggle"><input type="checkbox" role="switch" id="suspended"><span></span></span><small data-t="option_suspend_note"></small></label>
   <hr>
-  <footer><a class="bottone" href="http://127.0.0.1:8766/" target="_blank" rel="noopener" data-t="apri_pannello"></a><span class="sfumato" id="versione"></span></footer>
+  <footer><a class="button" href="http://127.0.0.1:8766/" target="_blank" rel="noopener" data-t="open_panel"></a><span class="faded" id="version"></span></footer>
 </main>
 <script src="popup.js"></script>
 </body>

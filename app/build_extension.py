@@ -13,77 +13,77 @@ from pathlib import Path
 
 import catalog
 
-QUI = Path(__file__).resolve().parent
-EST = QUI / "extension"
-VERSIONE = "0.1.0"
+HERE = Path(__file__).resolve().parent
+EST = HERE / "extension"
+VERSION = "0.1.0"
 
 
-def modelli(servizi):
+def models(services):
     out = []
-    for s in servizi:
-        for d in s["domini"]:
+    for s in services:
+        for d in s["domains"]:
             out += [f"*://{d}/*", f"*://*.{d}/*"]
     return out
 
 
-def manifesto(prova):
+def manifest(test):
     # i servizi del radar restano fuori: l'estensione non chiede l'accesso ai loro siti, li puo' solo bloccare
-    leggibili = modelli(s for s in catalog.SERVIZI if s["adattatore"])
-    altri = modelli(s for s in catalog.SERVIZI if not s["adattatore"] and not s["radar"])
-    if prova:
-        leggibili.append("http://localhost/*")
-    comuni = {"run_at": "document_start", "all_frames": True, "match_origin_as_fallback": True}
+    readable = models(s for s in catalog.SERVICES if s["adapter"])
+    others = models(s for s in catalog.SERVICES if not s["adapter"] and not s["radar"])
+    if test:
+        readable.append("http://localhost/*")
+    common = {"run_at": "document_start", "all_frames": True, "match_origin_as_fallback": True}
     return {
         "manifest_version": 3,
         # nome e descrizione stanno in _locales/<lingua>/messages.json, come tutte le frasi dell'estensione
-        "name": "Omissis (prova)" if prova else "__MSG_est_nome__",
-        "version": VERSIONE,
-        "description": "__MSG_est_descrizione__",
+        "name": "Omissis (prova)" if test else "__MSG_est_name__",
+        "version": VERSION,
+        "description": "__MSG_est_description__",
         "default_locale": "en",
         "minimum_chrome_version": "111",
         # declarativeNetRequest (e non ...WithHostAccess): serve a bloccare anche i servizi del radar, sui cui siti non si chiede l'accesso
         "permissions": ["storage", "alarms", "declarativeNetRequest"],
-        "host_permissions": ["http://127.0.0.1/*"] + leggibili + altri,
+        "host_permissions": ["http://127.0.0.1/*"] + readable + others,
         "background": {"service_worker": "background.js"},
         "action": {"default_popup": "popup.html", "default_title": "Omissis",
                    "default_icon": {str(n): f"icons/{n}.png" for n in (16, 32, 48)}},
         "icons": {str(n): f"icons/{n}.png" for n in (16, 48, 128)},
         "content_scripts": [
-            {"matches": leggibili, "js": ["page.js"], "world": "MAIN", **comuni},
-            {"matches": leggibili, "js": ["defaults.js", "channel.js", "content.js"], **comuni},
-            {"matches": altri, "js": ["defaults.js", "content.js"], "run_at": "document_start"},
-            {"matches": ["http://127.0.0.1/*", "http://localhost/*"] if not prova else ["http://127.0.0.1/*"],
+            {"matches": readable, "js": ["page.js"], "world": "MAIN", **common},
+            {"matches": readable, "js": ["defaults.js", "channel.js", "content.js"], **common},
+            {"matches": others, "js": ["defaults.js", "content.js"], "run_at": "document_start"},
+            {"matches": ["http://127.0.0.1/*", "http://localhost/*"] if not test else ["http://127.0.0.1/*"],
              "js": ["pair.js"], "run_at": "document_start"},
         ],
         "web_accessible_resources": [{"resources": ["blocked.html"], "matches": ["<all_urls>"]}],
     }
 
 
-def predefiniti(prova):
-    servizi = [{"id": s["id"], "nome": s["nome"], "domini": s["domini"], "politica": catalog.politica_predefinita(s),
-                "leggibile": bool(s["adattatore"])} for s in catalog.SERVIZI if not s["radar"]]
-    if prova:
-        servizi.append({"id": "prova", "nome": "Servizio finto", "domini": ["localhost"], "politica": "proteggi", "leggibile": True})
+def defaults(test):
+    services = [{"id": s["id"], "name": s["name"], "domains": s["domains"], "policy": catalog.default_policy(s),
+                "readable": bool(s["adapter"])} for s in catalog.SERVICES if not s["radar"]]
+    if test:
+        services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True})
     return ("// generato da build_extension.py: politiche di partenza, finche' il programma non manda le sue\n"
-            "globalThis.MSP_PREDEFINITI = " + json.dumps({"servizi": servizi, "ripristina": True, "blocca_file": False},
+            "globalThis.MSP_DEFAULTS = " + json.dumps({"services": services, "restore": True, "block_files": False},
                                                          ensure_ascii=False, separators=(",", ":")) + ";\n")
 
 
-def icone():
+def icons():
     from PIL import Image, ImageDraw
     (EST / "icons").mkdir(exist_ok=True)
-    grande = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-    d = ImageDraw.Draw(grande)
+    large = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+    d = ImageDraw.Draw(large)
     d.polygon([(256, 32), (464, 112), (464, 272), (256, 480), (48, 272), (48, 112)], fill=(16, 122, 107, 255))
     d.line([(160, 256), (232, 328), (360, 184)], fill=(255, 255, 255, 255), width=48, joint="curve")
     for n in (16, 32, 48, 128):
-        grande.resize((n, n), Image.LANCZOS).save(EST / "icons" / f"{n}.png")
+        large.resize((n, n), Image.LANCZOS).save(EST / "icons" / f"{n}.png")
 
 
 if __name__ == "__main__":
-    prova = "--test" in sys.argv
+    test = "--test" in sys.argv
     EST.mkdir(exist_ok=True)
-    (EST / "manifest.json").write_text(json.dumps(manifesto(prova), ensure_ascii=False, indent=1), encoding="utf-8")
-    (EST / "defaults.js").write_text(predefiniti(prova), encoding="utf-8")
-    icone()
-    print(f"estensione scritta in {EST}" + (" (con il servizio finto)" if prova else ""))
+    (EST / "manifest.json").write_text(json.dumps(manifest(test), ensure_ascii=False, indent=1), encoding="utf-8")
+    (EST / "defaults.js").write_text(defaults(test), encoding="utf-8")
+    icons()
+    print(f"estensione scritta in {EST}" + (" (con il servizio finto)" if test else ""))

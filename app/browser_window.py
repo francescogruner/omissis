@@ -18,26 +18,26 @@ from pathlib import Path
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 
-QUI = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent
 import settings   # noqa: E402
 import i18n         # noqa: E402
 import paths       # noqa: E402
 
-CERT = paths.DATI / "ca" / "mitmproxy-ca-cert.pem"
+CERT = paths.DATA / "ca" / "mitmproxy-ca-cert.pem"
 BROWSER = [r"C:\Program Files\Google\Chrome\Application\chrome.exe",
            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"]
 
 if not CERT.exists():
-    sys.exit(i18n.t("proxy.certificato.non_creato"))
-chiave = x509.load_pem_x509_certificate(CERT.read_bytes()).public_key().public_bytes(
+    sys.exit(i18n.t("proxy.certificate.not_created"))
+key = x509.load_pem_x509_certificate(CERT.read_bytes()).public_key().public_bytes(
     serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
-impronta = base64.b64encode(hashlib.sha256(chiave).digest()).decode()
+fingerprint = base64.b64encode(hashlib.sha256(key).digest()).decode()
 exe = next((b for b in BROWSER if Path(b).exists()), None)
 if exe is None:
-    sys.exit(i18n.t("programma.finestra_senza_browser"))
-subprocess.Popen([exe, f"--user-data-dir={paths.DATI / 'browser_profile'}", f"--proxy-server=http://127.0.0.1:{settings.leggi()['porta']}",
-                  f"--ignore-certificate-errors-spki-list={impronta}", "--no-first-run", "--no-default-browser-check",
+    sys.exit(i18n.t("program.window_without_browser"))
+subprocess.Popen([exe, f"--user-data-dir={paths.DATA / 'browser_profile'}", f"--proxy-server=http://127.0.0.1:{settings.read()['port']}",
+                  f"--ignore-certificate-errors-spki-list={fingerprint}", "--no-first-run", "--no-default-browser-check",
                   sys.argv[1] if len(sys.argv) > 1 else "https://claude.ai"])
-print(i18n.t("programma.finestra_aperta", browser=Path(exe).stem))
+print(i18n.t("program.window_opened", browser=Path(exe).stem))

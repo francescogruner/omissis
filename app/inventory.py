@@ -18,152 +18,152 @@ import time
 
 import paths
 
-FILE = paths.DATI / "inventory.sqlite"
-GIUDIZI = ("", "approvato", "da_rimuovere")
+FILE = paths.DATA / "inventory.sqlite"
+VERDICTS = ("", "approved", "to_remove")
 # cio' che va e viene da solo (un programma aperto o chiuso, un sito contattato): se ne annota la comparsa, non la scomparsa
-VOLATILI = {"processi", "in_ascolto", "contattati"}
-EVENTI_GIORNI = 365
-_lucchetto = threading.Lock()
+VOLATILE = {"processes", "listening", "contacted"}
+EVENTS_DAYS = 365
+_lock = threading.Lock()
 
 
 def _db():
     FILE.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(FILE)
-    db.execute("CREATE TABLE IF NOT EXISTS analisi (ora TEXT PRIMARY KEY, origine TEXT, secondi REAL, elementi INTEGER, nuovi INTEGER, spariti INTEGER)")
-    db.execute("CREATE TABLE IF NOT EXISTS elementi (chiave TEXT PRIMARY KEY, categoria TEXT, nome TEXT, dettaglio TEXT, versione TEXT, "
-               "servizio TEXT, segnale TEXT, primo TEXT, ultimo TEXT, presente INTEGER, giudizio TEXT DEFAULT '', nota TEXT DEFAULT '')")
-    db.execute("CREATE TABLE IF NOT EXISTS eventi (id INTEGER PRIMARY KEY AUTOINCREMENT, ora TEXT, tipo TEXT, chiave TEXT, categoria TEXT, "
-               "nome TEXT, dettaglio TEXT)")
+    db.execute("CREATE TABLE IF NOT EXISTS scan (stamp TEXT PRIMARY KEY, origin TEXT, seconds REAL, items INTEGER, new_items INTEGER, gone INTEGER)")
+    db.execute("CREATE TABLE IF NOT EXISTS items (key TEXT PRIMARY KEY, category TEXT, name TEXT, detail TEXT, version TEXT, "
+               "service TEXT, signal TEXT, first TEXT, last TEXT, present INTEGER, verdict TEXT DEFAULT '', note TEXT DEFAULT '')")
+    db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, stamp TEXT, kind TEXT, key TEXT, category TEXT, "
+               "name TEXT, detail TEXT)")
     return db
 
 
-def elementi_di(pc, rete=None):
+def items_of(pc, network=None):
     """La fotografia di scan.pc() e scan.rete() come elenco piatto: una voce per ogni cosa trovata, con una chiave stabile."""
     out = {}
 
-    def voce(categoria, chiave, nome, dettaglio="", versione="", servizio="", segnale=""):
-        out[f"{categoria}|{chiave}"] = {"categoria": categoria, "nome": str(nome)[:200], "dettaglio": str(dettaglio)[:300],
-                                        "versione": str(versione)[:60], "servizio": str(servizio or ""), "segnale": segnale}
-    for r in pc.get("programmi", []):
-        voce("programmi", r["nome"], r["servizio"]["nome"], r["nome"], r.get("versione", ""), r["servizio"].get("id"))
-    for r in pc.get("processi", []):
-        voce("processi", r["nome"].lower(), r["servizio"]["nome"], r["nome"], "", r["servizio"].get("id"))
-    for r in pc.get("estensioni_browser", []):
-        voce("estensioni_browser", f"{r['browser']}|{r['profilo']}|{r['id']}", r["nome"], f"{r['browser']} · {r['profilo']}", r.get("versione", ""),
-             segnale="tutti_i_siti" if r.get("accesso_a_tutti_i_siti") else "")
-    for r in pc.get("estensioni_editor", []):
-        voce("estensioni_editor", f"{r['editor']}|{r['autore']}|{r['nome']}", r["nome"], f"{r['editor']} · {r['autore']}", r.get("versione", ""))
-    for r in pc.get("comandi", []):
-        voce("comandi", r["comando"], r["comando"], r["percorso"])
-    for r in pc.get("locali", []):
+    def entry(category, key, name, detail="", version="", service="", signal=""):
+        out[f"{category}|{key}"] = {"category": category, "name": str(name)[:200], "detail": str(detail)[:300],
+                                        "version": str(version)[:60], "service": str(service or ""), "signal": signal}
+    for r in pc.get("programs", []):
+        entry("programs", r["name"], r["service"]["name"], r["name"], r.get("version", ""), r["service"].get("id"))
+    for r in pc.get("processes", []):
+        entry("processes", r["name"].lower(), r["service"]["name"], r["name"], "", r["service"].get("id"))
+    for r in pc.get("browser_extensions", []):
+        entry("browser_extensions", f"{r['browser']}|{r['profile']}|{r['id']}", r["name"], f"{r['browser']} · {r['profile']}", r.get("version", ""),
+             signal="all_sites" if r.get("all_sites_access") else "")
+    for r in pc.get("editor_extensions", []):
+        entry("editor_extensions", f"{r['editor']}|{r['author']}|{r['name']}", r["name"], f"{r['editor']} · {r['author']}", r.get("version", ""))
+    for r in pc.get("commands", []):
+        entry("commands", r["command"], r["command"], r["path"])
+    for r in pc.get("local", []):
         if r.get("gb") is None:
-            voce("in_ascolto", f"{r['nome']}|{r.get('porta', '')}", r["nome"], f"127.0.0.1:{r.get('porta', '')}")
+            entry("listening", f"{r['name']}|{r.get('port', '')}", r["name"], f"127.0.0.1:{r.get('port', '')}")
         else:
-            voce("modelli_locali", r["nome"], r["nome"], r["cosa"], f"{r['gb']} GB")
-    for r in (rete or {}).get("dns", []) + (rete or {}).get("connessioni", []):
-        voce("contattati", r["id"], r["servizio"], r.get("host", ""), "", r["id"])
+            entry("local_models", r["name"], r["name"], r["what"], f"{r['gb']} GB")
+    for r in (network or {}).get("dns", []) + (network or {}).get("links", []):
+        entry("contacted", r["id"], r["service"], r.get("host", ""), "", r["id"])
     return out
 
 
-def registra(pc, rete=None, origine="manuale"):
+def record(pc, network=None, origin="manual"):
     """Salva l'analisi. Restituisce {"prima": bool, "nuovi": [...], "spariti": [...]} rispetto a quella di prima."""
-    ora, trovati = time.strftime("%Y-%m-%d %H:%M:%S"), elementi_di(pc, rete)
-    with _lucchetto:
+    stamp, found_items = time.strftime("%Y-%m-%d %H:%M:%S"), items_of(pc, network)
+    with _lock:
         db = _db()
-        prima = db.execute("SELECT COUNT(*) FROM analisi").fetchone()[0] == 0
-        noti = {r[0]: {"categoria": r[1], "nome": r[2], "dettaglio": r[3], "presente": r[4]}
-                for r in db.execute("SELECT chiave, categoria, nome, dettaglio, presente FROM elementi")}
-        nuovi, spariti = [], []
-        for chiave, v in trovati.items():
-            n = noti.get(chiave)
+        before = db.execute("SELECT COUNT(*) FROM scan").fetchone()[0] == 0
+        well_known = {r[0]: {"category": r[1], "name": r[2], "detail": r[3], "present": r[4]}
+                for r in db.execute("SELECT key, category, name, detail, present FROM items")}
+        new_items, gone = [], []
+        for key, v in found_items.items():
+            n = well_known.get(key)
             if n is None:
-                db.execute("INSERT INTO elementi (chiave, categoria, nome, dettaglio, versione, servizio, segnale, primo, ultimo, presente) "
-                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)", (chiave, v["categoria"], v["nome"], v["dettaglio"], v["versione"], v["servizio"], v["segnale"], ora, ora))
+                db.execute("INSERT INTO items (key, category, name, detail, version, service, signal, first, last, present) "
+                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)", (key, v["category"], v["name"], v["detail"], v["version"], v["service"], v["signal"], stamp, stamp))
             else:
-                db.execute("UPDATE elementi SET nome=?, dettaglio=?, versione=?, servizio=?, segnale=?, ultimo=?, presente=1 WHERE chiave=?",
-                           (v["nome"], v["dettaglio"], v["versione"], v["servizio"], v["segnale"], ora, chiave))
-            if n is None or (not n["presente"] and v["categoria"] not in VOLATILI):
-                nuovi.append({"chiave": chiave, **v})
-        for chiave, n in noti.items():
-            if n["presente"] and chiave not in trovati:
-                db.execute("UPDATE elementi SET presente=0 WHERE chiave=?", (chiave,))
-                if n["categoria"] not in VOLATILI:
-                    spariti.append({"chiave": chiave, **n})
-        if not prima:   # la prima analisi e' il punto di partenza: non e' «comparso» tutto quel giorno
-            db.executemany("INSERT INTO eventi (ora, tipo, chiave, categoria, nome, dettaglio) VALUES (?, ?, ?, ?, ?, ?)",
-                           [(ora, tipo, e["chiave"], e["categoria"], e["nome"], e["dettaglio"]) for tipo, elenco in (("comparso", nuovi), ("sparito", spariti))
-                            for e in elenco])
-        db.execute("INSERT OR REPLACE INTO analisi VALUES (?, ?, ?, ?, ?, ?)", (ora, origine, float(pc.get("secondi") or 0), len(trovati),
-                                                                              0 if prima else len(nuovi), 0 if prima else len(spariti)))
-        db.execute("DELETE FROM eventi WHERE ora < ?", (time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400 * EVENTI_GIORNI)),))
-        db.execute("DELETE FROM analisi WHERE ora NOT IN (SELECT ora FROM analisi ORDER BY ora DESC LIMIT 400)")
+                db.execute("UPDATE items SET name=?, detail=?, version=?, service=?, signal=?, last=?, present=1 WHERE key=?",
+                           (v["name"], v["detail"], v["version"], v["service"], v["signal"], stamp, key))
+            if n is None or (not n["present"] and v["category"] not in VOLATILE):
+                new_items.append({"key": key, **v})
+        for key, n in well_known.items():
+            if n["present"] and key not in found_items:
+                db.execute("UPDATE items SET present=0 WHERE key=?", (key,))
+                if n["category"] not in VOLATILE:
+                    gone.append({"key": key, **n})
+        if not before:   # la prima analisi e' il punto di partenza: non e' «comparso» tutto quel giorno
+            db.executemany("INSERT INTO events (stamp, kind, key, category, name, detail) VALUES (?, ?, ?, ?, ?, ?)",
+                           [(stamp, kind, e["key"], e["category"], e["name"], e["detail"]) for kind, listing in (("appeared", new_items), ("gone", gone))
+                            for e in listing])
+        db.execute("INSERT OR REPLACE INTO scan VALUES (?, ?, ?, ?, ?, ?)", (stamp, origin, float(pc.get("seconds") or 0), len(found_items),
+                                                                              0 if before else len(new_items), 0 if before else len(gone)))
+        db.execute("DELETE FROM events WHERE stamp < ?", (time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400 * EVENTS_DAYS)),))
+        db.execute("DELETE FROM scan WHERE stamp NOT IN (SELECT stamp FROM scan ORDER BY stamp DESC LIMIT 400)")
         db.commit()
         db.close()
-    return {"prima": prima, "nuovi": [] if prima else nuovi, "spariti": [] if prima else spariti}
+    return {"before": before, "new_items": [] if before else new_items, "gone": [] if before else gone}
 
 
-def ultima():
+def latest():
     """Quando e' stata fatta l'ultima analisi (testo «AAAA-MM-GG HH:MM:SS»), o "" se mai."""
     if not FILE.exists():
         return ""
-    with _lucchetto:
+    with _lock:
         db = _db()
-        r = db.execute("SELECT MAX(ora) FROM analisi").fetchone()[0]
+        r = db.execute("SELECT MAX(stamp) FROM scan").fetchone()[0]
         db.close()
     return r or ""
 
 
-def riepilogo(eventi=200):
-    with _lucchetto:
+def summary(events=200):
+    with _lock:
         db = _db()
-        nomi = ("chiave", "categoria", "nome", "dettaglio", "versione", "servizio", "segnale", "primo", "ultimo", "presente", "giudizio", "nota")
-        elementi = [dict(zip(nomi, r)) for r in db.execute(f"SELECT {', '.join(nomi)} FROM elementi ORDER BY categoria, nome COLLATE NOCASE")]
-        analisi = [dict(zip(("ora", "origine", "secondi", "elementi", "nuovi", "spariti"), r))
-                   for r in db.execute("SELECT ora, origine, secondi, elementi, nuovi, spariti FROM analisi ORDER BY ora DESC LIMIT 30")]
-        fatti = [dict(zip(("ora", "tipo", "chiave", "categoria", "nome", "dettaglio"), r))
-                 for r in db.execute("SELECT ora, tipo, chiave, categoria, nome, dettaglio FROM eventi ORDER BY id DESC LIMIT ?", (int(eventi),))]
-        totale = db.execute("SELECT COUNT(*) FROM analisi").fetchone()[0]
+        names = ("key", "category", "name", "detail", "version", "service", "signal", "first", "last", "present", "verdict", "note")
+        items = [dict(zip(names, r)) for r in db.execute(f"SELECT {', '.join(names)} FROM items ORDER BY category, name COLLATE NOCASE")]
+        scan = [dict(zip(("stamp", "origin", "seconds", "items", "new_items", "gone"), r))
+                   for r in db.execute("SELECT stamp, origin, seconds, items, new_items, gone FROM scan ORDER BY stamp DESC LIMIT 30")]
+        completed = [dict(zip(("stamp", "kind", "key", "category", "name", "detail"), r))
+                 for r in db.execute("SELECT stamp, kind, key, category, name, detail FROM events ORDER BY id DESC LIMIT ?", (int(events),))]
+        total = db.execute("SELECT COUNT(*) FROM scan").fetchone()[0]
         db.close()
-    return {"elementi": elementi, "analisi": analisi, "eventi": fatti, "n_analisi": totale}
+    return {"items": items, "scan": scan, "events": completed, "scan_count": total}
 
 
-def giudica(chiave, giudizio, nota=None):
-    with _lucchetto:
+def judge(key, verdict, note=None):
+    with _lock:
         db = _db()
-        if giudizio in GIUDIZI:
-            db.execute("UPDATE elementi SET giudizio=? WHERE chiave=?", (giudizio, str(chiave)))
-        if nota is not None:
-            db.execute("UPDATE elementi SET nota=? WHERE chiave=?", (str(nota).strip()[:300], str(chiave)))
+        if verdict in VERDICTS:
+            db.execute("UPDATE items SET verdict=? WHERE key=?", (verdict, str(key)))
+        if note is not None:
+            db.execute("UPDATE items SET note=? WHERE key=?", (str(note).strip()[:300], str(key)))
         db.commit()
         db.close()
 
 
-def dimentica():
+def forget():
     """Toglie dall'inventario cio' che non c'e' piu'. Restituisce quante voci ha tolto."""
-    with _lucchetto:
+    with _lock:
         db = _db()
-        n = db.execute("DELETE FROM elementi WHERE presente=0").rowcount
+        n = db.execute("DELETE FROM items WHERE present=0").rowcount
         db.commit()
         db.close()
     return n
 
 
-def svuota():
-    with _lucchetto:
+def clear():
+    with _lock:
         db = _db()
-        for tabella in ("elementi", "eventi", "analisi"):
-            db.execute(f"DELETE FROM {tabella}")
+        for table in ("items", "events", "scan"):
+            db.execute(f"DELETE FROM {table}")
         db.commit()
         db.execute("VACUUM")
         db.close()
 
 
-def csv(intestazioni, categoria=lambda c: c, giudizio=lambda g: g):
+def csv(headers, category=lambda c: c, verdict=lambda g: g):
     """L'inventario come testo CSV (separatore ;) da aprire con Excel. intestazioni: i nomi delle colonne, gia' tradotti."""
-    uscita = io.StringIO()
-    w = _csv.writer(uscita, delimiter=";", lineterminator="\r\n")
-    w.writerow(intestazioni)
-    for e in riepilogo(0)["elementi"]:
-        w.writerow([categoria(e["categoria"]), e["nome"], e["dettaglio"], e["versione"], e["primo"][:16], e["ultimo"][:16],
-                    "1" if e["presente"] else "0", giudizio(e["giudizio"]), e["nota"]])
-    return "﻿" + uscita.getvalue()   # il segno iniziale fa leggere a Excel le lettere accentate
+    output = io.StringIO()
+    w = _csv.writer(output, delimiter=";", lineterminator="\r\n")
+    w.writerow(headers)
+    for e in summary(0)["items"]:
+        w.writerow([category(e["category"]), e["name"], e["detail"], e["version"], e["first"][:16], e["last"][:16],
+                    "1" if e["present"] else "0", verdict(e["verdict"]), e["note"]])
+    return "﻿" + output.getvalue()   # il segno iniziale fa leggere a Excel le lettere accentate

@@ -17,13 +17,13 @@ is sent to any Omissis server, because there is none.
 > Test with made-up data first.
 > The interface is in English and Italian. The detailed documentation is in Italian: see [README.it.md](README.it.md).
 
-![Home page](docs/screenshots/inizio-en.png)
+![Home page](docs/screenshots/start-en.png)
 
-![Paste a text: it is masked and copied for you](docs/screenshots/testo-en.png)
+![Paste a text: it is masked and copied for you](docs/screenshots/text-en.png)
 
-![Drop a document: the anonymised copy downloads by itself](docs/screenshots/documenti-en.png)
+![Drop a document: the anonymised copy downloads by itself](docs/screenshots/documents-en.png)
 
-<img src="docs/screenshots/estensione-finestrella-en.png" alt="The browser extension" width="340">
+<img src="docs/screenshots/extension-popup-en.png" alt="The browser extension" width="340">
 
 ## What is in the box
 

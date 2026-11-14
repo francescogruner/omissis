@@ -17,49 +17,49 @@ from pathlib import Path
 import connector
 import paths
 
-QUI = Path(__file__).resolve().parent
-CHROME = paths.browser_di_prova()
-PORTA, FINTO = 9562, "http://localhost:9911"
-TESTO = ("Scrivi una mail a Giulia Ferraresi (giulia.ferraresi@nevatek.example, cell. 347 5551234) della Nevatek S.r.l. "
+HERE = Path(__file__).resolve().parent
+CHROME = paths.test_browser()
+PORT, FAKE = 9562, "http://localhost:9911"
+TEXT = ("Scrivi una mail a Giulia Ferraresi (giulia.ferraresi@nevatek.example, cell. 347 5551234) della Nevatek S.r.l. "
          "per confermare l'appuntamento con Aldo Bruschi.")
-SENSIBILI = ["Giulia Ferraresi", "giulia.ferraresi@nevatek.example", "347 5551234", "Aldo Bruschi"]
-esiti = []
+SENSITIVE = ["Giulia Ferraresi", "giulia.ferraresi@nevatek.example", "347 5551234", "Aldo Bruschi"]
+outcomes = []
 
 
-def visto():
-    with urllib.request.urlopen("http://127.0.0.1:9911/visto", timeout=10) as r:
+def seen():
+    with urllib.request.urlopen("http://127.0.0.1:9911/seen", timeout=10) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
-def segna(nome, ok, nota=""):
-    esiti.append(ok)
-    print(f"{'OK    ' if ok else 'ERRORE'} {nome}" + (f"   {nota}" if nota else ""), flush=True)
+def mark(name, ok, note=""):
+    outcomes.append(ok)
+    print(f"{'OK    ' if ok else 'ERRORE'} {name}" + (f"   {note}" if note else ""), flush=True)
 
 
-class Guida:
+class Guide:
     """Un secondo collegamento, che fa la parte dell'utente: apre la pagina e ci scrive."""
 
     def __init__(self):
-        self.cdp = connector.Cdp(PORTA, lambda m: None)
+        self.cdp = connector.Cdp(PORT, lambda m: None)
         self.sid = None
 
-    def apri(self, indirizzo, attendi_codice=True):
-        t = self.cdp.invia("Target.createTarget", {"url": indirizzo})["targetId"]
-        self.sid = self.cdp.invia("Target.attachToTarget", {"targetId": t, "flatten": True})["sessionId"]
+    def open_up(self, address, wait_for_code=True):
+        t = self.cdp.send("Target.createTarget", {"url": address})["targetId"]
+        self.sid = self.cdp.send("Target.attachToTarget", {"targetId": t, "flatten": True})["sessionId"]
         for _ in range(50):
-            if self.valuta("document.readyState") == "complete" and self.valuta("typeof prova") == "function":
+            if self.evaluate("document.readyState") == "complete" and self.evaluate("typeof test") == "function":
                 break
             time.sleep(0.2)
         else:
             raise TimeoutError("la pagina di prova non si è caricata")
-        if attendi_codice:   # il codice dentro la pagina diventa attivo un attimo dopo: le prove sui formati lo aspettano
+        if wait_for_code:   # il codice dentro la pagina diventa attivo un attimo dopo: le prove sui formati lo aspettano
             for _ in range(40):
-                if self.valuta("!window.fetch.toString().includes('fetch')"):
+                if self.evaluate("!window.fetch.toString().includes('fetch')"):
                     return
                 time.sleep(0.1)
 
-    def valuta(self, espressione, attesa=60):
-        r = self.cdp.invia("Runtime.evaluate", {"expression": espressione, "awaitPromise": True, "returnByValue": True}, self.sid, attesa=attesa)
+    def evaluate(self, expression, timeout=60):
+        r = self.cdp.send("Runtime.evaluate", {"expression": expression, "awaitPromise": True, "returnByValue": True}, self.sid, timeout=timeout)
         if "exceptionDetails" in r:
             raise RuntimeError(r["exceptionDetails"].get("exception", {}).get("description", "errore nella pagina")[:160])
         return r["result"].get("value")
@@ -67,223 +67,223 @@ class Guida:
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
-    registro = paths.DATI / "activity.jsonl"
-    righe_prima = len(registro.read_text(encoding="utf-8").splitlines()) if registro.exists() else 0
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profilo:
-        app = subprocess.Popen([str(CHROME), f"--remote-debugging-port={PORTA}", f"--user-data-dir={profilo}", "--headless=new",
+    log = paths.DATA / "activity.jsonl"
+    lines_before = len(log.read_text(encoding="utf-8").splitlines()) if log.exists() else 0
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profile:
+        app = subprocess.Popen([str(CHROME), f"--remote-debugging-port={PORT}", f"--user-data-dir={profile}", "--headless=new",
                                 "--no-first-run", "--no-default-browser-check", "about:blank"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             for _ in range(60):
-                if connector.porta_aperta(PORTA):
+                if connector.opened_port(PORT):
                     break
                 time.sleep(0.25)
             time.sleep(1)
             # --- una finestra gia' aperta e caricata PRIMA che il connettore si colleghi
-            vecchia = Guida()
-            vecchia.apri(FINTO + "/pagina", attendi_codice=False)
-            con = connector.Connettore(PORTA, "app di prova", prova=True, sito="localhost")
+            old_one = Guide()
+            old_one.open_up(FAKE + "/page", wait_for_code=False)
+            con = connector.Connector(PORT, "app di prova", test=True, site="localhost")
             time.sleep(1.5)
             try:
-                risposta = vecchia.valuta(f"prova('claude', {json.dumps(TESTO)})")
-                arrivato = json.dumps(visto()["corpo"], ensure_ascii=False)
-                segna("finestra già aperta al momento del collegamento", not any(s in arrivato for s in SENSIBILI) and "[PERSONA_" in arrivato
-                      and all(s in risposta for s in SENSIBILI))
+                response = old_one.evaluate(f"test('claude', {json.dumps(TEXT)})")
+                arrived = json.dumps(seen()["body"], ensure_ascii=False)
+                mark("finestra già aperta al momento del collegamento", not any(s in arrived for s in SENSITIVE) and "[PERSONA_" in arrived
+                      and all(s in response for s in SENSITIVE))
             except Exception as ex:   # noqa: BLE001
-                segna("finestra già aperta al momento del collegamento", False, str(ex)[:150])
-            guida = Guida()
-            guida.apri(FINTO + "/pagina")
-            segna("codice portato nella finestra", not con.errori and con.conteggi["pagine"] >= 1, f"{con.cdp.prodotto} · {'; '.join(con.errori)}")
-            segna("controllo in rete acceso sull'intero browser (vale anche per le finestre non ancora agganciate)", con.guardia_browser, "; ".join(con.avvisi))
-            for formato in ("claude", "openai", "chatgpt", "cumulativo", "righe", "prefisso", "intera", "richiesta"):
+                mark("finestra già aperta al momento del collegamento", False, str(ex)[:150])
+            guide = Guide()
+            guide.open_up(FAKE + "/page")
+            mark("codice portato nella finestra", not con.errors and con.counts["pages"] >= 1, f"{con.cdp.product} · {'; '.join(con.errors)}")
+            mark("controllo in rete acceso sull'intero browser (vale anche per le finestre non ancora agganciate)", con.browser_guard, "; ".join(con.notices))
+            for fmt in ("claude", "openai", "chatgpt", "cumulative", "lines", "prefix", "whole", "request"):
                 try:
-                    risposta = guida.valuta(f"prova({json.dumps(formato)}, {json.dumps(TESTO)})")
+                    response = guide.evaluate(f"test({json.dumps(fmt)}, {json.dumps(TEXT)})")
                 except Exception as ex:   # noqa: BLE001
-                    segna(formato, False, str(ex)[:150])
+                    mark(fmt, False, str(ex)[:150])
                     continue
-                arrivato = json.dumps(visto()["corpo"], ensure_ascii=False)
-                fuori = [s for s in SENSIBILI if s in arrivato]
-                tornati = [s for s in SENSIBILI if s in (risposta or "")]
-                segna(formato, not fuori and "[PERSONA_" in arrivato and len(tornati) == len(SENSIBILI) and "[PERSONA_" not in risposta,
-                      f"al servizio in chiaro: {len(fuori)} · tornati alla pagina: {len(tornati)}/{len(SENSIBILI)}")
-            guida.valuta(f"prova('claude', {json.dumps(TESTO)})")
-            risposta = guida.valuta("prova('cronologia')")
-            segna("cronologia (risposta JSON a una GET)", all(s in risposta for s in SENSIBILI))
-            guida.valuta(f"prova('gemini', {json.dumps(TESTO)})")
-            arrivato = json.dumps(visto()["corpo"], ensure_ascii=False)
+                arrived = json.dumps(seen()["body"], ensure_ascii=False)
+                outside = [s for s in SENSITIVE if s in arrived]
+                returned = [s for s in SENSITIVE if s in (response or "")]
+                mark(fmt, not outside and "[PERSONA_" in arrived and len(returned) == len(SENSITIVE) and "[PERSONA_" not in response,
+                      f"al servizio in chiaro: {len(outside)} · tornati alla pagina: {len(returned)}/{len(SENSITIVE)}")
+            guide.evaluate(f"test('claude', {json.dumps(TEXT)})")
+            response = guide.evaluate("test('history')")
+            mark("cronologia (risposta JSON a una GET)", all(s in response for s in SENSITIVE))
+            guide.evaluate(f"test('gemini', {json.dumps(TEXT)})")
+            arrived = json.dumps(seen()["body"], ensure_ascii=False)
             time.sleep(0.7)
-            mostrato = guida.valuta("document.getElementById('esito').innerText")
-            segna("XMLHttpRequest: richiesta mascherata", not any(s in arrivato for s in SENSIBILI) and "[PERSONA_" in arrivato)
-            segna("XMLHttpRequest: valori veri nel testo della pagina", all(s in mostrato for s in SENSIBILI) and "[PERSONA_" not in mostrato)
-            segna("il sito non vede il canale con il programma", guida.valuta(f"typeof window.{connector.CHIAMATA}") == "undefined"
-                  and guida.valuta("typeof window.__msp_risposta") == "undefined")
-            segna("conteggi del connettore", con.conteggi["messaggi"] >= 9 and con.conteggi["sostituzioni"] >= 36, json.dumps(con.conteggi))
-            segna("nessun errore del connettore", not con.errori, "; ".join(con.errori)[:150])
+            shown = guide.evaluate("document.getElementById('outcome').innerText")
+            mark("XMLHttpRequest: richiesta mascherata", not any(s in arrived for s in SENSITIVE) and "[PERSONA_" in arrived)
+            mark("XMLHttpRequest: valori veri nel testo della pagina", all(s in shown for s in SENSITIVE) and "[PERSONA_" not in shown)
+            mark("il sito non vede il canale con il programma", guide.evaluate(f"typeof window.{connector.CALL}") == "undefined"
+                  and guide.evaluate("typeof window.__msp_response") == "undefined")
+            mark("conteggi del connettore", con.counts["messages"] >= 9 and con.counts["replacements"] >= 36, json.dumps(con.counts))
+            mark("nessun errore del connettore", not con.errors, "; ".join(con.errors)[:150])
             import activity
-            visti = [g for g in activity.compatibilita() if g["via"] == "app desktop" and g["cliente"]]
-            segna("registro delle versioni: l'app e la sua versione annotate accanto alle sostituzioni riuscite", any(g["ok"] >= 1 and "[" in g["cliente"] for g in visti),
-                  "; ".join(sorted({g["cliente"] for g in visti}))[:120] or "nessun programma annotato")
+            sightings = [g for g in activity.compatibility() if g["via"] == "app desktop" and g["client"]]
+            mark("registro delle versioni: l'app e la sua versione annotate accanto alle sostituzioni riuscite", any(g["ok"] >= 1 and "[" in g["client"] for g in sightings),
+                  "; ".join(sorted({g["client"] for g in sightings}))[:120] or "nessun programma annotato")
 
             # --- come nelle app vere (1): una finestra che il browser tiene FERMA finche' il connettore non da' il via
             t0 = time.perf_counter()
-            ferma = con.cdp.invia("Target.createTarget", {"url": FINTO + "/pagina"})["targetId"]
-            tenuta = Guida()
-            tenuta.sid = tenuta.cdp.invia("Target.attachToTarget", {"targetId": ferma, "flatten": True})["sessionId"]
-            pronta = False
+            stop = con.cdp.send("Target.createTarget", {"url": FAKE + "/page"})["targetId"]
+            kept = Guide()
+            kept.sid = kept.cdp.send("Target.attachToTarget", {"targetId": stop, "flatten": True})["sessionId"]
+            ready = False
             for _ in range(60):
                 try:
-                    if tenuta.valuta("document.readyState == 'complete' && typeof prova == 'function' && !window.fetch.toString().includes('fetch')", attesa=3):
-                        pronta = True
+                    if kept.evaluate("document.readyState == 'complete' && typeof test == 'function' && !window.fetch.toString().includes('fetch')", timeout=3):
+                        ready = True
                         break
                 except Exception:   # noqa: BLE001
                     pass
                 time.sleep(0.1)
-            attesa_ms = round((time.perf_counter() - t0) * 1000)
-            risposta = tenuta.valuta(f"prova('claude', {json.dumps(TESTO)})") if pronta else ""
-            arrivato = json.dumps(visto()["corpo"], ensure_ascii=False)
-            segna("finestra tenuta ferma all'avvio: parte subito e protetta", pronta and attesa_ms < 5000 and not con.errori
-                  and not any(s in arrivato for s in SENSIBILI) and all(s in risposta for s in SENSIBILI), f"{attesa_ms} ms · {'; '.join(con.errori)[:120]}")
+            timeout_ms = round((time.perf_counter() - t0) * 1000)
+            response = kept.evaluate(f"test('claude', {json.dumps(TEXT)})") if ready else ""
+            arrived = json.dumps(seen()["body"], ensure_ascii=False)
+            mark("finestra tenuta ferma all'avvio: parte subito e protetta", ready and timeout_ms < 5000 and not con.errors
+                  and not any(s in arrived for s in SENSITIVE) and all(s in response for s in SENSITIVE), f"{timeout_ms} ms · {'; '.join(con.errors)[:120]}")
 
             # --- come nelle app vere (2): una finestra con indirizzo interno (qui un file locale) che parla con il servizio
             locale = Path(tempfile.mkdtemp()) / "finestra_interna.html"
-            locale.write_bytes(urllib.request.urlopen(FINTO + "/pagina", timeout=10).read())
-            interna = Guida()
-            interna.apri(locale.as_uri())
+            locale.write_bytes(urllib.request.urlopen(FAKE + "/page", timeout=10).read())
+            internal = Guide()
+            internal.open_up(locale.as_uri())
             try:
-                risposta = interna.valuta(f"prova('claude', {json.dumps(TESTO)})")
-                arrivato = json.dumps(visto()["corpo"], ensure_ascii=False)
-                segna("finestra con indirizzo interno dell'app", not any(s in arrivato for s in SENSIBILI) and "[PERSONA_" in arrivato
-                      and all(s in risposta for s in SENSIBILI), f"al servizio in chiaro: {sum(s in arrivato for s in SENSIBILI)}")
+                response = internal.evaluate(f"test('claude', {json.dumps(TEXT)})")
+                arrived = json.dumps(seen()["body"], ensure_ascii=False)
+                mark("finestra con indirizzo interno dell'app", not any(s in arrived for s in SENSITIVE) and "[PERSONA_" in arrived
+                      and all(s in response for s in SENSITIVE), f"al servizio in chiaro: {sum(s in arrived for s in SENSITIVE)}")
             except Exception as ex:   # noqa: BLE001
-                segna("finestra con indirizzo interno dell'app", False, str(ex)[:150])
-            segna("stato dichiarato dal connettore", con.esito == "si", con.esito)
+                mark("finestra con indirizzo interno dell'app", False, str(ex)[:150])
+            mark("stato dichiarato dal connettore", con.outcome == "yes", con.outcome)
 
             # --- come nell'app di ChatGPT: la finestra parla con un indirizzo INTERNO dell'app, non con il servizio.
             # Qui l'indirizzo "interno" e' 127.0.0.1 (che non e' un servizio protetto) e il servizio dell'app e' localhost.
-            con2 = connector.Connettore(PORTA, "app con indirizzo interno", prova=True, sito="localhost", interni=["http://127.0.0.1:9911"])
+            con2 = connector.Connector(PORT, "app con indirizzo interno", test=True, site="localhost", internals=["http://127.0.0.1:9911"])
             time.sleep(1)
-            dentro = Guida()
-            dentro.apri("http://127.0.0.1:9911/pagina")
+            inside = Guide()
+            inside.open_up("http://127.0.0.1:9911/page")
             try:
-                risposta = dentro.valuta(f"prova('chatgpt', {json.dumps(TESTO)})")
-                arrivato = json.dumps(visto()["corpo"], ensure_ascii=False)
-                segna("la finestra parla con un indirizzo interno dell'app (come ChatGPT)", not any(s in arrivato for s in SENSIBILI) and "[PERSONA_" in arrivato
-                      and all(s in risposta for s in SENSIBILI) and con2.conteggi["messaggi"] >= 1,
-                      f"al servizio in chiaro: {sum(s in arrivato for s in SENSIBILI)} · tornati {sum(s in risposta for s in SENSIBILI)}/4 · {con2.conteggi['messaggi']} messaggi")
+                response = inside.evaluate(f"test('chatgpt', {json.dumps(TEXT)})")
+                arrived = json.dumps(seen()["body"], ensure_ascii=False)
+                mark("la finestra parla con un indirizzo interno dell'app (come ChatGPT)", not any(s in arrived for s in SENSITIVE) and "[PERSONA_" in arrived
+                      and all(s in response for s in SENSITIVE) and con2.counts["messages"] >= 1,
+                      f"al servizio in chiaro: {sum(s in arrived for s in SENSITIVE)} · tornati {sum(s in response for s in SENSITIVE)}/4 · {con2.counts['messages']} messaggi")
             except Exception as ex:   # noqa: BLE001
-                segna("la finestra parla con un indirizzo interno dell'app (come ChatGPT)", False, str(ex)[:150])
+                mark("la finestra parla con un indirizzo interno dell'app (come ChatGPT)", False, str(ex)[:150])
             # --- come nell'app di ChatGPT davvero: la chat non usa la rete della finestra. Si scrive nella casella con
             # tasti veri e si guarda che cosa la "app" ha letto dalla casella (__inviati) e che cosa si vede a schermo.
-            def scrivi_e_invia(testo, con_il_pulsante=False):
-                dentro.valuta("document.getElementById('scrivi').focus()")
-                dentro.cdp.invia("Input.insertText", {"text": testo}, dentro.sid)
-                if con_il_pulsante:
-                    dentro.valuta("document.getElementById('manda').click()")
+            def write_and_send(text, with_button=False):
+                inside.evaluate("document.getElementById('write').focus()")
+                inside.cdp.send("Input.insertText", {"text": text}, inside.sid)
+                if with_button:
+                    inside.evaluate("document.getElementById('post').click()")
                 else:
-                    for tipo in ("rawKeyDown", "char", "keyUp"):
-                        dentro.cdp.invia("Input.dispatchKeyEvent", {"type": tipo, "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13,
-                                                                    "nativeVirtualKeyCode": 13, "text": "\r" if tipo == "char" else ""}, dentro.sid)
+                    for kind in ("rawKeyDown", "char", "keyUp"):
+                        inside.cdp.send("Input.dispatchKeyEvent", {"type": kind, "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13,
+                                                                    "nativeVirtualKeyCode": 13, "text": "\r" if kind == "char" else ""}, inside.sid)
                 for _ in range(40):
-                    if dentro.valuta("window.__inviati.length") and not dentro.valuta("document.getElementById('scrivi').innerText.trim()"):
+                    if inside.evaluate("window.__sent.length") and not inside.evaluate("document.getElementById('write').innerText.trim()"):
                         break
                     time.sleep(0.1)
                 time.sleep(0.7)
-                return dentro.valuta("window.__inviati[window.__inviati.length - 1] || ''"), dentro.valuta("document.getElementById('chat').innerText")
+                return inside.evaluate("window.__sent[window.__sent.length - 1] || ''"), inside.evaluate("document.getElementById('chat').innerText")
 
-            for nome, pulsante in (("casella di scrittura: Invio", False), ("casella di scrittura: pulsante di invio", True)):
-                dentro.valuta("window.__inviati.length = 0; document.getElementById('chat').textContent = ''")
+            for name, button in (("casella di scrittura: Invio", False), ("casella di scrittura: pulsante di invio", True)):
+                inside.evaluate("window.__sent.length = 0; document.getElementById('chat').textContent = ''")
                 try:
-                    letto, schermo = scrivi_e_invia(TESTO, pulsante)
-                    segna(nome, letto and not any(s in letto for s in SENSIBILI) and "[PERSONA_" in letto and all(s in schermo for s in SENSIBILI)
-                          and "[PERSONA_" not in schermo, f"letti dall'app in chiaro: {sum(s in letto for s in SENSIBILI)} · a schermo {sum(s in schermo for s in SENSIBILI)}/4")
+                    read_back, screen = write_and_send(TEXT, button)
+                    mark(name, read_back and not any(s in read_back for s in SENSITIVE) and "[PERSONA_" in read_back and all(s in screen for s in SENSITIVE)
+                          and "[PERSONA_" not in screen, f"letti dall'app in chiaro: {sum(s in read_back for s in SENSITIVE)} · a schermo {sum(s in screen for s in SENSITIVE)}/4")
                 except Exception as ex:   # noqa: BLE001
-                    segna(nome, False, str(ex)[:150])
+                    mark(name, False, str(ex)[:150])
             # --- la "app" scrive la risposta a pezzetti, spezzando ogni segnaposto in tre (come fa l'app di ChatGPT)
             import re as _re
-            segn = _re.findall(r"\[[A-Z_]+_\d+\]", letto or "")[:3]
-            dentro.valuta("""(async s => { const p = document.createElement('p'); p.id = 'spezzata'; document.getElementById('chat').appendChild(p);
+            segn = _re.findall(r"\[[A-Z_]+_\d+\]", read_back or "")[:3]
+            inside.evaluate("""(async s => { const p = document.createElement('p'); p.id = 'split'; document.getElementById('chat').appendChild(p);
               const aggiungi = async x => { const e = document.createElement('span'); e.textContent = x; p.appendChild(e); await new Promise(r => setTimeout(r, 25)); };
               for (const x of s) { await aggiungi('Gentile '); const i = x.lastIndexOf('_'); const b = document.createElement('strong'); p.appendChild(b);
-                for (const pezzo of [x.slice(0, i), '_', x.slice(i + 1)]) { const e = document.createElement('span'); e.textContent = pezzo; b.appendChild(e); await new Promise(r => setTimeout(r, 25)); }
+                for (const chunk of [x.slice(0, i), '_', x.slice(i + 1)]) { const e = document.createElement('span'); e.textContent = chunk; b.appendChild(e); await new Promise(r => setTimeout(r, 25)); }
                 await aggiungi(', confermo. '); } })(%s)""" % json.dumps(segn))
             time.sleep(1.0)
-            spezzata = dentro.valuta("document.getElementById('spezzata').innerText")
-            segna("segnaposto scritti a pezzi nella risposta: tornano i valori veri", len(segn) >= 2 and "[" not in spezzata and "Giulia Ferraresi" in spezzata
-                  and spezzata.count("Gentile") == len(segn), spezzata[:70])
-            dentro.valuta("window.__inviati.length = 0")
-            letto, _ = scrivi_e_invia("Quanto fa dodici per otto? Rispondi solo con il numero.")
-            segna("casella di scrittura: un testo senza dati parte com'è", letto == "Quanto fa dodici per otto? Rispondi solo con il numero.", letto[:40])
+            split = inside.evaluate("document.getElementById('split').innerText")
+            mark("segnaposto scritti a pezzi nella risposta: tornano i valori veri", len(segn) >= 2 and "[" not in split and "Giulia Ferraresi" in split
+                  and split.count("Gentile") == len(segn), split[:70])
+            inside.evaluate("window.__sent.length = 0")
+            read_back, _ = write_and_send("Quanto fa dodici per otto? Rispondi solo con il numero.")
+            mark("casella di scrittura: un testo senza dati parte com'è", read_back == "Quanto fa dodici per otto? Rispondi solo con il numero.", read_back[:40])
             # --- allegati: un file trascinato nella finestra dell'app arriva alla "app" gia' anonimizzato
-            dentro.valuta("window.__file.length = 0")
-            dentro.valuta("""(() => { const dt = new DataTransfer();
+            inside.evaluate("window.__file.length = 0")
+            inside.evaluate("""(() => { const dt = new DataTransfer();
                 dt.items.add(new File([%s], 'appunti.txt', {type: 'text/plain'}));
-                document.getElementById('zona').dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt})); return true; })()""" % json.dumps(TESTO))
+                document.getElementById('zone').dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt})); return true; })()""" % json.dumps(TEXT))
             for _ in range(150):
-                if dentro.valuta("window.__file.length"):
+                if inside.evaluate("window.__file.length"):
                     break
                 time.sleep(0.2)
-            arrivato = dentro.valuta("window.__file[0] || null") or {}
-            segna("allegato trascinato nell'app: arriva la copia anonimizzata", arrivato.get("nome") == "appunti.anon.txt" and "[PERSONA_" in arrivato.get("testo", "")
-                  and "Giulia Ferraresi" not in arrivato.get("testo", ""), arrivato.get("nome", "nulla"))
-            con.porta_motore = con2.porta_motore = 1   # entrambi i connettori di questa prova rispondono alla stessa finestra
-            dentro.valuta("window.__inviati.length = 0")
-            scrivi_e_invia(TESTO)
-            segna("casella di scrittura: se la protezione non risponde il messaggio non parte", dentro.valuta("window.__inviati.length") == 0)
-            con.porta_motore = con2.porta_motore = connector.PORTA_MOTORE
-            dentro.valuta("document.getElementById('scrivi').textContent = ''")
-            con2.chiudi()
+            arrived = inside.evaluate("window.__file[0] || null") or {}
+            mark("allegato trascinato nell'app: arriva la copia anonimizzata", arrived.get("name") == "appunti.anon.txt" and "[PERSONA_" in arrived.get("text", "")
+                  and "Giulia Ferraresi" not in arrived.get("text", ""), arrived.get("name", "nothing"))
+            con.engine_port = con2.engine_port = 1   # entrambi i connettori di questa prova rispondono alla stessa finestra
+            inside.evaluate("window.__sent.length = 0")
+            write_and_send(TEXT)
+            mark("casella di scrittura: se la protezione non risponde il messaggio non parte", inside.evaluate("window.__sent.length") == 0)
+            con.engine_port = con2.engine_port = connector.ENGINE_PORT
+            inside.evaluate("document.getElementById('write').textContent = ''")
+            con2.close()
             time.sleep(0.5)
 
             # --- il caso difficile: finestre nuove che mandano un messaggio nell'istante in cui si aprono
-            chiaro = mascherati = fermi = 0
-            for giro in range(1, 21):
-                indirizzo = f"{FINTO}/pagina?subito={giro}"
-                rich = urllib.request.Request(f"http://127.0.0.1:{PORTA}/json/new?{urllib.parse.quote(indirizzo, safe=':/?=&%')}", method="PUT")
-                ident = json.loads(urllib.request.urlopen(rich, timeout=10).read().decode("utf-8"))["id"]
-                arrivato = None
+            light = masked = idle = 0
+            for lap in range(1, 21):
+                address = f"{FAKE}/page?at_once={lap}"
+                req = urllib.request.Request(f"http://127.0.0.1:{PORT}/json/new?{urllib.parse.quote(address, safe=':/?=&%')}", method="PUT")
+                ident = json.loads(urllib.request.urlopen(req, timeout=10).read().decode("utf-8"))["id"]
+                arrived = None
                 for _ in range(40):
-                    corpo = visto()["corpo"]
-                    if isinstance(corpo, dict) and corpo.get("giro") == giro:
-                        arrivato = json.dumps(corpo, ensure_ascii=False)
+                    body = seen()["body"]
+                    if isinstance(body, dict) and body.get("lap") == lap:
+                        arrived = json.dumps(body, ensure_ascii=False)
                         break
                     time.sleep(0.1)
-                if arrivato is None:
-                    fermi += 1
-                elif any(s in arrivato for s in SENSIBILI):
-                    chiaro += 1
+                if arrived is None:
+                    idle += 1
+                elif any(s in arrived for s in SENSITIVE):
+                    light += 1
                 else:
-                    mascherati += 1
-                urllib.request.urlopen(f"http://127.0.0.1:{PORTA}/json/close/{ident}", timeout=10).read()
-            segna("messaggio inviato nell'istante in cui la finestra si apre (20 finestre)", chiaro == 0 and mascherati + fermi == 20,
-                  f"in chiaro {chiaro} · mascherati {mascherati} · non partiti {fermi} · fermati dal controllo in rete {con.conteggi['in_rete']}")
+                    masked += 1
+                urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/close/{ident}", timeout=10).read()
+            mark("messaggio inviato nell'istante in cui la finestra si apre (20 finestre)", light == 0 and masked + idle == 20,
+                  f"in chiaro {light} · mascherati {masked} · non partiti {idle} · fermati dal controllo in rete {con.counts['at_network']}")
 
             # --- il programma non risponde: il messaggio non deve partire
-            con.porta_motore = 1
-            prima = json.dumps(visto())
+            con.engine_port = 1
+            before = json.dumps(seen())
             try:
-                guida.valuta(f"prova('claude', {json.dumps(TESTO)})")
-                segna("protezione che non risponde: richiesta bloccata", False, "la richiesta è partita")
+                guide.evaluate(f"test('claude', {json.dumps(TEXT)})")
+                mark("protezione che non risponde: richiesta bloccata", False, "la richiesta è partita")
             except Exception:   # noqa: BLE001
-                segna("protezione che non risponde: richiesta bloccata", json.dumps(visto()) == prima)
-            con.porta_motore = connector.PORTA_MOTORE
+                mark("protezione che non risponde: richiesta bloccata", json.dumps(seen()) == before)
+            con.engine_port = connector.ENGINE_PORT
 
             # --- connettore staccato: la pagina resta con il codice dentro e non lascia uscire nulla
-            con.chiudi()
+            con.close()
             time.sleep(0.5)
-            prima = json.dumps(visto())
+            before = json.dumps(seen())
             try:
-                guida.valuta(f"Promise.race([prova('intera', {json.dumps(TESTO)}), new Promise((_, no) => setTimeout(() => no(new Error('ferma')), 4000))])")
-                segna("connettore staccato: nulla esce in chiaro", False, "la richiesta è partita")
+                guide.evaluate(f"Promise.race([test('whole', {json.dumps(TEXT)}), new Promise((_, no) => setTimeout(() => no(new Error('stop')), 4000))])")
+                mark("connettore staccato: nulla esce in chiaro", False, "la richiesta è partita")
             except Exception:   # noqa: BLE001
-                segna("connettore staccato: nulla esce in chiaro", json.dumps(visto()) == prima)
+                mark("connettore staccato: nulla esce in chiaro", json.dumps(seen()) == before)
         finally:
             app.terminate()
-    nuove = [json.loads(r) for r in registro.read_text(encoding="utf-8").splitlines()[righe_prima:]]
-    mie = [v for v in nuove if v.get("via") == "app desktop"]
-    segna("registro: righe «via app desktop» senza testi", len([v for v in mie if v.get("evento") == "mascherata"]) >= 9
-          and not any(s in json.dumps(mie, ensure_ascii=False) for s in SENSIBILI), f"{len(mie)} righe")
-    print("\nTUTTO OK" if all(esiti) else f"\n{esiti.count(False)} ERRORI")
-    sys.exit(0 if all(esiti) else 1)
+    new_ones = [json.loads(r) for r in log.read_text(encoding="utf-8").splitlines()[lines_before:]]
+    my = [v for v in new_ones if v.get("via") == "app desktop"]
+    mark("registro: righe «via app desktop» senza testi", len([v for v in my if v.get("event") == "masked"]) >= 9
+          and not any(s in json.dumps(my, ensure_ascii=False) for s in SENSITIVE), f"{len(my)} righe")
+    print("\nTUTTO OK" if all(outcomes) else f"\n{outcomes.count(False)} ERRORI")
+    sys.exit(0 if all(outcomes) else 1)
 
 
 if __name__ == "__main__":

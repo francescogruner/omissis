@@ -288,3 +288,22 @@ class Rilevatore:
             for i, sp in zip(idx, self.modello([testi[i] or " " for i in idx])):
                 out[i] = self._completa(testi[i], sp) if completo else sp
         return out
+
+    # ---- English names of the interface the program uses. The Italian ones stay until the model code is renamed too.
+    off_model = property(lambda self: self.spente_modello)
+    off = property(lambda self: self.spente)
+    threshold = property(lambda self: self.soglia)
+    never = property(lambda self: self.mai)
+    rx_always = property(lambda self: self.rx_sempre)
+
+    def configure_off(self, labels):
+        return self.imposta_spente(labels)
+
+    def configure_lists(self, never=None, always=None):
+        return self.imposta_liste(never, always)
+
+    def many(self, texts, batch=32, complete=False):
+        return self.molti(texts, batch, complete)
+
+
+Detector = Rilevatore

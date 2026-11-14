@@ -1,8 +1,8 @@
 {
  "manifest_version": 3,
- "name": "__MSG_est_nome__",
+ "name": "__MSG_est_name__",
  "version": "0.1.0",
- "description": "__MSG_est_descrizione__",
+ "description": "__MSG_est_description__",
  "default_locale": "en",
  "minimum_chrome_version": "111",
  "permissions": [

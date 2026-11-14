@@ -27,152 +27,152 @@ u32.GetParent.restype = ctypes.c_void_p
 u32.GetParent.argtypes = [ctypes.c_void_p]
 u32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
 u32.GetForegroundWindow.restype = ctypes.c_void_p
-TESTO = "Scrivi a Giulia Ferraresi (giulia.ferraresi@nevatek.example, cell. 347 5551234) per confermare l'appuntamento."
-esiti, saltati = [], []
+TEXT = "Scrivi a Giulia Ferraresi (giulia.ferraresi@nevatek.example, cell. 347 5551234) per confermare l'appuntamento."
+outcomes, skipped = [], []
 
 
-def segna(nome, ok, nota=""):
-    esiti.append(bool(ok))
-    print(("OK    " if ok else "ERRORE ") + nome + (f"   {nota}" if nota else ""))
+def mark(name, ok, note=""):
+    outcomes.append(bool(ok))
+    print(("OK    " if ok else "ERRORE ") + name + (f"   {note}" if note else ""))
 
 
-def salta(nome, motivo):
-    saltati.append(nome)
-    print(f"SALTATO {nome}   ({motivo})")
+def skip(name, reason):
+    skipped.append(name)
+    print(f"SALTATO {name}   ({reason})")
 
 
 sys.stdout.reconfigure(encoding="utf-8")
 
 # ---------------------------------------------------------------- combinazioni
-segna("combinazioni: lette e scritte come sui tasti", clipboard.combinazione("ctrl+alt+m") == (3, ord("M")) and clipboard.combinazione("Ctrl + Alt + Shift + F22") == (7, 0x85)
-      and clipboard.scritta("ctrl+alt+m") == "Ctrl+Alt+M")
-segna("combinazioni: rifiutate quelle senza Ctrl o Alt, vuote o con due lettere", all(clipboard.combinazione(x) is None for x in ("", "m", "shift+m", "ctrl+alt", "ctrl+a+b", "ctrl+è")))
-segna("impostazioni: le scelte dell'utente sopra le predefinite, vuota = spenta",
-      clipboard.scelte({"scorciatoie": {"maschera": "CTRL+ALT+K", "ripristina": ""}}) == {"sostituisci": "ctrl+alt+s", "maschera": "ctrl+alt+k", "ripristina": ""})
+mark("combinazioni: lette e scritte come sui tasti", clipboard.combo("ctrl+alt+m") == (3, ord("M")) and clipboard.combo("Ctrl + Alt + Shift + F22") == (7, 0x85)
+      and clipboard.caption("ctrl+alt+m") == "Ctrl+Alt+M")
+mark("combinazioni: rifiutate quelle senza Ctrl o Alt, vuote o con due lettere", all(clipboard.combo(x) is None for x in ("", "m", "shift+m", "ctrl+alt", "ctrl+a+b", "ctrl+è")))
+mark("impostazioni: le scelte dell'utente sopra le predefinite, vuota = spenta",
+      clipboard.choices({"shortcuts": {"mask": "CTRL+ALT+K", "restore": ""}}) == {"replace": "ctrl+alt+s", "mask": "ctrl+alt+k", "restore": ""})
 
 # ---------------------------------------------------------------- scorciatoie registrate con Windows
-premute = []
-uno = clipboard.Scorciatoie({"sostituisci": lambda: premute.append("sostituisci"), "maschera": lambda: premute.append("maschera"), "ripristina": lambda: premute.append("ripristina")})
-stato = uno.imposta({"sostituisci": "ctrl+alt+shift+f22", "maschera": "ctrl+alt+shift+f21", "ripristina": ""})
-segna("scorciatoie: registrate, quella vuota resta spenta", stato["sostituisci"]["attiva"] and stato["maschera"]["attiva"] and not stato["ripristina"]["attiva"] and not stato["ripristina"]["errore"],
-      str({k: v["attiva"] for k, v in stato.items()}))
-due = clipboard.Scorciatoie({"maschera": lambda: None})
-occupata = due.imposta({"maschera": "ctrl+alt+shift+f22"})
-segna("scorciatoie: una combinazione già presa viene dichiarata occupata", not occupata["maschera"]["attiva"] and occupata["maschera"]["errore"] == "occupata")
-segna("scorciatoie: una combinazione non valida viene dichiarata tale", due.imposta({"maschera": "ctrl+alt"})["maschera"]["errore"] == "non_valida")
-due.ferma()
-clipboard.premi(clipboard.VK_CONTROL, clipboard.VK_MENU, clipboard.VK_SHIFT, 0x85)   # Ctrl+Alt+Maiusc+F22: non la usa nessun programma
-fine = time.time() + 3
-while not premute and time.time() < fine:
+pressed = []
+one = clipboard.Shortcuts({"replace": lambda: pressed.append("replace"), "mask": lambda: pressed.append("mask"), "restore": lambda: pressed.append("restore")})
+status = one.configure({"replace": "ctrl+alt+shift+f22", "mask": "ctrl+alt+shift+f21", "restore": ""})
+mark("scorciatoie: registrate, quella vuota resta spenta", status["replace"]["active"] and status["mask"]["active"] and not status["restore"]["active"] and not status["restore"]["error"],
+      str({k: v["active"] for k, v in status.items()}))
+two = clipboard.Shortcuts({"mask": lambda: None})
+busy = two.configure({"mask": "ctrl+alt+shift+f22"})
+mark("scorciatoie: una combinazione già presa viene dichiarata occupata", not busy["mask"]["active"] and busy["mask"]["error"] == "busy")
+mark("scorciatoie: una combinazione non valida viene dichiarata tale", two.configure({"mask": "ctrl+alt"})["mask"]["error"] == "not_valid")
+two.stop()
+clipboard.press(clipboard.VK_CONTROL, clipboard.VK_MENU, clipboard.VK_SHIFT, 0x85)   # Ctrl+Alt+Maiusc+F22: non la usa nessun programma
+end = time.time() + 3
+while not pressed and time.time() < end:
     time.sleep(0.05)
-if premute:
-    segna("scorciatoie: premuta la combinazione, parte la sua azione (e solo quella)", premute == ["sostituisci"], str(premute))
+if pressed:
+    mark("scorciatoie: premuta la combinazione, parte la sua azione (e solo quella)", pressed == ["replace"], str(pressed))
 else:
-    salta("scorciatoie: premuta la combinazione, parte la sua azione", "Windows non ha consegnato i tasti: schermo bloccato o sessione senza desktop")
-stato = uno.imposta({"sostituisci": "", "maschera": "ctrl+alt+shift+f22", "ripristina": ""})
-segna("scorciatoie: cambiate senza riavviare", stato["maschera"]["attiva"] and not stato["sostituisci"]["attiva"])
+    skip("scorciatoie: premuta la combinazione, parte la sua azione", "Windows non ha consegnato i tasti: schermo bloccato o sessione senza desktop")
+status = one.configure({"replace": "", "mask": "ctrl+alt+shift+f22", "restore": ""})
+mark("scorciatoie: cambiate senza riavviare", status["mask"]["active"] and not status["replace"]["active"])
 # una lettera già presa da un altro programma (qui: da un'altra copia delle scorciatoie) viene sostituita con una libera
-libera = next((x for x in "qwpoly" if uno.imposta({"sostituisci": f"ctrl+alt+{x}", "maschera": "", "ripristina": ""})["sostituisci"]["attiva"]), None)
-if libera is None:
-    salta("scorciatoie: lettera occupata sostituita da una libera", "nessuna lettera di prova libera su questo PC")
+free = next((x for x in "qwpoly" if one.configure({"replace": f"ctrl+alt+{x}", "mask": "", "restore": ""})["replace"]["active"]), None)
+if free is None:
+    skip("scorciatoie: lettera occupata sostituita da una libera", "nessuna lettera di prova libera su questo PC")
 else:
-    tre = clipboard.Scorciatoie({"sostituisci": lambda: None, "maschera": lambda: None, "ripristina": lambda: None})
-    in_uso, cambiate = clipboard.sistema(tre, {"sostituisci": "", "maschera": f"ctrl+alt+{libera}", "ripristina": "ctrl+alt+shift+f20"})
-    segna("scorciatoie: lettera occupata sostituita da una libera, le altre restano", list(cambiate) == ["maschera"] and cambiate["maschera"][0] == f"ctrl+alt+{libera}"
-          and in_uso["maschera"] != f"ctrl+alt+{libera}" and tre.stato["maschera"]["attiva"] and in_uso["ripristina"] == "ctrl+alt+shift+f20" and in_uso["sostituisci"] == "",
-          f"{clipboard.scritta(cambiate.get('maschera', ('', ''))[0])} → {clipboard.scritta(in_uso['maschera'])}")
-    tre.ferma()
-uno.ferma()
+    three = clipboard.Shortcuts({"replace": lambda: None, "mask": lambda: None, "restore": lambda: None})
+    in_use, changed = clipboard.system(three, {"replace": "", "mask": f"ctrl+alt+{free}", "restore": "ctrl+alt+shift+f20"})
+    mark("scorciatoie: lettera occupata sostituita da una libera, le altre restano", list(changed) == ["mask"] and changed["mask"][0] == f"ctrl+alt+{free}"
+          and in_use["mask"] != f"ctrl+alt+{free}" and three.status["mask"]["active"] and in_use["restore"] == "ctrl+alt+shift+f20" and in_use["replace"] == "",
+          f"{clipboard.caption(changed.get('mask', ('', ''))[0])} → {clipboard.caption(in_use['mask'])}")
+    three.stop()
+one.stop()
 
 # ---------------------------------------------------------------- testo selezionato, sul posto
-prima = clipboard.leggi()
-if prima is None and ctypes.windll.user32.CountClipboardFormats() > 0:
-    salta("selezione sul posto", "negli appunti c'è qualcosa che non è testo: non lo cancello")
+before = clipboard.read()
+if before is None and ctypes.windll.user32.CountClipboardFormats() > 0:
+    skip("selezione sul posto", "negli appunti c'è qualcosa che non è testo: non lo cancello")
 else:
     try:
         import tkinter as tk
-        radice = tk.Tk()
-        radice.title("Omissis: prova della selezione")
-        radice.attributes("-topmost", True)
-        casella = tk.Text(radice, width=90, height=5)
-        casella.pack()
-        casella.insert("1.0", TESTO)
-        radice.update()
-        finestra = u32.GetParent(radice.winfo_id())
-        clipboard.premi(clipboard.VK_MENU)   # un tasto premuto da questo processo: Windows gli concede il primo piano
-        u32.SetForegroundWindow(finestra)
-        radice.focus_force()
-        casella.focus_set()
-        casella.tag_add("sel", "1.0", "end-1c")
+        root = tk.Tk()
+        root.title("Omissis: prova della selezione")
+        root.attributes("-topmost", True)
+        box = tk.Text(root, width=90, height=5)
+        box.pack()
+        box.insert("1.0", TEXT)
+        root.update()
+        win = u32.GetParent(root.winfo_id())
+        clipboard.press(clipboard.VK_MENU)   # un tasto premuto da questo processo: Windows gli concede il primo piano
+        u32.SetForegroundWindow(win)
+        root.focus_force()
+        box.focus_set()
+        box.tag_add("sel", "1.0", "end-1c")
         for _ in range(20):
-            radice.update()
+            root.update()
             time.sleep(0.05)
-        if u32.GetForegroundWindow() != finestra:
-            salta("selezione sul posto", "la finestra di prova non ha ottenuto il primo piano: nessun tasto inviato")
+        if u32.GetForegroundWindow() != win:
+            skip("selezione sul posto", "la finestra di prova non ha ottenuto il primo piano: nessun tasto inviato")
         else:
-            esito = {}
-            filo = threading.Thread(target=lambda: esito.update(m=clipboard.sostituisci(documents.motore, solo_finestra=finestra)))
-            filo.start()
-            while filo.is_alive():
-                radice.update()
+            outcome = {}
+            thread = threading.Thread(target=lambda: outcome.update(m=clipboard.replace(documents.engine, only_window=win)))
+            thread.start()
+            while thread.is_alive():
+                root.update()
                 time.sleep(0.02)
             for _ in range(20):
-                radice.update()
+                root.update()
                 time.sleep(0.03)
-            dopo = casella.get("1.0", "end-1c")
-            segna("selezione sul posto: il testo selezionato è stato sostituito dalla versione mascherata",
-                  "[PERSONA_" in dopo and "[EMAIL_" in dopo and "Ferraresi" not in dopo and "347 5551234" not in dopo and dopo.startswith("Scrivi a "), esito.get("m", ""))
-            segna("selezione sul posto: negli appunti resta il testo mascherato, non l'originale", "Ferraresi" not in (clipboard.leggi() or "Ferraresi"))
-            casella.tag_remove("sel", "1.0", "end")
-            casella.delete("1.0", "end")
-            casella.insert("1.0", "Buongiorno, confermo la riunione di domani alle dieci.")
-            casella.tag_add("sel", "1.0", "end-1c")
-            radice.update()
-            filo = threading.Thread(target=lambda: esito.update(m=clipboard.sostituisci(documents.motore, solo_finestra=finestra)))
-            filo.start()
-            while filo.is_alive():
-                radice.update()
+            after = box.get("1.0", "end-1c")
+            mark("selezione sul posto: il testo selezionato è stato sostituito dalla versione mascherata",
+                  "[PERSONA_" in after and "[EMAIL_" in after and "Ferraresi" not in after and "347 5551234" not in after and after.startswith("Scrivi a "), outcome.get("m", ""))
+            mark("selezione sul posto: negli appunti resta il testo mascherato, non l'originale", "Ferraresi" not in (clipboard.read() or "Ferraresi"))
+            box.tag_remove("sel", "1.0", "end")
+            box.delete("1.0", "end")
+            box.insert("1.0", "Buongiorno, confermo la riunione di domani alle dieci.")
+            box.tag_add("sel", "1.0", "end-1c")
+            root.update()
+            thread = threading.Thread(target=lambda: outcome.update(m=clipboard.replace(documents.engine, only_window=win)))
+            thread.start()
+            while thread.is_alive():
+                root.update()
                 time.sleep(0.02)
-            segna("selezione sul posto: senza dati sensibili il testo resta com'era", casella.get("1.0", "end-1c") == "Buongiorno, confermo la riunione di domani alle dieci.", esito.get("m", ""))
-        segna("selezione sul posto: in un'altra finestra non parte nulla",
-              clipboard.sostituisci(documents.motore, solo_finestra=1) in (clipboard.i18n.t("appunti.sul_posto.finestra_cambiata"), clipboard.i18n.t("appunti.sul_posto.terminale"),
-                                                                             clipboard.i18n.t("appunti.sul_posto.tasti_premuti")))
-        radice.destroy()
+            mark("selezione sul posto: senza dati sensibili il testo resta com'era", box.get("1.0", "end-1c") == "Buongiorno, confermo la riunione di domani alle dieci.", outcome.get("m", ""))
+        mark("selezione sul posto: in un'altra finestra non parte nulla",
+              clipboard.replace(documents.engine, only_window=1) in (clipboard.i18n.t("clipboard.in_place.window_changed"), clipboard.i18n.t("clipboard.in_place.terminal"),
+                                                                             clipboard.i18n.t("clipboard.in_place.keystrokes_pressed")))
+        root.destroy()
     finally:
-        if prima is not None:
-            clipboard.scrivi(prima)
+        if before is not None:
+            clipboard.write(before)
 
 # ---------------------------------------------------------------- finestra «Seleziona cartella»
-def giro(tasto, titolo, cartella):
-    esito = {}
-    filo = threading.Thread(target=lambda: esito.update(r=folders.scegli(titolo, cartella, davanti=False)))
-    filo.start()
-    finestra = None
+def lap(keystroke, title, folder):
+    outcome = {}
+    thread = threading.Thread(target=lambda: outcome.update(r=folders.choose(title, folder, front=False)))
+    thread.start()
+    win = None
     for _ in range(100):
-        finestra = u32.FindWindowW(None, titolo)
-        if finestra:
+        win = u32.FindWindowW(None, title)
+        if win:
             break
         time.sleep(0.1)
-    if finestra:
+    if win:
         time.sleep(0.8)
-        segna_doppia = folders.scegli("x", davanti=False)   # mentre una è aperta, una seconda non si apre
-        u32.PostMessageW(finestra, 0x0111, tasto, 0)        # il pulsante di conferma (1) o Annulla (2)
+        mark_double = folders.choose("x", front=False)   # mentre una è aperta, una seconda non si apre
+        u32.PostMessageW(win, 0x0111, keystroke, 0)        # il pulsante di conferma (1) o Annulla (2)
     else:
-        segna_doppia = "non provata"
-    filo.join(15)
-    return finestra, esito.get("r"), segna_doppia, filo.is_alive()
+        mark_double = "non provata"
+    thread.join(15)
+    return win, outcome.get("r"), mark_double, thread.is_alive()
 
 
-with tempfile.TemporaryDirectory() as cartella:
-    finestra, scelta, doppia, viva = giro(1, "Omissis: prova della cartella (conferma)", cartella)
-    if not finestra:
-        salta("cartella: finestra di Windows", "la finestra non si è aperta: sessione senza desktop")
+with tempfile.TemporaryDirectory() as folder:
+    win, choice, double, alive = lap(1, "Omissis: prova della cartella (conferma)", folder)
+    if not win:
+        skip("cartella: finestra di Windows", "la finestra non si è aperta: sessione senza desktop")
     else:
-        segna("cartella: la finestra di Windows restituisce la cartella scelta", bool(scelta) and os.path.samefile(scelta, cartella) and not viva, scelta or "")
-        segna("cartella: una finestra per volta", doppia is None)
-        finestra, scelta, _, viva = giro(2, "Omissis: prova della cartella (annulla)", cartella)
-        segna("cartella: annullando non restituisce nulla", scelta == "" and not viva)
-    segna("cartella: si aprono solo cartelle che esistono", folders.apri(os.path.join(cartella, "non-esiste")) is False)
+        mark("cartella: la finestra di Windows restituisce la cartella scelta", bool(choice) and os.path.samefile(choice, folder) and not alive, choice or "")
+        mark("cartella: una finestra per volta", double is None)
+        win, choice, _, alive = lap(2, "Omissis: prova della cartella (annulla)", folder)
+        mark("cartella: annullando non restituisce nulla", choice == "" and not alive)
+    mark("cartella: si aprono solo cartelle che esistono", folders.open_up(os.path.join(folder, "non-esiste")) is False)
 
-print(f"\n{sum(esiti)}/{len(esiti)} controlli superati" + (f" · {len(saltati)} saltati" if saltati else ""))
-sys.exit(0 if all(esiti) else 1)
+print(f"\n{sum(outcomes)}/{len(outcomes)} controlli superati" + (f" · {len(skipped)} saltati" if skipped else ""))
+sys.exit(0 if all(outcomes) else 1)

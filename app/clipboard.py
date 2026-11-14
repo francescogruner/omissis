@@ -18,14 +18,14 @@ from ctypes import wintypes
 import i18n
 import restore as R
 
-MAX_TESTO = 200_000     # oltre, il testo non viene elaborato (mai tagliato in silenzio)
-PREDEFINITE = {"sostituisci": "ctrl+alt+s", "maschera": "ctrl+alt+m", "ripristina": "ctrl+alt+r"}
+MAX_TEXT = 200_000     # oltre, il testo non viene elaborato (mai tagliato in silenzio)
+DEFAULTS = {"replace": "ctrl+alt+s", "mask": "ctrl+alt+m", "restore": "ctrl+alt+r"}
 CF_UNICODETEXT, GMEM_MOVEABLE = 13, 0x0002
 MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_NOREPEAT = 0x0001, 0x0002, 0x0004, 0x4000
 VK_SHIFT, VK_CONTROL, VK_MENU, VK_LWIN, VK_RWIN = 0x10, 0x11, 0x12, 0x5B, 0x5C
 WM_HOTKEY, WM_APP, WM_QUIT = 0x0312, 0x8000, 0x0012
 # finestre in cui Ctrl+C non copia ma interrompe il programma in corso: li' la selezione non si tocca
-TERMINALI = {"ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS", "mintty", "PuTTY", "VirtualConsoleClass", "Alacritty",
+TERMINALS = {"ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS", "mintty", "PuTTY", "VirtualConsoleClass", "Alacritty",
              "org.wezfurlong.wezterm", "kitty", "TMobaXtermForm"}
 
 u32, k32 = ctypes.WinDLL("user32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
@@ -44,7 +44,7 @@ k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
 
 # ------------------------------------------------------------------ appunti
 
-def _apri():
+def _open_up():
     for _ in range(10):   # un altro programma puo' averli aperti in questo istante
         if u32.OpenClipboard(None):
             return True
@@ -52,8 +52,8 @@ def _apri():
     return False
 
 
-def leggi():
-    if not _apri():
+def read():
+    if not _open_up():
         return None
     try:
         h = u32.GetClipboardData(CF_UNICODETEXT)
@@ -68,50 +68,50 @@ def leggi():
         u32.CloseClipboard()
 
 
-def scrivi(testo):
-    dati = ctypes.create_unicode_buffer(testo)
-    if not _apri():
+def write(text):
+    data = ctypes.create_unicode_buffer(text)
+    if not _open_up():
         return False
     try:
         u32.EmptyClipboard()
-        h = k32.GlobalAlloc(GMEM_MOVEABLE, ctypes.sizeof(dati))
+        h = k32.GlobalAlloc(GMEM_MOVEABLE, ctypes.sizeof(data))
         p = k32.GlobalLock(h)
-        ctypes.memmove(p, dati, ctypes.sizeof(dati))
+        ctypes.memmove(p, data, ctypes.sizeof(data))
         k32.GlobalUnlock(h)
         return bool(u32.SetClipboardData(CF_UNICODETEXT, h))
     finally:
         u32.CloseClipboard()
 
 
-def trasforma(azione, motore):
+def transform(action, engine):
     """Maschera o ripristina il testo negli appunti. motore(percorso, dati) chiama il motore.
     Restituisce il messaggio da mostrare all'utente."""
-    testo = leggi()
-    if not testo or not testo.strip():
-        return i18n.t("appunti.vuoti")
-    if len(testo) > MAX_TESTO:
-        return i18n.t("appunti.troppo_lungo", n=MAX_TESTO)
+    text = read()
+    if not text or not text.strip():
+        return i18n.t("clipboard.empty")
+    if len(text) > MAX_TEXT:
+        return i18n.t("clipboard.too_long", n=MAX_TEXT)
     try:
-        if azione == "maschera":
-            r = motore("/mask", {"testi": [testo]})
-            n = sum(r["conteggi"].values())
-            if n and not scrivi(r["testi"][0]):
-                return i18n.t("appunti.non_scrivibili")
-            return i18n.t("appunti.mascherati", n=n) if n else i18n.t("appunti.nessun_dato")
-        trovati = sorted({m.group() for m in R.RX_SEGNAPOSTO.finditer(testo)})
-        if not trovati:
-            return i18n.t("appunti.senza_segnaposto")
-        mappa = motore("/values", {"segnaposto": trovati})["mappa"]
-        if mappa and not scrivi(R.ripristina(testo, mappa.get)):
-            return i18n.t("appunti.non_scrivibili")
-        return i18n.t("appunti.ripristinati", n=len(mappa)) + (" " + i18n.t("appunti.non_riconosciuti", n=len(trovati) - len(mappa)) if len(mappa) < len(trovati) else "")
+        if action == "mask":
+            r = engine("/mask", {"texts": [text]})
+            n = sum(r["counts"].values())
+            if n and not write(r["texts"][0]):
+                return i18n.t("clipboard.not_writable")
+            return i18n.t("clipboard.masked", n=n) if n else i18n.t("clipboard.no_data")
+        found_items = sorted({m.group() for m in R.RX_PLACEHOLDER.finditer(text)})
+        if not found_items:
+            return i18n.t("clipboard.without_placeholder")
+        mapping = engine("/values", {"placeholder": found_items})["mapping"]
+        if mapping and not write(R.restore(text, mapping.get)):
+            return i18n.t("clipboard.not_writable")
+        return i18n.t("clipboard.restored", n=len(mapping)) + (" " + i18n.t("clipboard.not_recognized", n=len(found_items) - len(mapping)) if len(mapping) < len(found_items) else "")
     except Exception:   # noqa: BLE001
-        return i18n.t("appunti.protezione_ferma")
+        return i18n.t("clipboard.protection_stopped")
 
 
 # ------------------------------------------------------------------ il testo selezionato, sul posto
 
-class _TASTO(ctypes.Structure):
+class _KEYSTROKE(ctypes.Structure):
     _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD), ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
                 ("dwExtraInfo", ctypes.c_size_t)]
 
@@ -121,215 +121,215 @@ class _MOUSE(ctypes.Structure):   # serve solo a dare alla struttura la dimensio
                 ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
 
 
-class _UNIONE(ctypes.Union):
-    _fields_ = [("ki", _TASTO), ("mi", _MOUSE)]
+class _UNION(ctypes.Union):
+    _fields_ = [("ki", _KEYSTROKE), ("mi", _MOUSE)]
 
 
-class _INGRESSO(ctypes.Structure):
-    _fields_ = [("type", wintypes.DWORD), ("u", _UNIONE)]
+class _INBOUND(ctypes.Structure):
+    _fields_ = [("type", wintypes.DWORD), ("u", _UNION)]
 
 
-def premi(*tasti):
+def press(*keystrokes):
     """Preme insieme i tasti dati (codici virtuali) e li rilascia: premi(VK_CONTROL, ord("C"))."""
-    giu = [_INGRESSO(1, _UNIONE(ki=_TASTO(t, 0, 0, 0, 0))) for t in tasti]
-    su = [_INGRESSO(1, _UNIONE(ki=_TASTO(t, 0, 2, 0, 0))) for t in reversed(tasti)]
-    serie = (_INGRESSO * (len(giu) + len(su)))(*giu, *su)
-    return u32.SendInput(len(serie), serie, ctypes.sizeof(_INGRESSO)) == len(serie)
+    down = [_INBOUND(1, _UNION(ki=_KEYSTROKE(t, 0, 0, 0, 0))) for t in keystrokes]
+    su = [_INBOUND(1, _UNION(ki=_KEYSTROKE(t, 0, 2, 0, 0))) for t in reversed(keystrokes)]
+    series = (_INBOUND * (len(down) + len(su)))(*down, *su)
+    return u32.SendInput(len(series), series, ctypes.sizeof(_INBOUND)) == len(series)
 
 
-def in_primo_piano():
+def in_foreground():
     """(finestra, classe) della finestra che riceve i tasti."""
     h = u32.GetForegroundWindow()
-    classe = ctypes.create_unicode_buffer(200)
-    u32.GetClassNameW(h, classe, 200)
-    return h, classe.value
+    cls = ctypes.create_unicode_buffer(200)
+    u32.GetClassNameW(h, cls, 200)
+    return h, cls.value
 
 
-def _tasti_rilasciati(attesa=2.0):
+def _keystrokes_released(timeout=2.0):
     """Aspetta che Ctrl, Alt, Maiusc e Windows siano rilasciati: ancora premuti cambierebbero Ctrl+C in un'altra combinazione."""
-    fine = time.time() + attesa
-    while time.time() < fine:
+    end = time.time() + timeout
+    while time.time() < end:
         if not any(u32.GetAsyncKeyState(t) & 0x8000 for t in (VK_CONTROL, VK_MENU, VK_SHIFT, VK_LWIN, VK_RWIN)):
             return True
         time.sleep(0.02)
     return False
 
 
-def sostituisci(motore, solo_finestra=None):
+def replace(engine, only_window=None):
     """Copia il testo selezionato nel programma in primo piano, lo maschera e lo incolla al posto dell'originale.
     solo_finestra: se dato, i tasti partono solo se in primo piano c'e' quella finestra (per le prove).
     Restituisce il messaggio da mostrare all'utente. Se qualcosa non va la selezione resta com'era."""
-    finestra, classe = in_primo_piano()
-    if classe in TERMINALI:
-        return i18n.t("appunti.sul_posto.terminale")
-    if not _tasti_rilasciati():
-        return i18n.t("appunti.sul_posto.tasti_premuti")
+    win, cls = in_foreground()
+    if cls in TERMINALS:
+        return i18n.t("clipboard.in_place.terminal")
+    if not _keystrokes_released():
+        return i18n.t("clipboard.in_place.keystrokes_pressed")
 
-    def stessa():
-        return u32.GetForegroundWindow() == finestra and (solo_finestra is None or finestra == solo_finestra)
-    if not stessa():
-        return i18n.t("appunti.sul_posto.finestra_cambiata")
-    prima = u32.GetClipboardSequenceNumber()
-    premi(VK_CONTROL, ord("C"))
-    fine = time.time() + 1.0
-    while u32.GetClipboardSequenceNumber() == prima and time.time() < fine:
+    def same():
+        return u32.GetForegroundWindow() == win and (only_window is None or win == only_window)
+    if not same():
+        return i18n.t("clipboard.in_place.window_changed")
+    before = u32.GetClipboardSequenceNumber()
+    press(VK_CONTROL, ord("C"))
+    end = time.time() + 1.0
+    while u32.GetClipboardSequenceNumber() == before and time.time() < end:
         time.sleep(0.02)
-    if u32.GetClipboardSequenceNumber() == prima:
-        return i18n.t("appunti.sul_posto.niente_selezionato")
+    if u32.GetClipboardSequenceNumber() == before:
+        return i18n.t("clipboard.in_place.nothing_selected")
     time.sleep(0.05)   # chi copia scrive piu' formati uno dopo l'altro
-    testo = leggi()
-    if not testo or not testo.strip():
-        return i18n.t("appunti.sul_posto.niente_selezionato")
-    if len(testo) > MAX_TESTO:
-        return i18n.t("appunti.troppo_lungo", n=MAX_TESTO)
+    text = read()
+    if not text or not text.strip():
+        return i18n.t("clipboard.in_place.nothing_selected")
+    if len(text) > MAX_TEXT:
+        return i18n.t("clipboard.too_long", n=MAX_TEXT)
     try:
-        r = motore("/mask", {"testi": [testo]})
+        r = engine("/mask", {"texts": [text]})
     except Exception:   # noqa: BLE001
-        return i18n.t("appunti.sul_posto.protezione_ferma")
-    n = sum(r["conteggi"].values())
+        return i18n.t("clipboard.in_place.protection_stopped")
+    n = sum(r["counts"].values())
     if not n:
-        return i18n.t("appunti.sul_posto.nessun_dato")
-    if not scrivi(r["testi"][0]):
-        return i18n.t("appunti.non_scrivibili")
-    if not stessa():   # nel frattempo si e' passati a un'altra finestra: li' non si incolla nulla
-        return i18n.t("appunti.sul_posto.solo_appunti", n=n)
+        return i18n.t("clipboard.in_place.no_data")
+    if not write(r["texts"][0]):
+        return i18n.t("clipboard.not_writable")
+    if not same():   # nel frattempo si e' passati a un'altra finestra: li' non si incolla nulla
+        return i18n.t("clipboard.in_place.only_clipboard", n=n)
     time.sleep(0.05)
-    premi(VK_CONTROL, ord("V"))
-    return i18n.t("appunti.sul_posto.fatto", n=n)
+    press(VK_CONTROL, ord("V"))
+    return i18n.t("clipboard.in_place.done", n=n)
 
 
 # ------------------------------------------------------------------ scorciatoie
 
-def combinazione(testo):
+def combo(text):
     """«ctrl+alt+m» -> (modificatori, codice del tasto); None se vuota o non valida. Serve almeno Ctrl o Alt."""
-    mod, tasto = 0, None
-    for p in (x.strip().lower() for x in str(testo or "").split("+")):
+    mod, keystroke = 0, None
+    for p in (x.strip().lower() for x in str(text or "").split("+")):
         if p in ("ctrl", "control"):
             mod |= MOD_CONTROL
         elif p == "alt":
             mod |= MOD_ALT
-        elif p in ("shift", "maiusc"):
+        elif p in ("shift", "upper"):
             mod |= MOD_SHIFT
-        elif len(p) == 1 and p.isascii() and p.isalnum() and tasto is None:
-            tasto = ord(p.upper())
-        elif re.fullmatch(r"f([1-9]|1\d|2[0-4])", p) and tasto is None:
-            tasto = 0x6F + int(p[1:])
+        elif len(p) == 1 and p.isascii() and p.isalnum() and keystroke is None:
+            keystroke = ord(p.upper())
+        elif re.fullmatch(r"f([1-9]|1\d|2[0-4])", p) and keystroke is None:
+            keystroke = 0x6F + int(p[1:])
         else:
             return None
-    return (mod, tasto) if tasto and mod & (MOD_CONTROL | MOD_ALT) else None
+    return (mod, keystroke) if keystroke and mod & (MOD_CONTROL | MOD_ALT) else None
 
 
-def scritta(testo):
+def caption(text):
     """«ctrl+alt+m» -> «Ctrl+Alt+M», come si scrive sui tasti."""
-    return "+".join(p.strip().capitalize() if len(p.strip()) > 1 else p.strip().upper() for p in str(testo or "").split("+") if p.strip())
+    return "+".join(p.strip().capitalize() if len(p.strip()) > 1 else p.strip().upper() for p in str(text or "").split("+") if p.strip())
 
 
-def scelte(imp):
+def choices(cfg):
     """Le combinazioni in uso: quelle delle impostazioni sopra le predefinite. Vuota = scorciatoia spenta."""
-    date = imp.get("scorciatoie") if isinstance(imp.get("scorciatoie"), dict) else {}
-    return {nome: str(date.get(nome, predefinita)).strip().lower()[:40] for nome, predefinita in PREDEFINITE.items()}
+    date = cfg.get("shortcuts") if isinstance(cfg.get("shortcuts"), dict) else {}
+    return {name: str(date.get(name, default)).strip().lower()[:40] for name, default in DEFAULTS.items()}
 
 
-class Scorciatoie:
+class Shortcuts:
     """Tiene registrate le scorciatoie e chiama l'azione di ciascuna. azioni: {nome: funzione senza argomenti}."""
 
-    def __init__(self, azioni):
-        self.azioni = azioni
-        self.volute = {}
-        self.stato = {}        # nome -> {"combinazione": "ctrl+alt+m", "attiva": bool, "errore": "" | "occupata" | "non_valida"}
-        self.filo = None       # identificativo del thread con il ciclo dei messaggi
-        self.pronto, self.registrate = threading.Event(), threading.Event()
-        self.occupato = threading.Lock()
+    def __init__(self, actions):
+        self.actions = actions
+        self.wanted = {}
+        self.status = {}        # nome -> {"combinazione": "ctrl+alt+m", "attiva": bool, "errore": "" | "occupata" | "non_valida"}
+        self.thread = None       # identificativo del thread con il ciclo dei messaggi
+        self.ready_now, self.recorded = threading.Event(), threading.Event()
+        self.busy = threading.Lock()
 
-    def imposta(self, volute):
+    def configure(self, wanted):
         """Registra queste combinazioni al posto di quelle di prima e restituisce lo stato."""
-        self.volute = dict(volute)
-        self.registrate.clear()
-        if self.filo is None:
-            threading.Thread(target=self._ciclo, daemon=True).start()
-            self.pronto.wait(5)
+        self.wanted = dict(wanted)
+        self.recorded.clear()
+        if self.thread is None:
+            threading.Thread(target=self._loop, daemon=True).start()
+            self.ready_now.wait(5)
         else:
-            u32.PostThreadMessageW(self.filo, WM_APP, 0, 0)
-        self.registrate.wait(5)
-        return self.stato
+            u32.PostThreadMessageW(self.thread, WM_APP, 0, 0)
+        self.recorded.wait(5)
+        return self.status
 
-    def ferma(self):
-        if self.filo is not None:
-            u32.PostThreadMessageW(self.filo, WM_QUIT, 0, 0)
+    def stop(self):
+        if self.thread is not None:
+            u32.PostThreadMessageW(self.thread, WM_QUIT, 0, 0)
 
-    def _registra(self, nomi):
-        for i in range(len(nomi)):
+    def _record(self, names):
+        for i in range(len(names)):
             u32.UnregisterHotKey(None, i + 1)
-        stato = {}
-        for i, nome in enumerate(nomi):
-            scelta = self.volute.get(nome, "")
-            voce = {"combinazione": scelta, "attiva": False, "errore": ""}
-            if scelta:
-                c = combinazione(scelta)
+        status = {}
+        for i, name in enumerate(names):
+            choice = self.wanted.get(name, "")
+            entry = {"combo": choice, "active": False, "error": ""}
+            if choice:
+                c = combo(choice)
                 if c is None:
-                    voce["errore"] = "non_valida"
-                elif any(combinazione(v["combinazione"]) == c for v in stato.values() if v["attiva"]):
-                    voce["errore"] = "occupata"
+                    entry["error"] = "not_valid"
+                elif any(combo(v["combo"]) == c for v in status.values() if v["active"]):
+                    entry["error"] = "busy"
                 elif u32.RegisterHotKey(None, i + 1, c[0] | MOD_NOREPEAT, c[1]):
-                    voce["attiva"] = True
+                    entry["active"] = True
                 else:
-                    voce["errore"] = "occupata"   # un altro programma (o un'altra copia di Omissis) l'ha gia' presa
-            stato[nome] = voce
-        self.stato = stato
-        self.registrate.set()
+                    entry["error"] = "busy"   # un altro programma (o un'altra copia di Omissis) l'ha gia' presa
+            status[name] = entry
+        self.status = status
+        self.recorded.set()
 
-    def _esegui(self, nome):
-        if not self.occupato.acquire(blocking=False):   # una per volta: una scorciatoia premuta due volte non si accavalla
+    def _run(self, name):
+        if not self.busy.acquire(blocking=False):   # una per volta: una scorciatoia premuta due volte non si accavalla
             return
         try:
-            self.azioni[nome]()
+            self.actions[name]()
         except Exception:   # noqa: BLE001  (un errore in un'azione non deve spegnere le scorciatoie)
             pass
         finally:
-            self.occupato.release()
+            self.busy.release()
 
-    def _ciclo(self):
-        nomi, msg = list(self.azioni), wintypes.MSG()
+    def _loop(self):
+        names, msg = list(self.actions), wintypes.MSG()
         u32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)   # crea la coda dei messaggi di questo thread
-        self.filo = k32.GetCurrentThreadId()
-        self.pronto.set()
-        self._registra(nomi)
+        self.thread = k32.GetCurrentThreadId()
+        self.ready_now.set()
+        self._record(names)
         while u32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
-            if msg.message == WM_HOTKEY and 1 <= msg.wParam <= len(nomi):
-                threading.Thread(target=self._esegui, args=(nomi[msg.wParam - 1],), daemon=True).start()
+            if msg.message == WM_HOTKEY and 1 <= msg.wParam <= len(names):
+                threading.Thread(target=self._run, args=(names[msg.wParam - 1],), daemon=True).start()
             elif msg.message == WM_APP:
-                self._registra(nomi)
-        for i in range(len(nomi)):
+                self._record(names)
+        for i in range(len(names)):
             u32.UnregisterHotKey(None, i + 1)
-        self.filo = None
+        self.thread = None
 
 
-def sistema(s, volute):
+def system(s, wanted):
     """Se una combinazione Ctrl+Alt+lettera e' gia' presa da un altro programma (succede: le sovrapposizioni delle schede
     grafiche ne usano diverse) ne registra un'altra libera. Restituisce (combinazioni in uso, {nome: (vecchia, nuova)})."""
-    volute, cambiate = dict(volute), {}
-    for _ in range(len(volute) + 1):
-        stato = s.imposta(volute)
-        prese = [n for n, v in stato.items() if v["errore"] == "occupata" and re.fullmatch(r"ctrl\+alt\+[a-z]", v["combinazione"])]
-        if not prese:
+    wanted, changed = dict(wanted), {}
+    for _ in range(len(wanted) + 1):
+        status = s.configure(wanted)
+        taken = [n for n, v in status.items() if v["error"] == "busy" and re.fullmatch(r"ctrl\+alt\+[a-z]", v["combo"])]
+        if not taken:
             break
-        nome = prese[0]
-        for lettera in ALTERNATIVE.get(nome, "") + "kjhxzdtyugbvqwopilfacn":   # mai la E: con AltGr scrive il simbolo dell'euro
-            nuova = f"ctrl+alt+{lettera}"
-            if nuova not in volute.values() and s.imposta({**volute, nome: nuova})[nome]["attiva"]:
-                cambiate[nome] = (cambiate.get(nome, (volute[nome],))[0], nuova)
-                volute[nome] = nuova
+        name = taken[0]
+        for letter in ALTERNATIVE.get(name, "") + "kjhxzdtyugbvqwopilfacn":   # mai la E: con AltGr scrive il simbolo dell'euro
+            new_one = f"ctrl+alt+{letter}"
+            if new_one not in wanted.values() and s.configure({**wanted, name: new_one})[name]["active"]:
+                changed[name] = (changed.get(name, (wanted[name],))[0], new_one)
+                wanted[name] = new_one
                 break
         else:
             break
-    return volute, cambiate
+    return wanted, changed
 
 
-ALTERNATIVE = {"sostituisci": "xzd", "maschera": "kjh", "ripristina": "tyu"}   # le lettere vicine, provate per prime
+ALTERNATIVE = {"replace": "xzd", "mask": "kjh", "restore": "tyu"}   # le lettere vicine, provate per prime
 
 
-def scorciatoie(motore, avvisa):
+def shortcuts(engine, notify):
     """Le scorciatoie sugli appunti e sul testo selezionato, ancora da registrare. avvisa(messaggio) mostra l'esito."""
-    return Scorciatoie({"sostituisci": lambda: avvisa(sostituisci(motore)),
-                        "maschera": lambda: avvisa(trasforma("maschera", motore)),
-                        "ripristina": lambda: avvisa(trasforma("ripristina", motore))})
+    return Shortcuts({"replace": lambda: notify(replace(engine)),
+                        "mask": lambda: notify(transform("mask", engine)),
+                        "restore": lambda: notify(transform("restore", engine))})

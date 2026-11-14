@@ -20,58 +20,58 @@ import catalog
 import settings
 import paths
 
-QUI = Path(__file__).resolve().parent
-PY_MODELLO = paths.python_modello()
-PORTA_MOTORE = paths.PORTA_MOTORE
+HERE = Path(__file__).resolve().parent
+PY_MODEL = paths.python_model()
+ENGINE_PORT = paths.ENGINE_PORT
 
 
-def stato():
-    token = (paths.DATI / "token.txt").read_text(encoding="utf-8").strip()
-    rich = urllib.request.Request(f"http://127.0.0.1:{PORTA_MOTORE}/status", headers={"X-Token": token})
-    with urllib.request.urlopen(rich, timeout=3) as r:
+def status():
+    token = (paths.DATA / "token.txt").read_text(encoding="utf-8").strip()
+    req = urllib.request.Request(f"http://127.0.0.1:{ENGINE_PORT}/status", headers={"X-Token": token})
+    with urllib.request.urlopen(req, timeout=3) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--test", dest="prova", action="store_true")
+    ap.add_argument("--test", dest="test", action="store_true")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
-    paths.DATI.mkdir(parents=True, exist_ok=True)
-    imp = settings.leggi()
-    modello = str(paths.modello(imp["modello"]))
-    amb = {**os.environ, "PYTHONUTF8": "1", "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1",
-           "OMISSIS_ENGINE_URL": f"http://127.0.0.1:{PORTA_MOTORE}"}
-    if a.prova:
-        amb["OMISSIS_TEST"] = "1"
+    paths.DATA.mkdir(parents=True, exist_ok=True)
+    cfg = settings.read()
+    model = str(paths.model(cfg["model"]))
+    env = {**os.environ, "PYTHONUTF8": "1", "HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1",
+           "OMISSIS_ENGINE_URL": f"http://127.0.0.1:{ENGINE_PORT}"}
+    if a.test:
+        env["OMISSIS_TEST"] = "1"
     print("avvio il motore (carica il modello, qualche secondo)...")
-    motore = subprocess.Popen([str(PY_MODELLO), str(QUI / "engine.py"), "--model", modello, "--port", str(PORTA_MOTORE)]
-                              + (["--device", imp["device"]] if imp["device"] in ("cpu", "cuda") else []),
-                              env=amb, cwd=QUI, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    engine = subprocess.Popen([str(PY_MODEL), str(HERE / "engine.py"), "--model", model, "--port", str(ENGINE_PORT)]
+                              + (["--device", cfg["device"]] if cfg["device"] in ("cpu", "cuda") else []),
+                              env=env, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         for _ in range(180):
-            if motore.poll() is not None:
+            if engine.poll() is not None:
                 sys.exit("il motore non è partito: avviarlo a mano con engine.py per vedere l'errore")
             try:
-                s = stato()
+                s = status()
                 break
             except Exception:   # noqa: BLE001
                 time.sleep(1)
         else:
             sys.exit("il motore non risponde")
-        protetti = settings.protetti(imp)
-        print(f"motore pronto: {Path(s['modello']).name} su {s['device']}, soglia {s['soglia']}")
-        print("servizi protetti:", ", ".join(x["nome"] for x in protetti))
-        comando = [*paths.mitmdump(), "-q", "-s", str(QUI / "addon.py"),
-                   "--listen-host", "127.0.0.1", "-p", str(imp["porta"]), "--set", f"confdir={paths.DATI / 'ca'}"]
-        for h in catalog.espressioni_host(protetti):
-            comando += ["--allow-hosts", h]
-        print(f"proxy in ascolto su 127.0.0.1:{imp['porta']} - Ctrl+C per fermare\n")
-        subprocess.run(comando, env=amb, cwd=QUI)
+        guarded = settings.guarded(cfg)
+        print(f"motore pronto: {Path(s['model']).name} su {s['device']}, soglia {s['threshold']}")
+        print("servizi protetti:", ", ".join(x["name"] for x in guarded))
+        command = [*paths.mitmdump(), "-q", "-s", str(HERE / "addon.py"),
+                   "--listen-host", "127.0.0.1", "-p", str(cfg["port"]), "--set", f"confdir={paths.DATA / 'ca'}"]
+        for h in catalog.expressions_host(guarded):
+            command += ["--allow-hosts", h]
+        print(f"proxy in ascolto su 127.0.0.1:{cfg['port']} - Ctrl+C per fermare\n")
+        subprocess.run(command, env=env, cwd=HERE)
     except KeyboardInterrupt:
         pass
     finally:
-        motore.terminate()
+        engine.terminate()
 
 
 if __name__ == "__main__":
