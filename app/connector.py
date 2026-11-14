@@ -161,9 +161,21 @@ class Connettore:
         self.pool = ThreadPoolExecutor(8)
         self.sessioni = {}      # sessione -> {"script": [...], "contesti": set(), "indirizzo": str}
         self.conteggi = {"messaggi": 0, "sostituzioni": 0, "bloccate": 0, "pagine": 0, "in_rete": 0, "controllati": 0}
-        self.errori = []
+        self.errori, self.avvisi = [], []
         self.stato = self._leggi_stato()
         self.cdp = Cdp(porta, self._evento)
+        # Il controllo in rete va acceso anche sul browser intero, e PRIMA di chiedere le finestre. Una finestra che l'app
+        # crea gia' con il suo indirizzo comincia a caricarsi subito: la notizia che esiste ci arriva qualche millisecondo
+        # dopo, e una pagina veloce in quel tempo ha gia' mandato il suo primo messaggio (visto: da 1 a 5 finestre su 20,
+        # con il controllo acceso solo finestra per finestra). Sul browser intero la richiesta della pagina stessa resta
+        # ferma finche' non rispondiamo noi, e a quel punto l'aggancio e' completo.
+        self.guardia_browser = True
+        if self._modelli():      # senza servizi da proteggere non c'e' nulla da accendere: lo si fara' quando cambiano
+            try:
+                self.cdp.attendi(self._guardia(None), 5)
+            except Exception as ex:   # noqa: BLE001  (un'app il cui browser non lo permette: resta il controllo finestra per finestra)
+                self.guardia_browser = False
+                self.avvisi.append(f"controllo in rete sul browser intero non disponibile: {type(ex).__name__}: {ex}"[:200])
         self.cdp.invia("Target.setAutoAttach", {"autoAttach": True, "waitForDebuggerOnStart": True, "flatten": True})
         threading.Thread(target=self._tieni_aggiornato, daemon=True).start()
 
@@ -213,6 +225,11 @@ class Connettore:
             if nuovo == self.stato:
                 continue
             self.stato = nuovo
+            if self.guardia_browser:
+                try:
+                    self._guardia(None)
+                except Exception:   # noqa: BLE001
+                    pass
             for sid, s in list(self.sessioni.items()):
                 try:
                     self._inietta(sid, subito=False)
@@ -266,15 +283,20 @@ class Connettore:
 
     # ---------------------------------------------------------------- barriera a livello di rete
     def _guardia(self, sid):
-        """Fa fermare dal browser ogni richiesta verso i servizi protetti, prima che parta."""
+        """Fa fermare dal browser ogni richiesta verso i servizi protetti, prima che parta. sid None: sul browser intero,
+        cioe' anche per le finestre a cui non siamo ancora agganciati (vedi __init__)."""
+        modelli = self._modelli()
+        if modelli:
+            return self.cdp.manda("Fetch.enable", {"patterns": modelli}, sid)
+        return self.cdp.manda("Fetch.disable", None, sid)   # un elenco vuoto fermerebbe tutte le richieste
+
+    def _modelli(self):
         modelli = []
         for s in self.stato["servizi"]:
             if s["politica"] == "proteggi" and s["leggibile"]:
                 for d in s["domini"]:
                     modelli += [{"urlPattern": f"*://{d}*", "requestStage": "Request"}, {"urlPattern": f"*://*.{d}*", "requestStage": "Request"}]
-        if modelli:
-            return self.cdp.manda("Fetch.enable", {"patterns": modelli}, sid)
-        return self.cdp.manda("Fetch.disable", None, sid)   # un elenco vuoto fermerebbe tutte le richieste
+        return modelli
 
     def _in_rete(self, sid, p):
         rq, rid, corpo = p.get("request", {}), p.get("requestId"), None

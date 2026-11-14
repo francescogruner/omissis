@@ -235,7 +235,7 @@ def app_desktop():
             c = None
         out.append({"id": chiave, "nome": a["nome"], "installata": Path(os.path.expandvars(a["comando"])).exists(),
                     "collegata": c is not None, "esito": c.esito if c else None, "conteggi": dict(c.conteggi) if c else None,
-                    "errori": c.errori[-3:] if c else []})
+                    "errori": (c.avvisi + c.errori)[-3:] if c else []})
     return out
 
 

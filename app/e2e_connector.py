@@ -94,6 +94,7 @@ def main():
             guida = Guida()
             guida.apri(FINTO + "/pagina")
             segna("codice portato nella finestra", not con.errori and con.conteggi["pagine"] >= 1, f"{con.cdp.prodotto} · {'; '.join(con.errori)}")
+            segna("controllo in rete acceso sull'intero browser (vale anche per le finestre non ancora agganciate)", con.guardia_browser, "; ".join(con.avvisi))
             for formato in ("claude", "openai", "chatgpt", "cumulativo", "righe", "prefisso", "intera", "richiesta"):
                 try:
                     risposta = guida.valuta(f"prova({json.dumps(formato)}, {json.dumps(TESTO)})")

@@ -374,9 +374,19 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 Le barriere sono due. Quella **dentro la pagina** sostituisce i dati e riscrive le risposte mentre
 arrivano. Quella **a livello di rete** ferma ogni invio verso un servizio protetto prima che parta e
 lo ricontrolla: serve perché una finestra appena aperta può mandare richieste prima che il codice al
-suo interno sia attivo (provato: senza la seconda barriera quei messaggi uscivano in chiaro; con la
-seconda, 60 finestre su 60 partono mascherate). Per quelle richieste la risposta resta con i
-segnaposto finché la pagina non è pronta.
+suo interno sia attivo (provato: senza la seconda barriera quei messaggi uscivano in chiaro). Per
+quelle richieste la risposta resta con i segnaposto finché la pagina non è pronta.
+
+La barriera di rete è accesa **due volte**: su ogni finestra, e sul browser intero. La seconda è
+arrivata dopo una prova fallita (14 novembre 2026). Una finestra che l'app crea già con il suo
+indirizzo comincia a caricarsi subito, e la notizia che esiste arriva al connettore qualche
+millisecondo dopo: con la barriera accesa solo finestra per finestra, una pagina veloce in quel tempo
+aveva già mandato il suo primo messaggio (da 1 a 5 finestre su 20, a seconda dei tempi della
+macchina; il giorno prima, sulla stessa macchina, zero). Accesa sul browser intero, la barriera
+trattiene anche il caricamento della pagina finché il connettore non risponde, e a quel punto
+l'aggancio è completo: 160 finestre su 160 partono mascherate. Se il browser di un'app non lo
+permette il connettore lo annota (`avvisi`) e resta la barriera finestra per finestra, con quel
+limite. Sull'app vera questa parte non è ancora stata provata.
 
 Da sapere:
 
@@ -394,7 +404,7 @@ Da sapere:
   stessa strada dell'estensione, provata sull'app di prova e non ancora su quella vera.
   Lo stato nel pannello ha tre livelli: non protetta, collegata ma non verificata, verificata dopo
   il primo messaggio passato dalla protezione. Su Claude Desktop non è mai stato provato. Sull'app
-  di prova: `e2e_connector.py`, 29 controlli;
+  di prova: `e2e_connector.py`, 32 controlli;
 - finché l'app è aperta così, qualunque programma di questo PC può comandarla dalla porta;
 - nel codice di Claude Desktop la porta di debug è in un elenco di opzioni a cui l'app reagisce
   (risulta che spenga il collegamento locale e il gestore delle password): l'app potrebbe anche
@@ -443,7 +453,7 @@ non va copiata né condivisa.
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 19 controlli) e **Claude Code dal vivo** con un messaggio di dati inventati |
-| Connettore per le app desktop | app di prova (`e2e_connector.py`, 31 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
+| Connettore per le app desktop | app di prova (`e2e_connector.py`, 32 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
 | Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
