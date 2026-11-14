@@ -124,6 +124,7 @@ class Vault:
         self.lock = threading.Lock()
         self.read_items = {}   # segnaposto -> valore: evita di decifrare a ogni richiesta
         self.touched, self.written = {}, time.time()   # (etichetta, n) -> ultimo uso, da scrivere ogni tanto
+        self.pending = False   # ci sono valori nuovi non ancora scritti sul disco (vedi flush)
         self.converted_ones = self._convert()
 
     def _convert(self):
@@ -157,7 +158,9 @@ class Vault:
             self.touched.clear()
         self.written = time.time()
 
-    def placeholder(self, label, value):
+    def placeholder(self, label, value, commit=True):
+        """commit=False: il valore nuovo resta in sospeso finche' non si chiama flush(). Chi maschera un testo scrive
+        cosi' sul disco una volta sola per richiesta invece che una per valore (ogni scrittura costa qualche millisecondo)."""
         k = self.seal.index(self.key(value))
         with self.lock:
             r = self.db.execute("SELECT n FROM entries WHERE label=? AND key=?", (label, k)).fetchone()
@@ -168,12 +171,23 @@ class Vault:
                 self.db.execute("INSERT INTO entries (label, n, key, value, created, used) VALUES (?, ?, ?, ?, ?, ?)",
                                 (label, n, k, self.seal.encrypt(value), stamp, stamp))
                 self.db.execute("INSERT OR REPLACE INTO counters VALUES (?, ?)", (label, n))
-                self.db.commit()
+                if commit:
+                    self.db.commit()
+                else:
+                    self.pending = True
                 self.read_items[f"[{label}_{n}]"] = value
             else:
                 n = r[0]
                 self._touch(label, n)
         return f"[{label}_{n}]"
+
+    def flush(self):
+        """Scrive sul disco i valori lasciati in sospeso. Va chiamata PRIMA di restituire i segnaposto a chi li ha chiesti:
+        un segnaposto uscito dal PC senza il suo valore nell'archivio non si potrebbe piu' ripristinare."""
+        with self.lock:
+            if self.pending:
+                self.db.commit()
+                self.pending = False
 
     def value(self, placeholder):
         m = RX_PLACEHOLDER.fullmatch(placeholder)
@@ -338,17 +352,20 @@ class Engine:
                 if forced:
                     by_text[i] = sorted(forced + [sp for sp in by_text[i] if not any(sp[0] < f[1] and f[0] < sp[1] for f in forced)])
         mapping, counts, exited, positions = {}, collections.Counter(), [], []
-        for t, sp in zip(texts, by_text):
-            chunks, pos, where = [], 0, []
-            for s, e, l in sp:
-                seg = self.vault.placeholder(l, t[s:e])
-                mapping.setdefault(seg, t[s:e])
-                counts[l] += 1
-                chunks += [t[pos:s], seg]
-                where.append([s, e, seg])
-                pos = e
-            exited.append("".join(chunks) + t[pos:])
-            positions.append(where)
+        try:
+            for t, sp in zip(texts, by_text):
+                chunks, pos, where = [], 0, []
+                for s, e, l in sp:
+                    seg = self.vault.placeholder(l, t[s:e], commit=False)
+                    mapping.setdefault(seg, t[s:e])
+                    counts[l] += 1
+                    chunks += [t[pos:s], seg]
+                    where.append([s, e, seg])
+                    pos = e
+                exited.append("".join(chunks) + t[pos:])
+                positions.append(where)
+        finally:
+            self.vault.flush()   # una scrittura sola per tutta la richiesta, e comunque prima di rispondere
         # "posizioni": per ogni testo, [inizio, fine, segnaposto] riferiti al testo ORIGINALE (serve ai documenti,
         # dove la sostituzione va riportata dentro pezzi di testo con formattazioni diverse)
         return {"texts": exited, "positions": positions, "mapping": mapping, "counts": dict(counts),

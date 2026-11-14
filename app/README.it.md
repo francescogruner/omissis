@@ -561,6 +561,40 @@ Nella sezione Attività (o in `data\activity.jsonl`):
 - `VALORI_IN_CHIARO` = un dato già mascherato compare in chiaro in un'altra richiesta;
 - `file_not_masked` = è stato caricato un file.
 
+## Quanto pesa e quanto è veloce
+
+Misurato il 14 novembre 2026 su un PC con Intel Core i7-14700K (20 core), 32 GB di memoria e una
+RTX 4080 SUPER, con testi inventati in stile help desk (nomi, aziende, e-mail, telefoni, IBAN, nomi
+di server, indirizzi IP). I tempi sono la mediana di una richiesta al motore, archivio compreso.
+
+| Modello e motore | 300 caratteri | 6.000 (due pagine) | 30.000 | 120.000 | Memoria del motore |
+|---|---|---|---|---|---|
+| `omissis-base`, scheda video | 42 ms | 61 ms | 0,2 s | 1,1 s | 1,4 GB, più 1,7 GB sulla scheda |
+| `omissis-small`, scheda video | 40 ms | 53 ms | 0,2 s | 0,9 s | 1,4 GB, più 0,9 GB sulla scheda |
+| `omissis-base`, solo processore (copia installata) | 66 ms | 1,6 s | 7,5 s | 30 s | 1,8 GB, fino a 2,1 dopo testi lunghi |
+| `omissis-small`, solo processore (copia installata) | 48 ms | 0,7 s | 3,6 s | 15 s | 1,2 GB, fino a 1,4 dopo testi lunghi |
+
+- **A riposo** il programma non consuma processore (meno dello 0,5 % di un core) e, oltre al motore,
+  occupa circa 120 MB (pannello e proxy). Il motore è pronto in circa 5 secondi dall'avvio.
+- **Un messaggio normale** (qualche riga) costa da 40 a 70 ms: non si nota. Su un PC senza scheda
+  video si nota invece un documento lungo: circa 4.000 caratteri al secondo con `omissis-base`,
+  8.000 con `omissis-small`. Per chi lavora spesso su testi lunghi senza scheda video conviene il
+  modello piccolo.
+- **Gateway per gli strumenti da terminale**: a un messaggio corto aggiunge da 30 a 75 ms. La prima
+  richiesta vera di Claude Code (101 KB, quasi tutta contesto) passa in 0,2 s con la scheda video,
+  in 2,3 s (`small`) o 4,6 s (`base`) sul solo processore; i turni successivi in circa un decimo di
+  secondo, perché il testo già visto non viene riesaminato.
+- **Più richieste insieme** (8 per volta, messaggi da 300 caratteri): 56 al secondo con la scheda
+  video, 20 (`base`) o 37 (`small`) sul solo processore, senza errori. Il motore esamina un testo
+  per volta: sul solo processore un messaggio corto arrivato mentre gira un testo di 30.000
+  caratteri aspetta che finisca (fino a 7 secondi con `omissis-base`).
+- **Archivio**: 5.700 voci occupano 3,2 MB e non rallentano nulla.
+- **Tenuta sui testi lunghi**: nei testi di queste misure sono stati messi circa 30.000 dati
+  inventati, in testi da 60 a 120.000 caratteri; nessuno è rimasto in chiaro, con nessuno dei due
+  modelli e dei due motori. È un controllo che il programma non perda nulla quando un testo è lungo
+  e viene esaminato a pezzi, non una misura della qualità del modello: i testi sono costruiti con
+  poche frasi fisse. I numeri sulla qualità sono nella scheda del modello.
+
 ## Limiti noti
 
 - Gli allegati vengono anonimizzati solo dove lavora l'estensione o il connettore delle app (vedi «Allegati»); chi passa
@@ -630,7 +664,7 @@ Usa un browser di prova che sta in `.playwright` (740 MB, si può cancellare; si
 `set PLAYWRIGHT_BROWSERS_PATH=app\.playwright` e
 `.venv\Scripts\python.exe -m playwright install chromium`). `e2e_sites.py` apre le pagine vere
 dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'estensione attiva.
-`e2e_vault.py` (20 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
+`e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
 inventate. Nessuno dei due ha bisogno di qualcosa acceso.
 `e2e_desktop.py` (17 controlli, serve la protezione attiva) prova ciò che tocca il desktop:

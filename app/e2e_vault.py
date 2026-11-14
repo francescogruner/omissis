@@ -90,6 +90,18 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     b.clear()
     check("svuotato", b.entries() == 0 and b.value("[PERSONA_1]") is None)
     check("anche dopo lo svuotamento i numeri non ripartono da 1", b.placeholder("PERSONA", "Dopo Lo Svuotamento") == "[PERSONA_6]")
+    # --- valori in sospeso: chi maschera un testo scrive sul disco una volta sola, prima di rispondere
+    t0 = time.perf_counter()
+    for i in range(300):
+        b.placeholder("ID_PRATICA", f"SOS-{i:05}", commit=False)
+    ms = (time.perf_counter() - t0) * 1000 / 300
+    other = sqlite3.connect(file)
+    before = other.execute("SELECT COUNT(*) FROM entries WHERE label = 'ID_PRATICA'").fetchone()[0]
+    b.flush()
+    after = other.execute("SELECT COUNT(*) FROM entries WHERE label = 'ID_PRATICA'").fetchone()[0]
+    other.close()
+    check("valori in sospeso: sul disco dopo una sola scrittura, e prima non ci sono", before == 0 and after == 300 and not b.pending
+              and b.value("[ID_PRATICA_301]") == "SOS-00000", f"{ms:.2f} ms per valore · prima {before}, dopo {after}")
     b.db.close()
 print("\nTUTTO OK" if ok else "\nERRORI")
 sys.exit(0 if ok else 1)

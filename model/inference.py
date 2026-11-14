@@ -32,6 +32,7 @@ import known as _noti
 import rules as _regole
 
 FINESTRA, PASSO = 512, 128
+GETTONI_PER_GIRO = 2048   # motore ONNX: token passati al modello in una volta (4 finestre piene, o piu' finestre corte)
 LISTE = Path(os.environ.get("OMISSIS_LISTS") or Path(__file__).resolve().parent / "lists")   # liste personali
 
 
@@ -123,8 +124,17 @@ class Rilevatore:
                 finestre.append((doc, w.ids, w.offsets))
         migliori = [dict() for _ in testi]
         ordine = sorted(range(len(finestre)), key=lambda i: len(finestre[i][1]))   # lunghezze simili insieme: meno riempitivo
-        for k in range(0, len(ordine), 16):
-            gruppo = [finestre[i] for i in ordine[k:k + 16]]
+        # Quante finestre per volta: tante se corte, poche se piene (al massimo GETTONI_PER_GIRO token in tutto).
+        # Misurato: sul processore passarne 16 piene insieme non fa guadagnare tempo rispetto a 4, ma fa tenere
+        # al programma 3,2 GB di memoria invece di 1,7 dopo un testo lungo (ONNX non la restituisce).
+        gruppi, k = [], 0
+        while k < len(ordine):
+            fine = k + 1
+            while fine < len(ordine) and fine - k < 32 and (fine - k + 1) * len(finestre[ordine[fine]][1]) <= GETTONI_PER_GIRO:
+                fine += 1
+            gruppi.append([finestre[i] for i in ordine[k:fine]])
+            k = fine
+        for gruppo in gruppi:
             lungo = max(len(g[1]) for g in gruppo)
             ids = np.full((len(gruppo), lungo), self.riempitivo, dtype=np.int64)
             att = np.zeros((len(gruppo), lungo), dtype=np.int64)
