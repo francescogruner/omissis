@@ -79,6 +79,7 @@ const ICONS = {
   app: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 10 3 2.5L7 15M13 15h4"/>',
   proxy: '<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+  mcp: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h4"/>',
 };
 const icon = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 
@@ -110,7 +111,7 @@ const toggle = (id, name) => `<span class="toggle"><input type="checkbox" role="
 const VIEWS = [
   {id: "start"}, {id: "text"}, {id: "documents"}, {id: "guide"},
   {id: "settings", cards: ["general", "recognition"], advancedCards: ["recognition"]},
-  {id: "connections", advanced: true, cards: ["browser", "app", "terminal", "proxy", "compatibility"]},
+  {id: "connections", advanced: true, cards: ["browser", "app", "terminal", "mcp", "proxy", "compatibility"]},
   {id: "services", advanced: true, cards: ["rules", "detected"]},
   {id: "activity", advanced: true}, {id: "vault", advanced: true},
 ];
@@ -255,14 +256,16 @@ function updateNotice(a) {
 const channels = test(async () => {
   const el = $("#channels");
   if (!el || view !== "advanced") return;
-  const [app, gw] = await Promise.all([api("/api/app"), api("/api/gateway")]);
+  const [app, gw, mcp] = await Promise.all([api("/api/app"), api("/api/gateway"), api("/api/mcp")]);
   if (!$("#channels")) return;
+  const reg = mcp.claude_desktop;
   const connected_ones = app.filter(a => a.connected).length, unprotected_ones = app.filter(a => a.installed && a.open_unprotected).length;
   const entry = (id, status, kind) => `<a class="channel" href="#/connections/${id}">${icon(id)}<b>${esc(t(`connections.card.${id}`))}</b>${label(status, kind)}<span class="below">${esc(t(`start.channel.${id}`))}</span></a>`;
   el.innerHTML = entry("browser", !extension ? t("browser.status.absent") : extension.connected && extension.ok ? t("browser.status.connected") : t("browser.status.to_connect"), extension && extension.connected && extension.ok ? "ok" : "")
     + entry("app", unprotected_ones ? t("app.unprotected_ones", {n: unprotected_ones}) : connected_ones ? t("app.connected_ones", {n: connected_ones}) : t("app.no_connected"),
             unprotected_ones ? "warning" : connected_ones ? "ok" : "")
     + entry("terminal", gw.is_active ? t("terminal.is_active", {port: gw.port}) : (gw.error || t("terminal.stopped")), gw.is_active ? "ok" : gw.error ? "error" : "")
+    + entry("mcp", reg.registered ? t(reg.current ? "mcp.registered" : "mcp.registered_old") : t("mcp.not_registered"), reg.registered ? (reg.current ? "ok" : "warning") : "")
     + entry("proxy", S && S.phase === "active" ? t("proxy.is_active", {port: S.port}) : t("proxy.stopped"), S && S.phase === "active" ? "ok" : "");
 });
 
@@ -572,7 +575,7 @@ const recognitionSettings = test(async el => {
 });
 
 // ---- Collegamenti
-DRAW.connections = (el, which) => ({browser: connectBrowser, app: connectApp, terminal: connectTerminal, proxy: connectProxy, compatibility: connectCompatibility}[which])(el);
+DRAW.connections = (el, which) => ({browser: connectBrowser, app: connectApp, terminal: connectTerminal, mcp: connectMcp, proxy: connectProxy, compatibility: connectCompatibility}[which])(el);
 REFRESH.connections = () => { if (opened.card === "app" && !$("button[data-app]:disabled")) appListing(); if (opened.card === "terminal") gatewayStatus(); };
 
 function drawExtension() {
@@ -662,6 +665,39 @@ const connectTerminal = test(async el => {
     ["others", g.routes.filter(r => !["anthropic", "openai", "ollama", "lmstudio"].includes(r)).map(r => `${u}/${r}`).join("\n")], ["local", `${u}/ollama/v1\n${u}/lmstudio/v1`]];
   $("#gwLines").innerHTML = lines.map(([n, r]) => `<div><div class="line"><h3>${esc(t(`terminal.line.${n}`))}</h3><span class="space"></span><button class="button" data-copy="${esc(r)}">${esc(t("general.copy"))}</button></div><pre>${esc(r)}</pre></div>`).join("");
   $$("button[data-copy]").forEach(b => b.onclick = () => copy(b.dataset.copy));
+});
+
+// Il server MCP: la strada ufficiale dentro Claude Desktop e gli editor, per i documenti. Si registra nella configurazione dell'app.
+const drawMcp = m => {
+  const c = m.claude_desktop, e = $("#mcpStatus");
+  if (!e) return;
+  e.textContent = c.registered ? t(c.current ? "mcp.registered" : "mcp.registered_old") : t("mcp.not_registered");
+  e.className = "label " + (c.registered ? (c.current ? "ok" : "warning") : "");
+  $("#mcpClaude").innerHTML = !c.installed ? `<span class="faded">${esc(t("mcp.claude.absent"))}</span>`
+    : (c.registered && c.current ? "" : `<button class="button primary" data-mcp="install">${esc(t("mcp.install"))}</button>`)
+      + (c.registered ? `<button class="button" data-mcp="uninstall">${esc(t("mcp.uninstall"))}</button>` : "");
+  $$("button[data-mcp]").forEach(b => b.onclick = test(async () => {
+    const action = b.dataset.mcp;
+    drawMcp(await api("/api/mcp", {action}));
+    notify(t(action === "install" ? "mcp.installed" : "mcp.uninstalled"));
+  }));
+};
+const connectMcp = test(async el => {
+  const m = await api("/api/mcp");
+  el.innerHTML = card(`<div class="line"><h2>${esc(t("mcp.status"))}</h2><span id="mcpStatus" class="label">…</span></div><p>${esc(t("mcp.what.below"))}</p>`)
+    + `<section class="card" aria-label="${esc(t("mcp.claude"))}">${line(t("mcp.claude"), esc(t("mcp.claude.below")), `<span id="mcpClaude" class="line"></span>`)}</section>`
+    + card(`<h2>${esc(t("mcp.others"))}</h2><p>${esc(t("mcp.others.below"))}</p><div class="block">${["json", "claude_code", "codex"].map(n =>
+      `<div><div class="line"><h3>${esc(t(`mcp.line.${n}`))}</h3><span class="space"></span><button class="button" data-copy="${esc(m.snippets[n])}">${esc(t("general.copy"))}</button></div><pre>${esc(m.snippets[n])}</pre></div>`).join("")}</div>`)
+    + card(`<h2>${esc(t("mcp.folders"))}</h2><p>${esc(t("mcp.folders.below", {folders: m.folders.join(" · ")}))}</p>
+      <textarea id="mcpFolders" class="short" aria-label="${esc(t("mcp.folders"))}">${esc(m.extra.join("\n"))}</textarea>
+      <div class="line"><span class="space"></span><button class="button" id="mcpSave">${esc(t("general.save"))}</button></div>`)
+    + card(`<h2>${esc(t("mcp.know"))}</h2><ul class="listing faded">${[1, 2, 3, 4].map(i => `<li>${t(`mcp.know.${i}`)}</li>`).join("")}</ul>`);
+  drawMcp(m);
+  $$("button[data-copy]").forEach(b => b.onclick = () => copy(b.dataset.copy));
+  $("#mcpSave").onclick = test(async () => {
+    await api("/api/mcp", {action: "folders", folders: $("#mcpFolders").value.split("\n")});
+    notify(t("mcp.folders.saved"));
+  });
 });
 
 const connectProxy = test(async el => {

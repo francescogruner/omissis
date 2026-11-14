@@ -25,6 +25,7 @@ DEFAULTS = {
     "scan": "weekly",    # analisi degli strumenti AI sul PC: settimanale | giornaliera | mai (resta quella a mano)
     "vault_days": 0,        # 0 = l'archivio tiene tutto; N = toglie da solo le voci non usate da N giorni
     "categories": [],             # categorie in piu' da sostituire (DATA, PROFESSIONE, SALUTE...): di serie restano in chiaro
+    "mcp_folders": [],            # cartelle in piu' che il server MCP puo' usare, oltre a Documenti, Desktop e Download
 }
 _cache = {"mtime": None, "data": None}
 
@@ -50,6 +51,8 @@ def write(data):
     date = clean["shortcuts"] if isinstance(clean["shortcuts"], dict) else {}
     clean["shortcuts"] = {k: str(date.get(k, v)).strip().lower()[:40] for k, v in DEFAULTS["shortcuts"].items()}
     clean["categories"] = sorted({str(x) for x in clean["categories"] or [] if str(x).isupper() and len(str(x)) <= 24})
+    extra = clean["mcp_folders"] if isinstance(clean["mcp_folders"], list) else []
+    clean["mcp_folders"] = list(dict.fromkeys(str(x).strip().strip('"') for x in extra if str(x).strip()))[:20]
     if clean["scan"] not in ("weekly", "daily", "never"):
         clean["scan"] = DEFAULTS["scan"]
     try:

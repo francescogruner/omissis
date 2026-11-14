@@ -36,7 +36,7 @@ TEXT = ("Buongiorno, sono Giulia Ferraresi della Nevatek S.r.l. Il mio collega A
          "cell. 347 5551234) non riesce ad accedere al gestionale: potete richiamarlo oggi?")
 SENSITIVE = ["Giulia Ferraresi", "Aldo Bruschi", "aldo.bruschi@nevatek.example", "347 5551234"]
 VIEWS = ["start", "text", "documents", "guide", "settings/general", "settings/recognition", "connections/browser",
-         "connections/app", "connections/terminal", "connections/proxy", "connections/compatibility", "services/rules", "services/detected", "activity", "vault"]
+         "connections/app", "connections/terminal", "connections/mcp", "connections/proxy", "connections/compatibility", "services/rules", "services/detected", "activity", "vault"]
 # una chiave rimasta a schermo al posto della frase ("menu.inizio", "testo.sotto"...): si cercano quelle vere, dal file di riferimento
 KEYS = set(json.loads((HERE / "panel" / "locales" / "it.json").read_text(encoding="utf-8")))
 RX_KEY = re.compile(r"[a-z_]+(?:\.[a-z_0-9]+)+")
@@ -161,6 +161,26 @@ def main():
                     mark(f"{language}: app desktop avviata protetta e staccata dal pannello", on and off and state == "waiting||0", state)
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: app desktop avviata protetta e staccata dal pannello", False, str(ex)[:160])
+
+                # --- server MCP: si registra e si toglie dalla configurazione di Claude Desktop (nelle prove, un file tra i dati di prova)
+                try:
+                    cfg = paths.DATA / "claude_desktop_config.json"
+                    cfg.write_text(json.dumps({"mcpServers": {"altro": {"command": "x"}}}), encoding="utf-8")
+                    pag.goto(f"{PANEL}/#/connections/mcp")
+                    pag.wait_for_selector("button[data-mcp=install]", timeout=15000)
+                    pag.click("button[data-mcp=install]")
+                    on = wait(pag, "() => document.getElementById('mcpStatus').classList.contains('ok') && !!document.querySelector('button[data-mcp=uninstall]')", timeout=15)
+                    written = json.loads(cfg.read_text(encoding="utf-8"))["mcpServers"]
+                    pag.click("button[data-mcp=uninstall]")
+                    off = wait(pag, "() => !!document.querySelector('button[data-mcp=install]') && !document.querySelector('button[data-mcp=uninstall]')", timeout=15)
+                    left = json.loads(cfg.read_text(encoding="utf-8"))["mcpServers"]
+                    mark(f"{language}: server MCP registrato e tolto dal pannello, senza toccare gli altri server", on and off and set(written) == {"altro", "omissis"}
+                         and written["omissis"]["args"][0].endswith("mcp_server.py") and left == {"altro": {"command": "x"}}
+                         and pag.locator("button[data-copy]").count() == 3)
+                    cfg.unlink()
+                    cfg.with_name(cfg.name + ".omissis-backup").unlink(missing_ok=True)
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: server MCP registrato e tolto dal pannello, senza toccare gli altri server", False, str(ex)[:160])
 
                 # --- testo: incolla -> mascherato e copiato; incolla di nuovo -> valori veri
                 pag.goto(f"{PANEL}/#/text")

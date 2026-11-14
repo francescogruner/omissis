@@ -373,6 +373,58 @@ ma un contesto molto mascherato, che può confondere il modello. I nomi degli st
 nella richiesta non vengono mai sostituiti. Il formato OpenAI è provato solo con il servizio finto; Codex con accesso
 ChatGPT (non con chiave) parla con un indirizzo diverso e non è coperto.
 
+## Server MCP: i documenti, dentro le app (sperimentale)
+
+MCP è il modo ufficiale con cui Claude Desktop, Claude Code, Codex, ChatGPT (modalità sviluppatore),
+Cursor, Windsurf, Antigravity e VS Code ricevono strumenti in più. `mcp_server.py` è uno di questi
+strumenti: l'app si continua a usare come sempre, **con il proprio abbonamento**, senza chiavi, senza
+porte di collegamento e senza riavvii speciali. È la strada che funziona anche dove il connettore non
+arriva (gli editor) o viene rifiutato.
+
+Che cosa cambia: quando si chiede all'assistente di lavorare su un documento indicandone il percorso,
+l'assistente lo fa leggere a Omissis. Il file viene aperto sul PC, i dati sostituiti, e
+all'assistente arriva solo il testo con i segnaposto. Gli strumenti sono cinque:
+
+| Strumento | Che cosa fa | Che cosa torna all'assistente |
+|---|---|---|
+| `read_anonymized` | legge un documento (Word, Excel, PowerPoint, PDF anche scansionato, immagini con testo, file di testo) | il testo con i segnaposto, a pezzi se è lungo |
+| `anonymize_copy` | scrive accanto all'originale una copia anonimizzata, nello stesso formato, di un file o di una cartella intera | dove sta la copia, e i conteggi |
+| `restore_text` | rimette i valori veri in un testo scritto dall'assistente (una mail, una risposta) e lo lascia negli appunti, oppure in un file nuovo | solo quanti segnaposto ha ripristinato |
+| `restore_copy` | scrive una copia con i valori veri di un file o di una cartella con i segnaposto | solo dove sta la copia |
+| `omissis_status` | dice se Omissis è acceso e quali cartelle può usare | lo stato |
+
+Tre garanzie tenute dal codice e provate: **nessuno strumento restituisce un valore vero** (il
+ripristino scrive sul PC e risponde solo «fatto»); il server legge e scrive **solo nelle cartelle
+permesse** (Documenti, Desktop e Download, più quelle aggiunte nel pannello; mai la cartella dei dati
+di Omissis); **con Omissis spento non esce nulla**, errore e non testo in chiaro.
+
+**Come si collega.** Pannello → Collegamenti → MCP: per Claude Desktop c'è un pulsante che aggiunge
+Omissis alla sua configurazione senza toccare il resto (prima ne tiene una copia; poi Claude Desktop
+va chiuso del tutto e riaperto); per le altre app ci sono i testi pronti da copiare. Da riga di
+comando: `python mcp_server.py --config` li stampa, `--install claude-desktop` e `--uninstall
+claude-desktop` fanno ciò che fa il pulsante.
+
+**Che cosa NON fa**, ed è il limite di questa strada per chiunque la usi:
+
+- non vede ciò che si scrive nella chat né i file allegati a mano: quelli partono così come sono, a
+  meno che l'app sia protetta anche dal connettore o dall'estensione. Il server MCP protegge i
+  documenti, non la conversazione;
+- funziona se l'assistente sceglie di usarlo. Le istruzioni che il server gli consegna glielo
+  chiedono, e nella prova dal vivo l'ha fatto da solo; ma un assistente che ha anche strumenti propri
+  per leggere i file può aprire l'originale. Per sicurezza: chiedere «usa Omissis», oppure fargli
+  lavorare una copia anonimizzata;
+- in un foglio Excel letto con `read_anonymized` anche i numeri passano dal riconoscimento (un
+  telefono scritto come numero viene sostituito); nella copia fatta con `anonymize_copy` restano i
+  limiti dei documenti descritti più sopra (numeri nelle celle numeriche, nomi dei fogli).
+
+Verificato: `e2e_mcp.py` (27 controlli: il protocollo, i cinque strumenti su tutti i formati, i
+limiti delle cartelle, il motore spento, la registrazione in Claude Desktop su un file di prova) e
+**una prova dal vivo con Claude Code** (14/11/2026, accesso in abbonamento, un verbale Word
+inventato): l'assistente ha usato da solo `read_anonymized`, ha visto solo segnaposto, ha scritto la
+risposta e l'ha fatta ripristinare negli appunti senza vedere i nomi. **Non ancora provato** dentro
+Claude Desktop, ChatGPT, Cursor e le altre app: la registrazione in Claude Desktop è provata solo su
+un file di prova.
+
 ## App desktop: Claude, ChatGPT, Kimi e Copilot per Windows (sperimentale)
 
 Queste app sono, sotto, un browser Chromium con dentro il sito del servizio (Claude e Kimi: Electron;
@@ -507,6 +559,7 @@ non va copiata né condivisa.
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 22 controlli) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
+| Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
 | Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |
 
@@ -678,7 +731,7 @@ inventate. Nessuno dei due ha bisogno di qualcosa acceso.
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (48 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (50 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,
@@ -690,7 +743,8 @@ aggiornamenti contro un servizio finto: ripresa, file manomessi, firma di un'alt
 ritoccato, versione più vecchia, installer sostituito sul disco.
 `e2e_connector.py` prova il connettore per le app desktop sullo stesso browser di prova, avviato
 con la porta di debug e senza estensione. `e2e_gateway.py` prova il gateway con un suo servizio
-finto e ha bisogno solo del motore acceso.
+finto e ha bisogno solo del motore acceso. `e2e_mcp.py` (27 controlli) fa da app al server MCP:
+lo lancia e gli parla come vuole il protocollo, su documenti inventati in una cartella provvisoria.
 
 Per provare senza fermare il programma in uso: `set OMISSIS_PORT=8775` prima di avviare una
 seconda copia (motore, pannello e gateway prendono le porte 8775, 8776 e 8777; la porta del proxy

@@ -37,6 +37,7 @@ import documents
 import folders
 import gateway
 import inventory
+import mcp_server
 import settings
 import i18n
 import weights
@@ -257,6 +258,13 @@ def watch_apps():
             reattach()
         except Exception:   # noqa: BLE001
             pass
+
+
+def mcp_state():
+    """Il server MCP: se e' registrato in Claude Desktop, che cosa incollare nelle altre app, quali cartelle puo' usare."""
+    file = DATA / "claude_desktop_config.json" if SUP.test else None   # nelle prove un file di prova, mai la configurazione vera
+    return {"claude_desktop": mcp_server.claude_desktop_state(file), "snippets": mcp_server.snippets(),
+            "folders": [str(x) for x in mcp_server._known_folders()], "extra": list(settings.read().get("mcp_folders") or [])}
 
 
 def app_desktop():
@@ -508,6 +516,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, app_desktop())
             elif u.path == "/api/view":
                 self._respond(200, {"view": settings.read().get("view", "simple")})
+            elif u.path == "/api/mcp":
+                self._respond(200, mcp_state())
             elif u.path == "/api/gateway":
                 g = SUP.gateway
                 self._respond(200, {"is_active": g is not None, "port": paths.GATEWAY_PORT, "error": SUP.gateway_error,
@@ -581,6 +591,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, {"restart_needed": SUP.restart_needed()})
             elif p == "/api/lists":
                 self._respond(200, write_lists(data))
+            elif p == "/api/mcp":
+                action = data.get("action")
+                if action in ("install", "uninstall"):   # scrive (o toglie) Omissis nella configurazione di Claude Desktop
+                    try:
+                        mcp_server.claude_desktop_install(DATA / "claude_desktop_config.json" if SUP.test else None, remove=action == "uninstall")
+                    except (OSError, ValueError) as ex:
+                        raise Refusal(i18n.t("mcp.error.config")) from ex
+                elif action == "folders":
+                    chosen = [str(x).strip().strip('"') for x in data.get("folders") or [] if str(x).strip()]
+                    missing = [x for x in chosen if not Path(x).is_dir()]
+                    if missing:
+                        raise Refusal(i18n.t("mcp.error.folder", folder=missing[0]))
+                    settings.write({**settings.read(), "mcp_folders": chosen})
+                self._respond(200, mcp_state())
             elif p == "/api/app":
                 key = str(data.get("id", ""))
                 if key not in connector.APP:
