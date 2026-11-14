@@ -317,6 +317,9 @@ class Engine:
         """escludi: etichette da NON sostituire in questa chiamata (es. quelle tecniche nel contesto di un agente).
         mai: termini da non sostituire in questa chiamata (es. i nomi degli strumenti dichiarati da un agente).
         anche: {termine: etichetta} da sostituire comunque, ovunque compaiano (le correzioni fatte a mano nel pannello)."""
+        # i gruppi di dati che chi usa il PC ha spento nelle impostazioni valgono per ogni strada (browser, app, terminale,
+        # documenti, MCP): tutte passano da qui. Cio' che e' stato scelto a mano («anche», liste personali) resta comunque.
+        exclude = set(exclude) | settings.labels_off()
         never = {str(x).strip(EDGES).casefold() for x in never}   # stessa pulizia dei bordi usata sotto: «Nevatek S.r.l.» finisce con un punto
         also = {str(v).strip(): (str(l) if RX_LABEL.fullmatch(str(l)) else "ELENCO") for v, l in (also or {}).items() if str(v).strip()}
         t0 = time.perf_counter()

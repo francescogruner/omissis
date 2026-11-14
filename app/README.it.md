@@ -193,6 +193,29 @@ vengono saltati, non copiati); da PDF e immagini esce un file di testo; nei
 fogli Excel ogni cella è valutata da sola, senza l'intestazione della colonna, quindi il modello
 può sbagliare di più; i nomi dei file e dei fogli restano come sono.
 
+## Cosa sostituire: i gruppi che si possono spegnere
+
+Di serie viene sostituito tutto ciò che il modello considera un identificativo, e per quasi tutti è
+la scelta giusta: non c'è nessun profilo da scegliere. Chi però fa lavorare l'AI proprio su certi
+dati può spegnerne il gruppo in Impostazioni → Riconoscimento → Cosa sostituire:
+
+| Gruppo | Che cosa contiene | Si può spegnere |
+|---|---|---|
+| Persone, contatti e documenti d'identità | nomi, e-mail, telefoni, indirizzi, CAP, città, data di nascita, codice fiscale, documenti | no |
+| Password, chiavi e altri segreti | password, token, chiavi, stringhe di connessione | no |
+| Conti e pagamenti | IBAN, carte, partita IVA | sì |
+| Aziende e organizzazioni | nomi di aziende, studi, clienti | sì |
+| Dati informatici | indirizzi IP e MAC, nomi di PC e server, domini, indirizzi web, account, identificativi cloud e di dispositivo | sì |
+| Pratiche, utenze e veicoli | polizze, protocolli, matricole, dati catastali, codici di fornitura, targhe, telai | sì |
+
+Esempi: un tecnico che chiede all'AI di ragionare su una rete spegne i dati informatici e tiene
+tutto il resto; uno studio che vuole leggere i numeri di pratica nelle risposte spegne l'ultimo
+gruppo. Spegnere **riduce la protezione**: quei dati partono in chiaro da ogni strada (browser, app,
+terminale, documenti, MCP). Per questo il pannello chiede conferma e la pagina iniziale lo ricorda
+ogni volta, con il collegamento per cambiare idea. Ciò che si è scelto a mano resta sostituito
+comunque: i termini della lista «sostituisci sempre» e le correzioni fatte nella sezione Testo
+vincono sui gruppi spenti. L'impostazione è `groups_off` in `settings.json`; l'effetto è immediato.
+
 ## Categorie in più
 
 Dalla versione 2 il modello riconosce, oltre agli identificativi diretti (nomi, contatti, codici,
@@ -363,7 +386,7 @@ Su questo PC Codex da terminale e OpenCode usano l'accesso con l'account ChatGPT
 sono coperti**. Codex 0.164 ha un'impostazione per cambiare indirizzo (`openai_base_url`) e comprime
 le richieste con zstd: la strada c'è, ma va provata dal vivo con l'account prima di dichiararla.
 
-Verificato: `e2e_gateway.py` (31 controlli contro un servizio finto) e **due prove dal vivo con
+Verificato: `e2e_gateway.py` (32 controlli contro un servizio finto) e **due prove dal vivo con
 Claude Code** e accesso in abbonamento, con dati inventati. Nella prima un messaggio semplice: 0
 valori in chiaro verso il servizio, risposta tornata con i valori veri. Nella seconda un'azione:
 Claude Code ha scritto un file, sul disco ci sono i valori veri e il servizio ha visto solo
@@ -588,7 +611,7 @@ non va copiata né condivisa.
 | Gemini | **sperimentale**: formato scritto a memoria, provato solo su un'imitazione |
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
-| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 31 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
+| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 32 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
 | Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |
@@ -761,7 +784,7 @@ inventate. Nessuno dei due ha bisogno di qualcosa acceso.
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (52 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (54 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,

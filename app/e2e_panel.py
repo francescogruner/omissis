@@ -219,6 +219,36 @@ def main():
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: terminale, righe per Codex in abbonamento e gateway proprio salvato, rifiutato se non valido, tolto", False, str(ex)[:160])
 
+                # --- gruppi di dati: spegnerne uno chiede conferma, la pagina iniziale lo ricorda, riaccenderlo toglie l'avviso
+                try:
+                    off = lambda: json.loads((paths.DATA / "settings.json").read_text(encoding="utf-8")).get("groups_off")   # noqa: E731
+                    pag.goto(f"{PANEL}/#/settings/recognition")
+                    pag.wait_for_selector("#grp-it", state="attached", timeout=15000)
+                    locked = pag.evaluate("!document.getElementById('grp-people') && !document.getElementById('grp-secrets') && document.getElementById('grp-it').checked")
+                    pag.evaluate("document.getElementById('grp-it').click()")
+                    pag.wait_for_selector("#confirm[open]", timeout=5000)
+                    pag.click("#confirmNo")                            # ci ripensa: non cambia nulla
+                    pag.wait_for_timeout(500)
+                    kept = pag.evaluate("document.getElementById('grp-it').checked") and not off()
+                    pag.evaluate("document.getElementById('grp-it').click()")
+                    pag.wait_for_selector("#confirm[open]", timeout=5000)
+                    pag.click("#confirmYes")
+                    stored = wait_until(lambda: off() == ["it"])
+                    pag.goto(f"{PANEL}/#/start")
+                    warned = wait(pag, "() => !!document.querySelector('#reduced .note.warning')", timeout=15)
+                    pag.goto(f"{PANEL}/#/settings/recognition")
+                    pag.wait_for_selector("#grp-it", state="attached", timeout=15000)
+                    wait(pag, "() => document.getElementById('grp-it').checked === false", timeout=10)
+                    pag.evaluate("document.getElementById('grp-it').click()")   # riaccendere non chiede nulla
+                    back = wait_until(lambda: off() == [])
+                    pag.goto(f"{PANEL}/#/start")
+                    pag.wait_for_selector("#main_switch")
+                    cleared = wait(pag, "() => !document.querySelector('#reduced .note')", timeout=15)
+                    mark(f"{language}: gruppi di dati, spegnere chiede conferma e la pagina iniziale lo ricorda; persone e segreti non si spengono",
+                         locked and kept and stored and warned and back and cleared, f"fissi {locked} · ripensamento {kept} · spento {stored} · avviso {warned} · riacceso {back} · tolto {cleared}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: gruppi di dati, spegnere chiede conferma e la pagina iniziale lo ricorda; persone e segreti non si spengono", False, str(ex)[:160])
+
                 # --- testo: incolla -> mascherato e copiato; incolla di nuovo -> valori veri
                 pag.goto(f"{PANEL}/#/text")
                 pag.wait_for_selector("#paste")

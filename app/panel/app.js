@@ -188,6 +188,7 @@ DRAW.start = el => {
       <span class="space"></span>
       <button class="button" id="restart" hidden>${esc(t("start.restart"))}</button><button class="button primary" id="main_switch">…</button>
     </div></div></section>
+    <div id="reduced"></div>
     <div id="update"></div>
     <div class="badges">${["text", "documents", "guide"].map(v => `<a class="badge" href="#/${v}">${icon(v)}<b>${esc(t(`start.badge.${v}`))}</b><span>${esc(t(`start.badge.${v}.below`))}</span></a>`).join("")}</div>
     <div class="grid">${["messages", "replacements", "blocked"].map(k => card(`<div class="number" id="n-${k}">0</div><div class="faded small">${esc(t(`start.today.${k}`))}</div>`)).join("")}
@@ -223,6 +224,12 @@ REFRESH.start = s => {
   b.disabled = phase === "startup";
   $("#restart").hidden = !s.restart_needed;
   updateNotice(s.update);
+  // chi ha spento un gruppo di dati lo deve vedere ogni volta che apre il programma, non solo nelle impostazioni
+  const off = (s.groups_off || []).map(g => t(`groups.${g}`)).join(", ");
+  if ($("#reduced").dataset.off !== off) {
+    $("#reduced").dataset.off = off;
+    $("#reduced").innerHTML = off ? `<div class="note warning"><span class="space">${esc(t("groups.reduced", {listing: off}))}</span><a class="button" href="#/settings/recognition">${esc(t("groups.reduced.change"))}</a></div>` : "";
+  }
   const st = s.stats;
   for (const k of ["messages", "replacements", "blocked"]) $(`#n-${k}`).textContent = num(st.today[k]);
   $("#n-entries").textContent = s.entries == null ? "–" : num(s.entries);
@@ -548,6 +555,11 @@ const recognitionSettings = test(async el => {
       ${line(t("recognition.where"), "", `<select id="device" aria-label="${esc(t("recognition.where"))}">${["auto", "cuda", "cpu"].map(v => `<option value="${v}">${esc(t(`recognition.where.${v}`))}</option>`).join("")}</select>`)}
       ${["box", "attachments", "restore", "block_files"].map(k => line(t(`recognition.${k}`), esc(t(`recognition.${k}.below`)), toggle(k, t(`recognition.${k}`)))).join("")}
     </section>
+    <section class="card" aria-labelledby="grpTitle">
+      <div class="inside"><h2 id="grpTitle">${esc(t("groups.title"))}</h2><p>${esc(t("groups.below"))}</p></div>
+      ${Object.entries(i.groups_always).map(([name, entries]) => line(t(`groups.${name}`), esc(entries.map(dataKind).join(", ")), label(t("groups.always"), "ok"))).join("")}
+      ${Object.entries(i.groups).map(([name, entries]) => line(t(`groups.${name}`), esc(entries.map(dataKind).join(", ")), toggle(`grp-${name}`, t(`groups.${name}`)))).join("")}
+    </section>
     ${groups.length ? `<section class="card" aria-labelledby="catTitle">
       <div class="inside"><h2 id="catTitle">${esc(t("categories.title"))}</h2><p>${esc(t("categories.below"))}</p></div>
       ${groups.map(([name, entries]) => line(t(`categories.${name}`), esc(t(`categories.${name}.below`, {listing: entries.map(dataKind).join(", ").toLowerCase()})), toggle(`cat-${name}`, t(`categories.${name}`)))).join("")}
@@ -559,6 +571,16 @@ const recognitionSettings = test(async el => {
     <div class="line"><button class="button primary" id="saveLists">${esc(t("lists.save"))}</button><span class="faded small">${esc(t("lists.note"))}</span></div>`;
   for (const k of ["model", "device"]) { $(`#${k}`).value = i[k]; $(`#${k}`).onchange = test(e => save({[k]: e.target.value})); }
   for (const k of ["box", "attachments", "restore", "block_files"]) { $(`#${k}`).checked = i[k] !== false && !!i[k]; $(`#${k}`).onchange = test(e => save({[k]: e.target.checked})); }
+  let off = (i.groups_off || []).slice();
+  for (const name of Object.keys(i.groups)) {
+    $(`#grp-${name}`).checked = !off.includes(name);
+    $(`#grp-${name}`).onchange = test(async e => {
+      // spegnere riduce la protezione: lo si fa solo dopo una conferma, e la pagina iniziale lo ricorda
+      if (!e.target.checked && !await confirm(t("groups.confirm.title", {name: t(`groups.${name}`)}), t("groups.confirm"), t("groups.confirm.yes"))) { e.target.checked = true; return; }
+      off = off.filter(g => g !== name).concat(e.target.checked ? [] : [name]);
+      await save({groups_off: off}, e.target.checked ? "groups.saved_on" : "groups.saved_off");
+    });
+  }
   let enabled = cat.enabled.slice();
   for (const [name, entries] of groups) {
     $(`#cat-${name}`).checked = entries.every(v => enabled.includes(v));

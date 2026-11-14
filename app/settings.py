@@ -29,6 +29,7 @@ DEFAULTS = {
     "categories": [],             # categorie in piu' da sostituire (DATA, PROFESSIONE, SALUTE...): di serie restano in chiaro
     "mcp_folders": [],            # cartelle in piu' che il server MCP puo' usare, oltre a Documenti, Desktop e Download
     "gateway_upstreams": {},      # chi ha gia' un proprio gateway: nome usato nell'indirizzo (anthropic, openai...) -> dove inoltrare
+    "groups_off": [],             # gruppi di dati che chi usa il PC ha scelto di NON sostituire (vedi GROUPS): di serie nessuno
 }
 _cache = {"mtime": None, "data": None}
 
@@ -44,6 +45,22 @@ def read():
         except ValueError:
             _cache.update(mtime=m, data=dict(DEFAULTS))
     return _cache["data"]
+
+
+# I gruppi di dati che si possono spegnere (Impostazioni > Riconoscimento > Cosa sostituire). Serve a chi lavora proprio su
+# quei dati: un tecnico che fa ragionare l'AI su una rete, uno studio che vuole leggere i numeri di pratica nelle risposte.
+GROUPS = {"payments": ["IBAN", "CARTA", "CARTA_SEC", "PIVA"],
+          "organizations": ["ORG"],
+          "it": ["IP", "MAC", "HOSTNAME", "DOMINIO", "URL", "ACCOUNT", "ID_CLOUD", "ID_DISPOSITIVO"],
+          "records": ["ID_PRATICA", "CATASTO", "ID_UTENZA", "TARGA", "ID_VEICOLO"]}
+# Questi non si spengono: sono il motivo per cui il programma esiste.
+ALWAYS_ON = {"people": ["PERSONA", "EMAIL", "TELEFONO", "INDIRIZZO", "CAP", "CITTA", "DATA_NASCITA", "CF", "DOC_ID"], "secrets": ["SEGRETO"]}
+
+
+def labels_off(cfg=None):
+    """Le etichette che, per scelta di chi usa il PC, non vanno sostituite."""
+    chosen = (cfg or read()).get("groups_off") or []
+    return {label for g in chosen if g in GROUPS for label in GROUPS[g]}
 
 
 def address_ok(text):
@@ -66,6 +83,7 @@ def write(data):
     own = clean["gateway_upstreams"] if isinstance(clean["gateway_upstreams"], dict) else {}
     clean["gateway_upstreams"] = {str(k): str(v).strip().rstrip("/") for k, v in own.items()
                                   if re.fullmatch(r"[a-z0-9-]{1,30}", str(k)) and str(k) != "codex" and address_ok(v)}
+    clean["groups_off"] = sorted({str(g) for g in (clean["groups_off"] if isinstance(clean["groups_off"], list) else []) if str(g) in GROUPS})
     extra = clean["mcp_folders"] if isinstance(clean["mcp_folders"], list) else []
     clean["mcp_folders"] = list(dict.fromkeys(str(x).strip().strip('"') for x in extra if str(x).strip()))[:20]
     if clean["scan"] not in ("weekly", "daily", "never"):

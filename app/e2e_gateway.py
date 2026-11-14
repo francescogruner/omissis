@@ -314,6 +314,18 @@ def main():
           and kept == {"anthropic": "https://gateway.azienda.example/llm", "openai": "https://gateway.azienda.example/api/v1"}, f"{path_a} · {path_o} · {sorted(kept)}")
     status, raw = call("/openai/v1/responses", codex, {"Authorization": subscription})
     mark("l'accesso in abbonamento non va mai al gateway proprio: sempre a ChatGPT", status == 200 and SEEN["path"] == "/backend-api/codex/responses")
+    # --- un gruppo di dati spento a mano (Impostazioni > Cosa sostituire): quei dati partono in chiaro, tutti gli altri no
+    technical = TEXT + " Il server SRV-ALPI-04 (indirizzo 10.20.30.40) non risponde al ping."
+    ask = lambda: call("/anthropic/v1/messages", {"model": "x", "max_tokens": 100, "messages": [{"role": "user", "content": technical}]}, {"x-api-key": "chiave-di-prova"})   # noqa: E731
+    ask()
+    with_all = json.dumps(SEEN["body"], ensure_ascii=False)
+    settings.write({**settings.read(), "groups_off": ["it", "records", "gruppo-inventato", "people"]})
+    chosen = settings.read()["groups_off"]
+    status, raw = ask()
+    reduced = json.dumps(SEEN["body"], ensure_ascii=False)
+    mark("gruppo «dati informatici» spento: indirizzi e nomi di server partono, persone e contatti restano sostituiti", status == 200
+          and "10.20.30.40" not in with_all and "10.20.30.40" in reduced and "SRV-ALPI-04" in reduced and reveal(SEEN["body"]) == 0 and "[PERSONA_" in reduced
+          and chosen == ["it", "records"], f"spenti {chosen}")
     if before is None:
         settings.FILE.unlink()
     else:

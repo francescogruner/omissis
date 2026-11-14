@@ -204,7 +204,8 @@ class Supervisor:
                 "downloading": weights.status(settings.read()["model"]) if self.phase in ("model", "error") else None,
                 "update": updates.status(),
                 "model": Path(info["model"]).name if info.get("model") else None, "device": info.get("device"),
-                "threshold": info.get("threshold"), "entries": info.get("entries"), "port": settings.read()["port"]}
+                "threshold": info.get("threshold"), "entries": info.get("entries"), "port": settings.read()["port"],
+                "groups_off": list(settings.read().get("groups_off") or [])}   # gruppi di dati spenti a mano: la pagina iniziale lo dice
 
 
 SUP = None
@@ -509,7 +510,7 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/services":
                 self._respond(200, services())
             elif u.path == "/api/settings":
-                self._respond(200, {**settings.read(), "certificate": certificate()})
+                self._respond(200, {**settings.read(), "certificate": certificate(), "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON})
             elif u.path == "/api/lists":
                 self._respond(200, read_lists())
             elif u.path == "/api/app":
