@@ -103,6 +103,12 @@ and downloaded with `model/download_model.py`; they are not stored in this repos
 
 ## Quick start (Windows)
 
+**Requirements:** 64-bit Windows 10 (version 2004 or later) or Windows 11 on an Intel or AMD
+processor, 4 cores, 8 GB of memory with `omissis-small` (16 GB for `omissis-base`), 1 to 2 GB of
+disk. No graphics card needed: the installed copy runs on the CPU. On an ordinary office PC choose
+`omissis-small`: measured quality is almost the same and it is twice as fast (an estimate for a
+4-core PC: about 0.1 s for a short message, 3 s for two pages; details in the Italian guide).
+
 **With the installer** (if you just want to use it): download `Omissis-<version>-setup.exe` from the
 [releases page](https://github.com/francescogruner/omissis/releases/latest). No Python and no
 administrator rights needed. On first start the program downloads the model (once), then works

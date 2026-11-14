@@ -676,6 +676,39 @@ Nella sezione Attività (o in `data\activity.jsonl`):
 - `VALUES_IN_CLEAR` = un dato già mascherato compare in chiaro in un'altra richiesta;
 - `file_not_masked` = è stato caricato un file.
 
+## Requisiti
+
+| | Minimo | Consigliato |
+|---|---|---|
+| Sistema | Windows 10 (versione 2004 o successiva) o Windows 11, a 64 bit su processore Intel o AMD | uguale |
+| Processore | 4 core | 6 core o più, di generazione recente |
+| Memoria | 8 GB, con il modello piccolo | 16 GB, necessari per il modello grande |
+| Disco | 1 GB con il modello piccolo | 2 GB con il modello grande |
+| Scheda video | non serve | non serve: la copia installata usa solo il processore |
+| Rete | solo per scaricare il modello al primo avvio e per gli aggiornamenti | uguale |
+
+Il programma tiene in memoria il modello finché la protezione è accesa: da 1,2 a 1,5 GB con
+`omissis-small`, da 1,8 a 2,5 GB con `omissis-base`. La scheda video viene usata solo da chi lancia
+il programma dai sorgenti con PyTorch (una NVIDIA con 2 GB liberi basta).
+
+**Su un PC da ufficio conviene il modello piccolo.** La qualità misurata è quasi la stessa, la
+velocità è doppia. Tempi del riconoscimento per lunghezza del testo, solo processore:
+
+| Dove | Modello | 300 caratteri | 6.000 (due pagine) | 30.000 |
+|---|---|---|---|---|
+| PC veloce (i7-14700K, 20 core): misurato | small | 20 ms | 0,4 s | 2 s |
+| | base | 39 ms | 0,9 s | 4 s |
+| PC da ufficio a 4 core: **stima** | small | 0,12 s | 3 s | 15 s |
+| | base | 0,22 s | 6 s | 29 s |
+| PC di fascia bassa a 2 core: **stima** | small | 0,17 s | 5 s | 22 s |
+| | base | 0,64 s | 16 s | 64 s |
+
+Le due stime sono fatte il 14 novembre 2026 sullo stesso PC, lasciando al programma solo quattro o
+due dei suoi core più lenti (`misure\pochi_core.py`): dicono l'ordine di grandezza, non sostituiscono
+una misura su un portatile vero, che in più scalda e rallenta. In pratica: un messaggio normale passa
+sempre in una frazione di secondo; a pesare sono i documenti lunghi, e lì su un PC modesto con il
+modello grande si aspetta.
+
 ## Quanto pesa e quanto è veloce
 
 Misurato il 14 novembre 2026 su un PC con Intel Core i7-14700K (20 core), 32 GB di memoria e una
@@ -789,9 +822,12 @@ programma scrive, e questo cambia quattro cose:
 Stato al 14 novembre 2026: la cartella del pacchetto e il suo manifesto esistono
 (`costruisci_store.py`) e il programma, lanciato da lì con i comandi del manifesto, supera 9
 controlli (`prova_store.py`). Lo strumento di Microsoft (`makeappx`) convalida il manifesto e chiude
-il file `.msix` (82 MB), per ora con un'identità di prova. **Non ancora fatto**: registrarlo e
-provarlo dal menu Start (serve la Modalità sviluppatore di Windows), rifarlo con il nome e l'editore
-assegnati dal Partner Center, l'invio. I passi sono in `pubblicazione\store\microsoft_it.md`.
+il file `.msix` (82 MB) con l'identità assegnata dal Partner Center. Registrato su questo PC e
+avviato dal menu Start supera altri 11 controlli (`prova_store_registrato.py`): la protezione si
+accende con il motore del pacchetto, i dati finiscono nella cartella privata, il server MCP parte
+dal nome fisso e parla con quel motore, l'avvio insieme a Windows risulta registrato; tolta la
+registrazione non resta nulla. **Non ancora fatto**: l'invio, e la prova di una copia scaricata
+davvero dallo Store. I passi sono in `pubblicazione\store\microsoft_it.md`.
 
 ## Prove automatiche
 

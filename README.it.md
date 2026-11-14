@@ -87,6 +87,13 @@ I pesi si scaricano da Hugging Face con `model/download_model.py`; non stanno in
 
 ## Installazione (Windows)
 
+**Requisiti:** Windows 10 (versione 2004 o successiva) o Windows 11 a 64 bit su processore Intel o
+AMD, 4 core, 8 GB di memoria con `omissis-small` (16 GB per `omissis-base`), da 1 a 2 GB di disco.
+Non serve una scheda video: la copia installata usa il processore. Su un normale PC da ufficio
+conviene `omissis-small`: la qualità misurata è quasi la stessa e va il doppio più veloce (stima per
+un PC a 4 core: circa 0,1 s per un messaggio breve, 3 s per due pagine; i dettagli nella
+[guida](app/README.it.md)).
+
 **Con l'installer** (per chi vuole solo usarlo): dalla pagina delle
 [versioni](https://github.com/francescogruner/omissis/releases/latest) si scarica
 `Omissis-<versione>-setup.exe`. Non serve Python e non servono diritti di amministratore. Al primo
