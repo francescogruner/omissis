@@ -128,7 +128,8 @@ Tutto il resto è in [app/README.it.md](app/README.it.md).
 
 **Su molti PC** (aziende, MSP): gli script in [`deploy/`](deploy/README.it.md) installano Omissis in silenzio e
 già configurato, bloccano le impostazioni scelte dall'amministratore, ne riferiscono lo stato e lo tolgono, da
-un RMM, da Intune o da uno script di accesso.
+un RMM, da Intune o da uno script di accesso. Si parte dalla [guida per le aziende](deploy/GUIDA-AZIENDE.it.md):
+che cosa è gratuito e che cosa no, quale schema scegliere, il server di inferenza passo per passo.
 
 **PC che non reggono il modello**: un PC con Omissis può prestare il suo modello agli altri della rete
 (Impostazioni, Riconoscimento, «Server di inferenza in rete»). Il testo da controllare viaggia cifrato e tornano

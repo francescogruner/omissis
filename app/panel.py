@@ -164,6 +164,11 @@ class Supervisor:
                 env["OMISSIS_TEST"] = "1"
             if not self._alive(self.engine) or self.launched_with is None or self.launched_with[0] != self._engine_choices(cfg):
                 self._stop(self.engine)
+                if cfg["serve"]:   # presta il modello (anche per un'impostazione imposta da chi amministra): certificato e chiave devono esserci
+                    try:
+                        remote.ensure(DATA / "server")
+                    except Exception:   # noqa: BLE001  (senza, il motore parte lo stesso e la scheda dice che non e' in ascolto)
+                        pass
                 # primo avvio di una copia installata: i pesi si scaricano una volta. Non a chi usa il modello di un server della rete
                 if not remote.configured(cfg) and weights.missing(cfg["model"]):
                     self.phase = "model"

@@ -2,7 +2,11 @@
 
 Four PowerShell scripts for whoever manages the computers of an organisation or of several customers (an MSP):
 install Omissis silently and pre-configured, lock its settings, check its state, remove it. They work with anything that can run a
-script: an RMM tool, Intune, a logon script. The full guide is in Italian: [README.it.md](README.it.md).
+script: an RMM tool, Intune, a logon script. The full reference of the scripts is in Italian: [README.it.md](README.it.md).
+
+**Where to start**: [`GUIDE-ORGANISATIONS.md`](GUIDE-ORGANISATIONS.md) says what is free and what is not, which
+layout to choose (every PC with its own model, or one PC lending it to the others) and how to turn on the
+inference server, step by step.
 
 | File | What it is for |
 |---|---|

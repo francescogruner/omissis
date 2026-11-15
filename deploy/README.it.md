@@ -4,6 +4,10 @@ Per chi gestisce i computer di un'azienda o di più clienti (un MSP): quattro sc
 Omissis in silenzio, già configurato, bloccarne le impostazioni, controllarne lo stato e toglierlo. Funzionano
 con qualsiasi strumento che sappia lanciare uno script: un RMM, Intune, uno script di accesso.
 
+**Da dove cominciare**: [`GUIDA-AZIENDE.it.md`](GUIDA-AZIENDE.it.md) dice che cosa è gratuito e che cosa no, quale
+schema scegliere (ogni PC con il suo modello, oppure un PC che lo presta agli altri) e come accendere il server di
+inferenza, passo per passo. Questa pagina è il riferimento degli script.
+
 | File | A cosa serve |
 |---|---|
 | `Install-Omissis.ps1` | Installa in silenzio, applica le scelte del cliente, porta il modello, avvia la protezione |
@@ -12,6 +16,7 @@ con qualsiasi strumento che sappia lanciare uno script: un RMM, Intune, uno scri
 | `Uninstall-Omissis.ps1` | Toglie il programma; con `-RemoveData` anche i dati |
 | `settings.example.json` | Modello delle scelte del cliente (l'utente le può cambiare) |
 | `policy.example.json` | Modello delle impostazioni bloccate (l'utente non le può cambiare) |
+| `GUIDA-AZIENDE.it.md`, `GUIDE-ORGANISATIONS.md` | La guida pratica: gratuito e a pagamento, schemi, server di inferenza |
 
 ## La regola che conta: si lancia come utente
 
@@ -156,8 +161,9 @@ Gli script installano il programma, non l'estensione. Due cose restano da fare:
 - **Installarla.** Finché non è pubblicata sugli store dei browser si carica a mano dalla cartella indicata nel
   pannello. Quando sarà pubblicata si potrà imporre con il criterio `ExtensionInstallForcelist` di Chrome e di
   Edge (un criterio di macchina: qui servono i diritti di amministratore).
-- **Collegarla.** Ogni utente apre una volta il pannello, sezione Browser, e preme «Collega»: il codice di
-  collegamento è diverso su ogni PC e non esce da lì. Un collegamento automatico non c'è ancora.
+- **Collegarla.** Appena installata, l'estensione apre una pagina con il pulsante «Collega questo browser»: il
+  pannello si apre e il collegamento si fa da solo. Va fatto una volta per utente e per browser: il codice di
+  collegamento è diverso su ogni PC e non esce da lì.
 
 ## Aggiornare e togliere
 

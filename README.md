@@ -142,7 +142,8 @@ Everything else is in [app/README.it.md](app/README.it.md).
 
 **On many PCs** (organisations, MSPs): the scripts in [`deploy/`](deploy/README.md) install Omissis silently and
 pre-configured, lock the settings the administrator chooses, report its state and remove it, from an RMM tool,
-Intune or a logon script.
+Intune or a logon script. Start from the [guide for organisations](deploy/GUIDE-ORGANISATIONS.md): what is free
+and what is not, which layout to choose, the inference server step by step.
 
 **PCs that cannot hold the model**: one PC with Omissis can lend its model to the others on the network (Settings,
 Recognition, "Inference server on the network"). The text to check travels encrypted and only the positions of the

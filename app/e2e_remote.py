@@ -163,6 +163,39 @@ def main():
             client.wait(15)
             client = None
 
+        # ---- imposto da chi amministra il PC: si accende da solo (certificato e chiave compresi) e dal pannello non si spegne
+        imposed = Path(os.environ.get("OMISSIS_MANAGED_FILE") or paths.DATA / "imposte.json")
+        kept = paths.DATA / "server-di-prima"
+        try:
+            if (paths.DATA / "server").exists():
+                (paths.DATA / "server").rename(kept)
+            imposed.write_text(json.dumps({"serve": True}), encoding="utf-8")
+            time.sleep(2.6)   # nelle prove il programma rilegge le impostazioni imposte ogni due secondi
+            if not panel("/api/server")["managed"]:
+                print("SALTATO server imposto: questo programma non legge le impostazioni imposte da un file (manca OMISSIS_MANAGED_FILE)")
+            else:
+                panel("/api/protection", {"action": "restart"})
+                on = wait_until(lambda: panel("/api/status")["phase"] == "active" and panel("/api/server")["server"]["listening"])
+                try:
+                    panel("/api/server", {"action": "share", "on": False})
+                    stopped = "spento"
+                except urllib.error.HTTPError as ex:
+                    stopped = ex.code
+                mark("imposto da chi amministra il PC: il server si accende da solo, con certificato e chiave nuovi, e dal pannello non si spegne",
+                     on and len(panel("/api/server")["server"]["pin"]) == 64 and (paths.DATA / "server" / "access.txt").exists() and stopped != "spento"
+                     and panel("/api/server")["mode"] == "server", f"risposta allo spegnimento: {stopped}")
+        finally:
+            imposed.unlink(missing_ok=True)
+            time.sleep(2.6)
+            try:
+                panel("/api/protection", {"action": "restart"})
+                wait_until(lambda: panel("/api/status")["phase"] == "active" and panel("/api/server")["mode"] == "local")
+            finally:
+                if kept.exists():
+                    import shutil
+                    shutil.rmtree(paths.DATA / "server", ignore_errors=True)
+                    kept.rename(paths.DATA / "server")
+
         # ---- la pagina, nelle due lingue
         if "--no-page" not in sys.argv:
             page_checks(code, panel)
