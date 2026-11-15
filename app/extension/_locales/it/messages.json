@@ -83,6 +83,9 @@
  "option_notices": {
   "message": "Mostra un avviso nella pagina quando sostituisco dei dati"
  },
+ "managed_note": {
+  "message": "Regola scelta dalla tua organizzazione: su questo sito la sospensione non vale."
+ },
  "option_suspend": {
   "message": "Sospendi la protezione in questo browser"
  },

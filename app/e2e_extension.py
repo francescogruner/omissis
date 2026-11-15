@@ -266,6 +266,38 @@ def main():
         page.wait_for_timeout(300)
         page.evaluate("t => test('whole', t)", TEXT)
         mark("sospesa: il messaggio parte senza sostituzioni", SENSITIVE[0] in json.dumps(seen()["body"], ensure_ascii=False))
+
+        # --- la regola del servizio e' imposta da chi amministra il PC: li' la sospensione non vale
+        imposed = Path(os.environ.get("OMISSIS_MANAGED_FILE") or paths.DATA / "imposte.json")
+        known = "chrome.storage.local.get('status').then(d => !!(d.status.services.find(s => s.id === 'test') || {}).locked)"
+        try:
+            imposed.write_text(json.dumps({"policies": {"test": "protect"}}), encoding="utf-8")
+            page.wait_for_timeout(2600)   # nelle prove il programma rilegge le impostazioni imposte ogni due secondi
+            sw.evaluate("refresh(true)")
+            if not sw.evaluate(known):
+                print("SALTATO regola imposta: questo programma non legge le impostazioni imposte da un file (manca OMISSIS_MANAGED_FILE)")
+            else:
+                page.wait_for_timeout(500)
+                page.bring_to_front()   # la finestrella, qui aperta come scheda, guarda il sito della scheda in primo piano
+                fin.reload()
+                wait_for(fin, "#title", "active")
+                note = fin.is_visible("#managed")
+                page.evaluate("t => test('whole', t)", TEXT)
+                held = json.dumps(seen()["body"], ensure_ascii=False)
+                imposed.unlink()
+                page.wait_for_timeout(2600)
+                sw.evaluate("refresh(true)")
+                page.wait_for_timeout(500)
+                fin.reload()
+                wait_for(fin, "#title", "suspended")
+                page.evaluate("t => test('whole', t)", TEXT)
+                free = SENSITIVE[0] in json.dumps(seen()["body"], ensure_ascii=False)
+                mark("regola imposta dall'amministratore: la sospensione lì non vale, e torna a valere quando il vincolo sparisce",
+                      note and "[PERSONA_" in held and not any(s in held for s in SENSITIVE) and free and not fin.is_visible("#managed"),
+                      f"avviso nella finestrella: {note} · in chiaro con il vincolo: {sum(s in held for s in SENSITIVE)} · senza vincolo passa: {free}")
+        finally:
+            imposed.unlink(missing_ok=True)
+            fin.bring_to_front()
         fin.uncheck("#suspended")
         wait_for(fin, "#title", "active")
         page.wait_for_timeout(300)

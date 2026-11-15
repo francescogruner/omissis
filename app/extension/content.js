@@ -20,9 +20,15 @@
     return null;
   }
 
+  // la regola di questo servizio e' imposta da chi amministra il PC? Li' la sospensione scelta dalla finestrella non vale
+  function fixed(host) {
+    for (const s of (status && status.services) || []) if (s.domains.some(d => host === d || host.endsWith('.' + d))) return !!s.locked;
+    return false;
+  }
+
   function summary() {
     const domains = [];
-    if (!suspended) for (const s of (status && status.services) || []) if (s.policy === 'protect' && s.readable) domains.push(...s.domains);
+    for (const s of (status && status.services) || []) if (s.policy === 'protect' && s.readable && (!suspended || s.locked)) domains.push(...s.domains);
     // ospite: solo dentro un'app desktop, il servizio a cui appartengono le sue finestre interne
     return {domains, restore: !suspended && !!(status && status.restore), host_site: (!suspended && globalThis.MSP_HOST_SITE) || ''};
   }
@@ -31,7 +37,7 @@
     let d = {};
     try { d = await chrome.storage.local.get(['status', 'suspended', 'notices']); } catch (e) { /* estensione ricaricata */ }
     status = d.status || globalThis.MSP_DEFAULTS;
-    suspended = !!d.suspended;
+    suspended = !!d.suspended && !fixed(HOST_SITE);
     notices = d.notices !== false;
     if (channel) channel.ready.then(p => p.postMessage({status: summary()}));
     pageText();

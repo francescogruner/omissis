@@ -33,6 +33,7 @@ import urllib.request
 from pathlib import Path
 
 import catalog
+import managed
 import settings
 import paths
 import activity
@@ -117,11 +118,15 @@ class Bridge:
     def status(self, data):
         cfg = settings.read()
         # del radar all'estensione interessano solo i servizi da bloccare: degli altri non puo' fare nulla
+        # servizi la cui regola e' imposta da chi amministra il PC: li' la sospensione dalla finestrella dell'estensione non vale
+        fixed = set(settings.locked()["policies"])
         services = [{"id": s["id"], "name": s["name"], "domains": s["domains"], "policy": settings.policy(s, cfg),
-                    "readable": bool(s["adapter"]), **({"radar": True} if s["radar"] else {})}
+                    "readable": bool(s["adapter"]), **({"radar": True} if s["radar"] else {}), **({"locked": True} if s["id"] in fixed else {})}
                    for s in catalog.SERVICES if not s["radar"] or settings.policy(s, cfg) == "block"]
-        if self.test:
-            services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True})
+        if self.test:   # il servizio finto non e' nel catalogo: nelle prove lo si impone nominandolo tra le regole imposte
+            raw = managed.read().get("policies")
+            services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True,
+                             **({"locked": True} if isinstance(raw, dict) and "test" in raw else {})})
         return {"version": VERSION, "restore": bool(cfg["restore"]), "block_files": bool(cfg["block_files"]),
                 "box": bool(cfg.get("box", True)), "attachments": bool(cfg.get("attachments", True)), "services": services}
 

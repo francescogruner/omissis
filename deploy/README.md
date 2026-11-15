@@ -29,7 +29,8 @@ failed, `4` installed but protection not up yet.
 
 **Locked settings.** `Set-OmissisPolicy.ps1 -Settings policy.json` writes the settings under
 `HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Omissis`, which standard users cannot change. Omissis reads that key: what
-it finds there wins over the user's choices and shows as locked in the panel. There is no password: whoever has
+it finds there wins over the user's choices and shows as locked in the panel. On the services listed under
+`policies` the browser extension cannot be paused from its popup either. There is no password: whoever has
 administrator rights on the PC decides. It is not a defence against a user who tampers with the program, which
 is installed in the user's own profile.
 

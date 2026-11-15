@@ -83,6 +83,9 @@
  "option_notices": {
   "message": "Show a notice on the page when I replace data"
  },
+ "managed_note": {
+  "message": "Rule set by your organisation: suspending does not apply on this site."
+ },
  "option_suspend": {
   "message": "Pause protection in this browser"
  },

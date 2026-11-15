@@ -130,6 +130,16 @@ function find(status, host) {
   return null;
 }
 
+// La sospensione scelta dalla finestrella non vale sui servizi la cui regola e' imposta da chi amministra il PC:
+// si guarda il servizio a cui va la richiesta e quello della pagina che la fa.
+async function paused(c, m, sender) {
+  if (!c.suspended) return false;
+  const {status} = await chrome.storage.local.get('status');
+  const hosts = m && m.host ? [String(m.host)] : [];
+  for (const u of [m && m.url, sender && sender.tab && sender.tab.url]) { try { hosts.push(new URL(u).hostname); } catch (e) { /* senza indirizzo */ } }
+  return !hosts.some(h => { const s = find(status || MSP_DEFAULTS, h); return !!(s && s.locked); });
+}
+
 // ---------------------------------------------------------------- messaggi
 // vero se il messaggio viene da una pagina dell'estensione stessa (la finestrella), non da un sito
 const internal = sender => !sender.tab || String(sender.url || '').startsWith(chrome.runtime.getURL(''));
@@ -138,7 +148,7 @@ async function handle(m, sender) {
   switch (m && m.t) {
     case 'request': {
       const c = await conf();
-      if (c.suspended) return {action: 'passthrough'};
+      if (await paused(c, m, sender)) return {action: 'passthrough'};
       if (!c.token) return {action: 'block', reason: 'not_paired'};
       let r;
       try { r = await engine('request', m); } catch (e) {
@@ -150,13 +160,13 @@ async function handle(m, sender) {
     }
     case 'text': {   // la casella di scrittura: stesse regole di una richiesta
       const c = await conf();
-      if (c.suspended) return {action: 'passthrough'};
+      if (await paused(c, m, sender)) return {action: 'passthrough'};
       if (!c.token) return {action: 'block', reason: 'not_paired'};
       try { return await engine('text', m); } catch (e) { return {action: 'block', reason: 'engine'}; }
     }
     case 'attachment': {   // un file che sta per essere allegato: torna la copia anonimizzata
       const c = await conf();
-      if (c.suspended) return {action: 'passthrough'};
+      if (await paused(c, m, sender)) return {action: 'passthrough'};
       if (!c.token) return {action: 'block', reason: 'not_paired'};
       try {
         const r = await engine('attachment', m, 300000);
@@ -200,7 +210,7 @@ async function handle(m, sender) {
       const s = find(d.status || MSP_DEFAULTS, host);
       const key = 'c' + (card ? card.id : '');
       return {version: VERSION, build: BUILD, connected: !!d.token, health: d.health || {ok: false}, suspended: !!d.suspended, notices: d.notices !== false,
-        restore: !!(d.status && d.status.restore), host, service: s && {name: s.name, policy: s.policy, readable: s.readable},
+        restore: !!(d.status && d.status.restore), host, service: s && {name: s.name, policy: s.policy, readable: s.readable, locked: !!s.locked},
         counts: (await chrome.storage.session.get(key))[key] || null};
     }
     case 'blocked':

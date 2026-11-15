@@ -73,7 +73,8 @@ powershell -ExecutionPolicy Bypass -File Set-OmissisPolicy.ps1 -Settings "\\serv
 
 - Va lanciato **come amministratore o come SYSTEM** (è il modo in cui RMM e Intune lanciano gli script di serie).
 - I nomi sono gli stessi delle scelte del cliente (`policy.example.json` è un modello). `policies` blocca solo i
-  servizi scritti: gli altri restano all'utente. Ogni altra impostazione è bloccata per intero.
+  servizi scritti: gli altri restano all'utente. Ogni altra impostazione è bloccata per intero. Sui servizi
+  scritti lì, l'estensione del browser non si lascia sospendere dalla sua finestrella.
 - La chiave rispecchia il file: un'impostazione tolta dal file torna libera. Con `-Remove` torna tutto libero, e
   ogni utente ritrova le scelte che aveva prima.
 - Esce con `0` (fatto), `3` (file mancante o non valido), `5` (non ha i diritti per scrivere).
@@ -82,7 +83,9 @@ powershell -ExecutionPolicy Bypass -File Set-OmissisPolicy.ps1 -Settings "\\serv
 
 **Che cosa non è.** Omissis è installato nel profilo dell'utente, che quindi può modificarne i file: il blocco
 ferma i cambi fatti dal pannello e dal file delle impostazioni, non chi manomette il programma. Chi deve
-impedire anche questo usa gli strumenti di Windows (AppLocker, controllo delle applicazioni).
+impedire anche questo usa gli strumenti di Windows (AppLocker, controllo delle applicazioni). Allo stesso modo,
+niente impedisce all'utente di spegnere o togliere l'estensione dal browser: per quello servono i criteri del
+browser (installazione forzata), possibili quando l'estensione sarà pubblicata su uno store.
 
 ## La console centrale
 

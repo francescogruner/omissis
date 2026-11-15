@@ -298,7 +298,8 @@ Installazione di prova: `chrome://extensions` → Modalità sviluppatore → Car
 pacchettizzata → cartella `extension`. Poi nel pannello, aperto in quel browser, sezione Browser →
 Collega questo browser. Finché non è collegata, o se la protezione è ferma, sui servizi protetti i
 messaggi **non partono** (compare un avviso rosso nella pagina); dalla finestrella dell'icona si
-può sospendere la protezione in quel browser.
+può sospendere la protezione in quel browser, tranne che sui servizi la cui regola è imposta da chi
+amministra il PC (vedi «Nelle organizzazioni»): lì la sospensione non vale, e la finestrella lo dice.
 
 Le difese sono due, in fila. La prima è sulla **casella di scrittura**: all'Invio (o al clic sul
 pulsante di invio) i dati vengono sostituiti già nella casella, prima che il sito legga il testo.
@@ -630,6 +631,8 @@ script `deploy\Set-OmissisPolicy.ps1` lo fa da un file JSON). Ogni valore ha il 
 stessi di `settings.json`. Ciò che sta lì vince sulle scelte dell'utente: nel pannello quei comandi restano
 visibili ma fermi, e il programma rifiuta di cambiarli. `policies` blocca solo i servizi scritti; ogni altra
 impostazione è bloccata per intero. Nel file dell'utente restano le sue scelte: tolto il blocco, tornano.
+Sui servizi scritti in `policies` nemmeno l'estensione del browser si lascia sospendere. Resta fuori chi
+toglie o spegne l'estensione dal browser: quello si impedisce solo con i criteri del browser.
 Non c'è una password di amministratore: comanda chi ha i diritti di amministratore su quel PC. E non è una
 difesa da chi manomette il programma, che è installato nel profilo dell'utente.
 
@@ -672,7 +675,7 @@ collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serv
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
-| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 36 controlli); pagine vere solo aperte, senza accedere |
+| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 37 controlli); pagine vere solo aperte, senza accedere |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
 da Servizi AI dopo averli provati con dati inventati.

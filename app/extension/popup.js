@@ -26,7 +26,9 @@ async function show() {
   }
   const fault = !d.connected ? T('fault_not_connected')
     : !d.health.ok ? T(d.health.reason === 'invalid_code' ? 'fault_code' : 'fault_program') : '';
-  const status = fault ? 'not_active' : d.suspended ? 'suspended' : 'active';
+  const fixed = !!(d.service && d.service.locked);   // regola imposta da chi amministra il PC: qui la sospensione non vale
+  const paused = d.suspended && !fixed;
+  const status = fault ? 'not_active' : paused ? 'suspended' : 'active';
   el('title').dataset.status = status;   // il codice dello stato, uguale in ogni lingua (lo leggono le prove)
   el('textTitle').textContent = T('status_' + status);
   el('fault').hidden = !fault;
@@ -34,7 +36,8 @@ async function show() {
   el('connection').hidden = d.connected && d.health.reason !== 'invalid_code';
   el('service').textContent = d.service ? d.service.name : d.host ? T('site_outside_catalog') : '—';
   const pol = d.service ? (d.service.policy === 'protect' && !d.service.readable ? 'record' : d.service.policy) : null;
-  el('policy').textContent = !pol ? '—' : pol === 'protect' && d.suspended ? T('policy_suspended', T('policy_protect')) : T('policy_' + pol);
+  el('policy').textContent = !pol ? '—' : pol === 'protect' && paused ? T('policy_suspended', T('policy_protect')) : T('policy_' + pol);
+  el('managed').hidden = !fixed;
   const c = d.counts || {messages: 0, replacements: 0, blocked: 0};
   for (const k of ['messages', 'replacements', 'blocked']) el(k).textContent = c[k];
   el('notices').checked = d.notices;
