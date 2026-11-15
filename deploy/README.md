@@ -43,8 +43,9 @@ is installed in the user's own profile.
 replaced per type and per AI service, requests stopped, names and versions of the AI tools found): never texts,
 never the replaced values. The panel shows the user where the PC is connected and the exact summary. Per-person
 counts can amount to monitoring of employees: check with whoever handles privacy first, or set
-`"console_names": false`. The protocol is open (`app/central.py`); the console itself is not part of this
-repository. A console on the local network, with a certificate it made itself and no public name, is recognised
+`"console_names": false`. The protocol is open (`app/central.py`); the console is a separate program, not open
+source: it is downloaded compiled from the releases page and is free up to 5 PCs (see
+[`../console/README.md`](../console/README.md)). A console on the local network, with a certificate it made itself and no public name, is recognised
 by `console_pin`, the SHA-256 fingerprint of that certificate: the PC connects only to the server presenting it,
 and checks before sending the key. Without `console_pin` the certificate must be valid as for a browser.
 

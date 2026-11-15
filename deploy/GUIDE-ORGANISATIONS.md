@@ -19,23 +19,29 @@ on the number of PCs.
 | Settings locked by the administrator | yes | |
 | Inference server on the network (one PC lends its model to the others) | yes | |
 | State of each PC read by your RMM (`Get-OmissisStatus.ps1`) | yes | |
-| **Central console**: all the PCs on one page, customer by customer | | yes |
+| **Central console**: all the PCs on one page, up to 5 PCs of one customer | yes, but not open source | |
+| Central console beyond 5 PCs, or for several customers (MSP) | | yes, with a licence |
 
 **What the console adds.** How many PCs have Omissis and which ones need attention (protection off, PCs that
 have gone quiet, old versions), how much data was kept away from AI services in total, per day, per type of data
 and per service, and the AI tools found on the PCs. For an MSP: several separate customers, with a read-only
 login for each customer. It receives counts and program names only, never the texts.
 
-**How to move to the console.** There is no other edition of Omissis to install and no licence code to put on
-the PCs: the program stays the free one.
+**How to try it and how to move to a licence.** There is no other edition of Omissis to install and no licence
+code goes on the PCs: the program for the PCs stays the free one. The console is a separate program, compiled (its
+code is not in this repository): its guide is in [`../console/README.md`](../console/README.md).
 
-1. Ask for the console by writing to <https://francescogruner.it/contatti/>.
-2. You receive the console (to install on a server of your own, on the local network too) and, for each
-   customer, an **enrolment key**.
-3. Three settings are added on the PCs: `console_url`, `console_key` and, for a console on the local network,
-   `console_pin`. With `Set-OmissisPolicy.ps1` on all the PCs at once, or by hand from each panel (Settings →
-   Central console, in the advanced view).
-4. Within an hour the PCs show up in the console. Remove the three settings and everything is as before.
+1. Download `omissis-console-<version>.zip` from the
+   [releases page](https://github.com/francescogruner/omissis/releases/latest) and install it on a computer of your
+   own, on the local network too. On first opening, the page has you create your login and walks you through the
+   first steps.
+2. For each customer the console gives an **enrolment key** and a file with three settings: `console_url`,
+   `console_key` and, on the local network, `console_pin`. They go on the PCs with `Set-OmissisPolicy.ps1`, all at
+   once, or by hand from each panel (Settings → Central console, in the advanced view).
+3. Within an hour the PCs show up in the console. Remove the three settings and everything is as before.
+4. **Beyond 5 PCs, or with more than one customer**: in the console, "Licence" card → "Request a licence". It
+   prepares a file with the identifier of the installation; send it from <https://francescogruner.it/contatti/> and
+   you get back a licence file to load in the same card.
 
 ## 2. Which layout to choose
 

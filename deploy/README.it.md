@@ -111,7 +111,8 @@ pulsante «Vedi che cosa parte» mostra il riepilogo esatto.
   essere un controllo a distanza dei lavoratori; prima di attivarli si sente chi si occupa di privacy e, dove
   serve, si informano i dipendenti.
 - Il protocollo è aperto (`app/central.py`): una richiesta `POST` a `<console_url>/api/v1/report` con la chiave
-  nell'intestazione `Authorization`. La console in sé non fa parte di questo repository.
+  nell'intestazione `Authorization`. La console è un programma a parte, non aperto: si scarica compilata dalla
+  pagina delle versioni ed è gratuita fino a 5 PC (vedi [`../console/README.it.md`](../console/README.it.md)).
 - Un rinvio verso un altro indirizzo non viene seguito, e un indirizzo non `https` viene rifiutato.
 - **Console in rete locale.** Una console interna non ha un nome pubblico né un certificato firmato da
   un'autorità: si fa il certificato da sé e ne dà l'impronta. Con `"console_pin": "<impronta SHA-256>"` il PC si

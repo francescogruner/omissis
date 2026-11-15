@@ -131,6 +131,10 @@ già configurato, bloccano le impostazioni scelte dall'amministratore, ne riferi
 un RMM, da Intune o da uno script di accesso. Si parte dalla [guida per le aziende](deploy/GUIDA-AZIENDE.it.md):
 che cosa è gratuito e che cosa no, quale schema scegliere, il server di inferenza passo per passo.
 
+**Tutti i PC in una pagina**: la [console centrale](console/README.it.md) mostra, cliente per cliente, quali PC sono
+protetti e quanti dati sono stati tenuti fuori dai servizi AI. È un programma a parte, compilato e non aperto,
+**gratuito fino a 5 PC**: si scarica dalla [pagina delle versioni](https://github.com/francescogruner/omissis/releases/latest).
+
 **PC che non reggono il modello**: un PC con Omissis può prestare il suo modello agli altri della rete
 (Impostazioni, Riconoscimento, «Server di inferenza in rete»). Il testo da controllare viaggia cifrato e tornano
 solo le posizioni dei dati trovati; segnaposto, valori veri, regole ed elenchi restano su ogni PC. Di serie è spento.
@@ -164,7 +168,7 @@ Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 - Firma del codice dell'installer e pubblicazione sul Microsoft Store
 - Messaggistica nativa del browser per l'estensione e pubblicazione sugli store; Firefox
 - Scansioni restituite come immagine oscurata; ripristino automatico dei file scaricati dalle chat
-- Console centrale per le organizzazioni (un prodotto a parte: il programma blocca già le impostazioni e manda il riepilogo)
+- Console centrale: cambiare le regole dei PC dalla console, accesso con l'account Microsoft, avvisi
 
 ## Licenza
 

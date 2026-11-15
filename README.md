@@ -145,6 +145,10 @@ pre-configured, lock the settings the administrator chooses, report its state an
 Intune or a logon script. Start from the [guide for organisations](deploy/GUIDE-ORGANISATIONS.md): what is free
 and what is not, which layout to choose, the inference server step by step.
 
+**All the PCs on one page**: the [central console](console/README.md) shows, customer by customer, which PCs are
+protected and how much data was kept away from AI services. It is a separate program, compiled and not open
+source, **free up to 5 PCs**: download it from the [releases page](https://github.com/francescogruner/omissis/releases/latest).
+
 **PCs that cannot hold the model**: one PC with Omissis can lend its model to the others on the network (Settings,
 Recognition, "Inference server on the network"). The text to check travels encrypted and only the positions of the
 data found come back; placeholders, real values, rules and lists stay on each PC. Off by default.
@@ -180,7 +184,7 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 - Native messaging instead of the local HTTP bridge for the extension; store publication
 - Firefox
 - Redacted image output for scans; automatic restore of files downloaded from chats
-- Central console for organisations (a separate product: the program already locks settings and sends the summary)
+- Central console: changing the rules of the PCs from the console, sign-in with a Microsoft account, alerts
 
 ## Licence
 
