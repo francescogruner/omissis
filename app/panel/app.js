@@ -503,7 +503,7 @@ const drawConsole = test(async () => {
   const el = $("#console");
   if (!el) return;
   const c = await api("/api/console");
-  const problem = c.error ? t(`console.error.${["address", "unreachable", "certificate"].includes(c.error) ? c.error : c.error === "http_401" || c.error === "http_403" ? "refused" : "answer"}`) : "";
+  const problem = c.error ? t(`console.error.${["address", "unreachable", "certificate"].includes(c.error) ? c.error : c.error === "http_401" || c.error === "http_403" ? "refused" : c.error === "http_402" ? "licence" : "answer"}`) : "";
   el.closest("section").classList.toggle("only-advanced", !c.configured);
   el.innerHTML = c.configured
     ? line(t("console.connected", {host: c.host}), esc(t(c.names ? "console.sends.names" : "console.sends")) + (c.pinned ? " " + esc(t("console.pinned")) : "") + (c.managed ? " " + esc(t("managed.locked")) : ""),

@@ -772,6 +772,7 @@
  "console.error.unreachable": "Console unreachable",
  "console.error.refused": "Key not accepted",
  "console.error.answer": "The console answered with an error",
+ "console.error.licence": "The console accepts no more PCs: it has reached the limit of its licence",
  "service.manual": "Manual use",
  "via.text": "Text section",
  "via.clipboard": "clipboard and shortcuts",

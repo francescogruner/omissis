@@ -273,6 +273,11 @@ def share(engine, port, key, cert, private):
             if size < 0 or size > MAX_BODY:
                 self._respond(413, {"error": "size"})
                 return
+            known = secrets.compare_digest(self.headers.get("Authorization", "").encode("utf-8"), ("Bearer " + key).encode("utf-8"))
+            if not known and size > 65536:   # chi non porta la chiave non fa leggere al server megabyte di dati
+                self.close_connection = True
+                self._allowed()
+                return
             raw = self.rfile.read(size)   # si legge prima di rispondere, anche per rifiutare: altrimenti chi scrive vede cadere la linea
             if not self._allowed():
                 return

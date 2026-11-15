@@ -90,6 +90,13 @@ def main():
                 refused.append(ex.code)
         mark("il server dice chi è solo a chi ha la chiave; con un'impronta diversa il PC non gli parla nemmeno",
              bool(who["model"]) and refused == ["refused", "certificate"], f"{who['model']} · {refused}")
+        try:   # senza la chiave un corpo grande non viene nemmeno letto: rifiuto, o linea chiusa mentre lo si sta ancora mandando
+            remote._open(url, key[:-3] + "xyz", pin, "/omissis/detect", {"texts": ["x" * 300_000]})
+            heavy = "accettato"
+        except remote.Failure as ex:
+            heavy = ex.code
+        mark("chi non ha la chiave non fa leggere al server un corpo grande, e il server resta in piedi",
+             heavy in ("refused", "unreachable") and bool(remote.check(url, key, pin)["model"]), heavy)
         try:
             call(url.replace("https://", "http://") + "/omissis/info", {"Authorization": "Bearer " + key}, timeout=8)
             plain = "ha risposto"

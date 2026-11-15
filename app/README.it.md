@@ -937,7 +937,7 @@ inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2
 registro dell'utente, mai da quelle di sistema) e il riepilogo per la console centrale, mandato a un servizio
 finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta, e una console con un certificato
 fatto da sé, accettata solo con l'impronta giusta.
-`e2e_remote.py` (14 controlli, serve la copia di prova accesa) prova il server di inferenza in rete: le fa prestare
+`e2e_remote.py` (15 controlli, serve la copia di prova accesa) prova il server di inferenza in rete: le fa prestare
 il modello e lancia un secondo motore senza modello, con dati suoi, che glielo chiede in HTTPS. Controlla che dal PC
 escano solo segnaposto, che regole, elenchi e archivio restino sul PC, che il server non scriva nulla, che chiave e
 impronta sbagliate vengano rifiutate, che a server spento non parta nulla, e la scheda nella pagina nelle due lingue.

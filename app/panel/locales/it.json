@@ -772,6 +772,7 @@
  "console.error.unreachable": "Console non raggiungibile",
  "console.error.refused": "Chiave non accettata",
  "console.error.answer": "La console ha risposto con un errore",
+ "console.error.licence": "La console non accetta altri PC: ha raggiunto il limite della sua licenza",
  "service.manual": "Uso manuale",
  "via.text": "sezione Testo",
  "via.clipboard": "appunti e scorciatoie",

@@ -3,7 +3,6 @@
 import json
 import re
 import urllib.parse
-from pathlib import Path
 
 import catalog
 import managed
