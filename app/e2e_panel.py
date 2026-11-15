@@ -345,7 +345,7 @@ def main():
                         print("SALTATO impostazioni imposte: senza OMISSIS_MANAGED_FILE la prova non può imporre nulla")
                     else:
                         Path(imposed).write_text(json.dumps({"updates": "never", "policies": {"deepseek": "block"}}), encoding="utf-8")
-                        fixed = wait_until(lambda: call(code, "/api/settings")["managed"] == {"keys": ["updates"], "policies": ["deepseek"]}, timeout=15)
+                        fixed = wait_until(lambda: call(code, "/api/settings")["managed"] == {"keys": ["updates"], "policies": ["deepseek"], "console": []}, timeout=15)
                         pag.goto(f"{PANEL}/#/settings/general")
                         pag.wait_for_selector("#updates", state="attached", timeout=15000)
                         shown = wait(pag, "() => document.getElementById('updates').disabled && document.getElementById('updates').value === 'never' && !!document.getElementById('managedNote')", timeout=10)
@@ -358,7 +358,7 @@ def main():
                                 refused.append(ex.code == 422)
                         free = call(code, "/api/settings", {"theme": "light"})["updates"] == "never"   # il resto si cambia come sempre
                         Path(imposed).unlink()
-                        back = wait_until(lambda: call(code, "/api/settings")["managed"] == {"keys": [], "policies": []}, timeout=15)
+                        back = wait_until(lambda: call(code, "/api/settings")["managed"] == {"keys": [], "policies": [], "console": []}, timeout=15)
                         mark(f"{language}: impostazioni imposte dall'amministratore: ferme nella pagina, rifiutate dal programma, libere quando il vincolo sparisce",
                              fixed and shown and refused == [True, True] and free and back, f"imposte {fixed} · pagina {shown} · rifiuti {refused} · tolte {back}")
                 except Exception as ex:   # noqa: BLE001
@@ -382,6 +382,19 @@ def main():
                     mark(f"{language}: console centrale: non collegata di serie, indirizzo non https rifiutato, anteprima di ciò che partirebbe",
                          card and not state["configured"] and bad and {"device", "days", "tools", "version"} <= set(preview) and hidden_key
                          and not call(code, "/api/console")["configured"], f"scheda {card} · rifiuto {bad}")
+                    # collegato a una console (qui spenta): le sue regole si accettano solo per scelta, con l'interruttore
+                    call(code, "/api/console", {"action": "connect", "url": "http://127.0.0.1:9", "key": "chiave-di-prova"})
+                    pag.reload()
+                    shown = wait(pag, "() => !!document.getElementById('conRules')", timeout=15)
+                    before = call(code, "/api/console")["rules"]
+                    pag.evaluate("document.getElementById('conRules').click()")
+                    accepted = wait_until(lambda: call(code, "/api/console")["rules"]["accept"] is True, timeout=30)
+                    text = pag.inner_text("#console")
+                    call(code, "/api/console", {"action": "rules", "accept": False})
+                    call(code, "/api/console", {"action": "disconnect"})
+                    mark(f"{language}: console centrale: le regole della console si accettano solo per scelta, con un interruttore nel pannello",
+                         shown and before == {"accept": False, "managed": False, "version": 0, "count": 0, "received": ""} and accepted and "console.rules" not in text
+                         and not call(code, "/api/console")["configured"] and call(code, "/api/console")["rules"]["accept"] is False, f"{before} · {text[:80]!r}")
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: console centrale", False, str(ex)[:160])
 

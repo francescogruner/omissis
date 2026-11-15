@@ -9,6 +9,16 @@ conteggi e nomi di programmi: mai i testi scritti dalle persone, mai i valori so
 
 English: [README.md](README.md).
 
+## Che cosa si fa da lì
+
+- **Regole per i PC**: quali servizi AI proteggere o bloccare, i file, gli aggiornamenti, fissati per cliente e mandati
+  ai PC che hanno scelto di accettarli. La console può cambiare le regole, non a chi i PC mandano i dati.
+- **Avvisi**: un PC che spegne la protezione, uno che non si fa più sentire, uno strumento AI nuovo. Nella pagina, a un
+  indirizzo web (Teams, Slack) o per posta.
+- **Registro di conformità**: chi è entrato e che cosa ha cambiato, con il CSV da dare a chi fa un controllo e una
+  catena di impronte che scopre le righe ritoccate.
+- **Accessi**: con nome e password, oppure con l'account Microsoft dell'organizzazione (Entra ID).
+
 ## Gratis fino a 5 PC
 
 La console è **gratuita fino a 5 PC di un solo cliente**, senza scadenza e senza registrarsi. Per seguire più PC o
@@ -43,6 +53,7 @@ completa, con la messa in rete su Internet, le copie di sicurezza e i problemi t
 ## Che cosa è provato e che cosa no
 
 Le prove automatiche, su un solo computer, coprono le chiamate della console, la pagina, la licenza, il primo avvio
-e il pacchetto compilato installato senza attività pianificate. Non ancora provato: un PC che si collega da
+e il pacchetto compilato installato senza attività pianificate. Regole, avvisi e registro sono provati in automatico con il programma vero e con destinazioni finte; l'ingresso con
+l'account Microsoft solo contro un servizio di accesso finto, non con un'organizzazione vera. Non ancora provato: un PC che si collega da
 un'altra macchina della rete, il riavvio del server e la copia notturna, l'installazione del pacchetto compilato da
 amministratore. Il programma non è firmato: Windows può mostrare un avviso quando lo si lancia.

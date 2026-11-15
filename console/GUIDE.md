@@ -121,6 +121,83 @@ If the customer wants to see their own numbers, create a read-only login for the
 the console shows how much each person uses AI services, and that can amount to remote monitoring of employees.
 With `"console_names": false` in the file only the totals arrive.
 
+## Managing the PCs from the console
+
+Four more things, all on the page, for those who follow many PCs. Only the role that manages the console sees and uses
+them; a customer with read-only access sees its own alerts and nothing else.
+
+### Rules for a customer's PCs
+
+Choose a customer at the top: the card "Rules for this customer's PCs" appears. There you set the rules per service
+(protect, record, block, ignore), file uploads, attachments, replacement in the writing box, updates, the scan for AI
+tools, and you can forbid reduced protection. "Save and send to the PCs": each PC receives them in the answer to its
+next summary, so within an hour, and at once with "Send now" from its panel.
+
+Three things to know:
+
+- **The PC must have chosen to accept them.** By default a PC ignores the console's rules. It is turned on from the
+  panel (Settings → Central console → "Accept rules from this console") or, for all the PCs together, by putting
+  `"console_rules": true` in the file you give to `Set-OmissisPolicy.ps1`. The card says how many PCs accept them and
+  how many have already applied them.
+- **The console cannot move the data.** The list of what can be imposed is closed, and lives both in the console and in
+  the program: the address of the console and of the inference server, gateways, folders, and the computer and user
+  name in the summary stay out of it. Someone getting into the console without the right could loosen the rules of the
+  PCs that accept them, not have their data sent elsewhere.
+- **The PC's administrator wins.** A rule written in the PC's Windows registry (`Set-OmissisPolicy.ps1`) counts more
+  than the console's. To forbid the console's rules on a PC altogether: `"console_rules": false`, imposed.
+
+### Alerts
+
+The "Alerts" card lists what needs attention: a PC that turned protection off, one that has been quiet for three
+days, an AI tool that showed up on a PC that did not have it before. The first two close by themselves when the PC is
+fine again; any alert can be closed with "Seen".
+
+With "Where to send them" new alerts also leave the page, within a minute and in a single message:
+
+- to a **web address** (webhook): the message is in the `text` field, the shape accepted by Slack, Mattermost and the
+  Teams connectors; the address must start with `https://`;
+- by **e-mail**, through an SMTP server (STARTTLS or SSL). The password stays in the console's data, in clear because
+  it is needed to send: one more reason to keep the data folder closed. A dedicated mailbox is a good idea.
+
+The message carries the customer, the computer name and what happened: never the user's name, never counts or texts.
+"Send a test alert" tells you at once whether the destination answers. If a send fails the page says so and the
+console retries by itself.
+
+### Compliance log
+
+At the bottom of the page: who signed in (or tried), who created or removed logins and customers, who changed the PC
+rules (with the old ones and the new ones), licences loaded, alert destinations, every export. For each row: when,
+who, from which address. It downloads as CSV, also for a single customer.
+
+Rows cannot be changed or deleted from the console, and each one carries a fingerprint that depends on the previous
+one: if someone alters or removes a row in the database, the page (and `console --data <data> --verify-audit`) says
+from which row the chain breaks. **The limit**: someone with access to the server who rewrites the whole log from
+scratch is not caught from here. That is why the page shows the fingerprint of the last row, and every CSV carries it:
+noted down now and then outside the server (in a ticket, in an e-mail), it proves what the log was on that day.
+
+The log is never cleaned up automatically, not even by `--prune`. The one from earlier versions (`audit.jsonl`) is
+brought in at the first start and the file renamed `audit-importato.jsonl`.
+
+### Logins, and signing in with a Microsoft account
+
+In the "Logins" card you create and remove the console's logins without going through the terminal.
+
+To let people sign in with the organisation's Microsoft account (Entra ID) instead of a name and password:
+
+1. in the Entra admin centre, **App registrations → New registration**, accounts "in this organisation only",
+   platform **Web**, with the redirect address the console shows under "Sign-in with Microsoft" (it is the console's
+   address followed by `/auth/microsoft/callback`);
+2. under **Certificates & secrets** create a client secret;
+3. in the console, "Sign-in with Microsoft": paste the directory ID, the application ID and the secret, and enable it;
+4. add a login "With a Microsoft account" for each person, with their address. **Only those on that list get in**:
+   having an account in the organisation is not enough.
+
+At the first sign-in the login is tied to that exact account: another account that one day took the same address
+does not get in. Always keep at least one login with a password, for when Microsoft cannot be reached. The
+application secret expires: when it does, create a new one and paste it again. It needs an `https://` address that
+Microsoft accepts: with the console on the local network and its self-made certificate the browser will show its
+warning.
+
 ## The licence
 
 Without a licence the console works, and follows up to **5 PCs of a single customer**. To follow more you need a
@@ -149,10 +226,12 @@ change a number and it stops being valid.
 |---|---|
 | See customers and logins | `console --data <data> --list` |
 | Change a password | `console --data <data> --set-password name` (it closes the open sessions of that login) |
-| Remove a login | `console --data <data> --remove-user name` |
+| Remove a login | `console --data <data> --remove-user name` (or from the "Logins" card) |
+| Create a login that signs in with a Microsoft account | `console --data <data> --add-user name@company.com --microsoft` |
 | Read the certificate fingerprint again | `console --data <data> --show-pin` |
 | Install a licence, see how much is used | `console --data <data> --licence <file>`, `console --data <data> --licence-info` |
-| Who signed in and what they changed | `<data>\audit.jsonl`: successful and failed sign-ins, customers created, keys changed, PCs removed, licences loaded |
+| Who signed in and what they changed | The "Compliance log" card on the page, with the CSV to download |
+| Check that the log has not been altered | `console --data <data> --verify-audit` |
 | Make a backup now | `console --data <data> --backup <folder>` (it works with the console running) |
 | Remove old data | `console --data <data> --prune 400` |
 
@@ -187,11 +266,33 @@ copy the chosen file over `console.sqlite` in the data folder, remove any `conso
 | In the PC's panel: "Key not accepted" | Wrong key, or a new one was created |
 | In the PC's panel: "Console unreachable" | Wrong address or port, firewall, server off |
 | "Too many attempts" at sign-in | After five wrong passwords you wait a quarter of an hour |
+| Forgotten password | See below, "Forgotten password" |
 | All the PCs of a customer disappear | A new key was created: the old one no longer works, the PCs must be connected again |
+
+### Forgotten password
+
+The console does not e-mail passwords and does not keep them in a form that can be read back: a lost password is not
+recovered, **a new one is set**. Whoever has administrator rights on the console's computer does it, the same person
+who could reinstall it anyway.
+
+1. On the console's computer open PowerShell **as administrator**.
+2. If you do not remember the login's name either: `C:\OmissisConsole\app\omissis-console.exe --data C:\OmissisConsole\data --list`
+3. Set the new password (at least 12 characters; it is asked twice and not shown while you type):
+   `C:\OmissisConsole\app\omissis-console.exe --data C:\OmissisConsole\data --set-password name`
+
+There is no need to stop the console. That login's open sessions are closed, and the compliance log records that the
+password was changed from the terminal. It also works after "Too many attempts": wait the quarter of an hour, or
+restart the console.
+
+If nobody can get in any more (the only login used a Microsoft account and Microsoft cannot be reached, or the login
+was removed by mistake), a new one is created from the same terminal: `... --add-user new.name --role msp`. Data,
+customers and the licence are not touched.
+
+Someone with a read-only customer login asks whoever manages the console for a new password.
 
 ## What has been tested
 
-On 15 November 2026: the console's calls (39 checks); the built-in HTTPS with the real
+On 15 November 2026: the console's calls (92 checks); the built-in HTTPS with the real
 Omissis program (right fingerprint: the summary arrives; wrong or missing: nothing leaves); the page over HTTPS
 with the file to download; the unzipped package, with the **compiled** program, installed in a test folder
 **without** registering tasks (`-NoTasks`), started, connected, licensed, backed up, updated and removed (22
@@ -205,6 +306,12 @@ script, and does not answer in plain HTTP.
 
 That test was made with the earlier package, which carried Python: with the compiled program the installation as
 administrator has to be repeated.
+
+The parts of "Managing the PCs from the console" are tested automatically, on the same computer: the rules reach the
+real program, which applies them only if it chose to accept them; alerts reach a fake web address and a fake mail
+server; the log catches a changed or removed row. **Sign-in with a Microsoft account is tested only against a fake
+sign-in service**: it has not yet been tried with a real organisation on Entra ID, nor have alerts towards a real
+Teams, Slack or mail server.
 
 **Not tested yet**: a restart of the server and the nightly backup made by the scheduled task; a PC connecting
 from another machine on the network; an update over a running installation; Caddy and the real certificate.

@@ -39,6 +39,9 @@ code is not in this repository): its guide is in [`../console/README.md`](../con
    `console_key` and, on the local network, `console_pin`. They go on the PCs with `Set-OmissisPolicy.ps1`, all at
    once, or by hand from each panel (Settings → Central console, in the advanced view).
 3. Within an hour the PCs show up in the console. Remove the three settings and everything is as before.
+   From the console you can also **send rules to the PCs** (which services to protect or block, files, updates),
+   receive **alerts** and keep a **compliance log**. Rules apply only to PCs that accept them:
+   `"console_rules": true` in the same file. The console cannot change where the PCs send their data.
 4. **Beyond 5 PCs, or with more than one customer**: in the console, "Licence" card → "Request a licence". It
    prepares a file with the identifier of the installation; send it from <https://francescogruner.it/contatti/> and
    you get back a licence file to load in the same card.

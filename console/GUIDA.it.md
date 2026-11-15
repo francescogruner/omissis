@@ -120,6 +120,82 @@ Se il cliente vuole vedere i suoi numeri, creagli un accesso in sola lettura:
 la console mostra quanto ogni persona usa i servizi AI, e può essere un controllo a distanza dei lavoratori.
 Con `"console_names": false` nel file arrivano solo i totali.
 
+## Gestire i PC dalla console
+
+Quattro cose in più, tutte nella pagina, per chi segue molti PC. Le vede e le usa solo chi ha il ruolo che gestisce la
+console; il cliente con accesso in sola lettura vede i suoi avvisi e nient'altro.
+
+### Regole per i PC di un cliente
+
+Scegli un cliente in alto: compare la scheda «Regole per i PC di questo cliente». Lì si fissano le regole per servizio
+(proteggi, registra, blocca, ignora), il caricamento di file, gli allegati, la sostituzione nella casella di scrittura,
+gli aggiornamenti, l'analisi degli strumenti AI, e si può vietare la protezione ridotta. «Salva e manda ai PC»: ogni PC
+le riceve in risposta al suo prossimo riepilogo, quindi entro un'ora, e subito con «Invia ora» dal suo pannello.
+
+Tre cose da sapere:
+
+- **Il PC deve aver scelto di accettarle.** Di serie un PC ignora le regole della console. Si accende dal pannello
+  (Impostazioni → Console centrale → «Accetta le regole da questa console») oppure, per tutti i PC insieme, mettendo
+  `"console_rules": true` nel file che dai a `Set-OmissisPolicy.ps1`. La scheda dice quanti PC le accettano e quanti le
+  hanno già applicate.
+- **La console non può spostare i dati.** L'elenco di ciò che si può imporre è chiuso, e sta sia nella console sia nel
+  programma: restano fuori l'indirizzo della console e del server di inferenza, i gateway, le cartelle, il nome del
+  computer e dell'utente nel riepilogo. Chi entrasse nella console senza diritto potrebbe allentare le regole dei PC che
+  le accettano, non farsi mandare i loro dati.
+- **L'amministratore del PC vince.** Una regola scritta nel registro di Windows del PC (`Set-OmissisPolicy.ps1`) vale
+  più di quella della console. Per vietare del tutto le regole della console su un PC: `"console_rules": false` imposto.
+
+### Avvisi
+
+La scheda «Avvisi» elenca ciò che chiede attenzione: un PC che ha spento la protezione, uno che non si fa sentire da tre
+giorni, uno strumento AI comparso su un PC che prima non l'aveva. I primi due si chiudono da soli quando il PC torna a
+posto; ogni avviso si può chiudere con «Visto».
+
+Con «Dove mandarli» gli avvisi nuovi partono anche fuori dalla pagina, entro un minuto e in un solo messaggio:
+
+- a un **indirizzo web** (webhook): il messaggio è nel campo `text`, la forma che accettano Slack, Mattermost e i
+  connettori di Teams; l'indirizzo deve iniziare con `https://`;
+- per **posta**, con un server SMTP (STARTTLS o SSL). La password resta tra i dati della console, in chiaro perché
+  serve per inviare: è un motivo in più per tenere chiusa la cartella dei dati. Conviene una casella dedicata.
+
+Nel messaggio ci sono il cliente, il nome del computer e che cosa è successo: mai il nome dell'utente, mai conteggi o
+testi. «Manda un avviso di prova» dice subito se la destinazione risponde. Se un invio fallisce la pagina lo scrive e
+la console riprova da sola.
+
+### Registro di conformità
+
+In fondo alla pagina: chi è entrato (o ha provato), chi ha creato o tolto accessi e clienti, chi ha cambiato le regole
+dei PC (con quelle di prima e quelle nuove), le licenze caricate, le destinazioni degli avvisi, ogni esportazione. Per
+ogni riga: quando, chi, da quale indirizzo. Si scarica in CSV, anche per un solo cliente.
+
+Le righe non si modificano e non si cancellano dalla console, e ognuna porta un'impronta che dipende da quella prima:
+se qualcuno ritocca o toglie una riga nell'archivio, la pagina (e `console --data <dati> --verify-audit`) dice da quale
+riga la catena non torna. **Il limite**: chi ha accesso al server e riscrive tutto il registro da capo non viene
+scoperto da qui. Per questo la pagina mostra l'impronta dell'ultima riga, e ogni CSV la riporta: annotata ogni tanto
+fuori dal server (in un ticket, in una mail), è la prova che il registro di quel giorno era quello.
+
+Il registro non viene mai ripulito da solo, nemmeno da `--prune`. Quello delle versioni precedenti (`audit.jsonl`)
+viene portato dentro al primo avvio e il file rinominato `audit-importato.jsonl`.
+
+### Accessi, e ingresso con l'account Microsoft
+
+Nella scheda «Accessi» si creano e si tolgono gli accessi alla console, senza passare dal terminale.
+
+Per far entrare le persone con l'account Microsoft dell'organizzazione (Entra ID) al posto di nome e password:
+
+1. nel centro di amministrazione di Entra, **Registrazioni app → Nuova registrazione**, account «solo di questa
+   organizzazione», piattaforma **Web**, con l'indirizzo di reindirizzamento che la console mostra in «Accesso con
+   Microsoft» (è l'indirizzo della console seguito da `/auth/microsoft/callback`);
+2. in **Certificati e segreti** crea un segreto client;
+3. nella console, «Accesso con Microsoft»: incolla ID della directory, ID dell'applicazione e segreto, e attivalo;
+4. aggiungi un accesso «Con account Microsoft» per ogni persona, con il suo indirizzo. **Entra solo chi è in
+   quell'elenco**: avere un account nell'organizzazione non basta.
+
+Al primo ingresso l'accesso viene legato all'account preciso: un altro account che un giorno prendesse lo stesso
+indirizzo non entra. Tieni sempre almeno un accesso con password, per quando Microsoft non è raggiungibile. Il segreto
+dell'applicazione scade: alla scadenza se ne crea uno nuovo e lo si incolla di nuovo. Serve un indirizzo `https://`
+che Microsoft accetti: con la console in rete locale e il certificato fatto da sé il browser mostrerà il suo avviso.
+
 ## La licenza
 
 Senza licenza la console funziona, e segue fino a **5 PC di un cliente solo**. Per seguirne di più serve un file di
@@ -147,10 +223,12 @@ smette di valere.
 |---|---|
 | Vedere clienti e accessi | `console --data <dati> --list` |
 | Cambiare una password | `console --data <dati> --set-password nome` (chiude le sessioni aperte di quell'accesso) |
-| Togliere un accesso | `console --data <dati> --remove-user nome` |
+| Togliere un accesso | `console --data <dati> --remove-user nome` (o dalla scheda «Accessi») |
+| Creare un accesso che entra con l'account Microsoft | `console --data <dati> --add-user nome@azienda.it --microsoft` |
 | Rileggere l'impronta del certificato | `console --data <dati> --show-pin` |
 | Installare una licenza, vedere quanto è usata | `console --data <dati> --licence <file>`, `console --data <dati> --licence-info` |
-| Chi è entrato e che cosa ha cambiato | `<dati>\audit.jsonl`: ingressi riusciti e falliti, clienti creati, chiavi cambiate, PC tolti, licenze caricate |
+| Chi è entrato e che cosa ha cambiato | Scheda «Registro di conformità» della pagina, con il CSV da scaricare |
+| Controllare che il registro non sia stato ritoccato | `console --data <dati> --verify-audit` |
 | Fare una copia adesso | `console --data <dati> --backup <cartella>` (funziona anche a console accesa) |
 | Togliere i dati vecchi | `console --data <dati> --prune 400` |
 
@@ -184,11 +262,33 @@ eventuali `console.sqlite-wal` e `console.sqlite-shm`, riavvia.
 | Nel pannello del PC: «Chiave non accettata» | Chiave sbagliata, o ne è stata creata una nuova |
 | Nel pannello del PC: «Console non raggiungibile» | Indirizzo o porta sbagliati, firewall, server spento |
 | «Troppi tentativi» all'ingresso | Dopo cinque password sbagliate ci si ferma per un quarto d'ora |
+| Password dimenticata | Vedi qui sotto, «Password dimenticata» |
 | Tutti i PC di un cliente spariscono | È stata creata una chiave nuova: quella vecchia non vale più, i PC vanno ricollegati |
+
+### Password dimenticata
+
+La console non manda password per posta e non le conserva in una forma che si possa rileggere: una password persa
+non si recupera, **se ne mette una nuova**. Lo fa chi ha i diritti di amministratore sul computer della console, che
+è la stessa persona che potrebbe comunque reinstallarla.
+
+1. Sul computer della console apri PowerShell **come amministratore**.
+2. Se non ricordi nemmeno il nome dell'accesso: `C:\OmissisConsole\app\omissis-console.exe --data C:\OmissisConsole\data --list`
+3. Metti la password nuova (almeno 12 caratteri; viene chiesta due volte e non si vede mentre la scrivi):
+   `C:\OmissisConsole\app\omissis-console.exe --data C:\OmissisConsole\data --set-password nome`
+
+Non serve fermare la console. Le sessioni aperte di quell'accesso si chiudono, e nel registro di conformità resta
+scritto che la password è stata cambiata dal terminale. Vale anche dopo «Troppi tentativi»: si aspetta il quarto
+d'ora, oppure si riavvia la console.
+
+Se nessuno riesce più a entrare (l'unico accesso entrava con l'account Microsoft e Microsoft non è raggiungibile, o
+l'accesso è stato tolto per errore), dallo stesso terminale se ne crea uno nuovo:
+`... --add-user nuovo.nome --role msp`. I dati, i clienti e la licenza non vengono toccati.
+
+Chi ha un accesso da cliente, in sola lettura, chiede la password nuova a chi gestisce la console.
 
 ## Che cosa è stato provato
 
-Il 15 novembre 2026: le chiamate della console (39 controlli); l'HTTPS integrato con il
+Il 15 novembre 2026: le chiamate della console (92 controlli); l'HTTPS integrato con il
 programma vero di Omissis (impronta giusta: il riepilogo arriva; sbagliata o assente: non parte nulla); la pagina
 in HTTPS con il file da scaricare; il pacchetto scompattato, con il programma **compilato**, installato in una
 cartella di prova **senza** registrare attività (`-NoTasks`), acceso, collegato, messo sotto licenza, salvato,
@@ -203,6 +303,12 @@ nome inglese, che su un Windows in un'altra lingua non esiste: ora lo ricava dal
 
 Quella prova è stata fatta con il pacchetto di prima, che portava con sé Python: con il programma compilato
 l'installazione da amministratore va rifatta.
+
+Le parti di «Gestire i PC dalla console» sono provate in automatico, sullo stesso computer: le regole arrivano al
+programma vero, che le applica solo se ha scelto di accettarle; gli avvisi arrivano a un indirizzo web e a un server di
+posta finti; il registro scopre una riga cambiata o tolta. **L'ingresso con l'account Microsoft è provato solo contro un
+servizio di accesso finto**: con un'organizzazione vera su Entra ID non è ancora stato provato, e nemmeno gli avvisi
+verso Teams, Slack o un server di posta veri.
 
 **Non ancora provato**: il riavvio del server e la copia notturna fatta dall'attività pianificata; un PC che si
 collega da un'altra macchina della rete; un aggiornamento sopra un'installazione in funzione; Caddy e il

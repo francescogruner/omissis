@@ -508,6 +508,7 @@ const drawConsole = test(async () => {
   el.innerHTML = c.configured
     ? line(t("console.connected", {host: c.host}), esc(t(c.names ? "console.sends.names" : "console.sends")) + (c.pinned ? " " + esc(t("console.pinned")) : "") + (c.managed ? " " + esc(t("managed.locked")) : ""),
         label(problem || (c.last ? t("console.last", {when: c.last}) : t("console.never")), problem ? "error" : c.last ? "ok" : ""))
+      + (c.rules ? `<div class="setting"><span class="name">${esc(t("console.rules"))}</span><span class="help">${esc(t("console.rules.below"))}${c.rules.accept ? " " + esc(c.rules.count ? t("console.rules.count", {n: c.rules.count, when: c.rules.received}) : t("console.rules.none")) : ""}${c.rules.managed ? " " + esc(t("managed.locked")) : ""}</span><span class="command">${toggle("conRules", t("console.rules"))}</span></div>` : "")
       + `<div class="setting"><span class="help">${esc(t("console.what"))}</span><span class="command"><button class="button" id="conPreview">${esc(t("console.preview"))}</button><button class="button" id="conSend">${esc(t("console.send"))}</button>${c.managed ? "" : `<button class="button" id="conOff">${esc(t("console.disconnect"))}</button>`}</span></div><pre id="conData" hidden></pre>`
     : `<div class="setting"><span class="name">${esc(t("console.none"))}</span><span class="help">${esc(t("console.none.below"))} <a href="${CONTACT}" target="_blank" rel="noopener">${esc(t("console.contact"))}</a></span></div>
        <div class="setting"><span class="help"><input type="text" class="wide" id="conUrl" placeholder="https://" aria-label="${esc(t("console.url"))}"> <input type="text" class="wide" id="conKey" placeholder="${esc(t("console.key"))}" aria-label="${esc(t("console.key"))}" autocomplete="off"> <input type="text" class="wide" id="conPin" placeholder="${esc(t("console.pin"))}" aria-label="${esc(t("console.pin"))}" autocomplete="off"></span><span class="command"><button class="button" id="conOn">${esc(t("console.connect"))}</button></span></div>`;
@@ -515,6 +516,8 @@ const drawConsole = test(async () => {
   act("#conPreview", async () => { const p = $("#conData"); p.textContent = JSON.stringify((await api("/api/console", {action: "preview"})).preview, null, 1); p.hidden = false; });
   act("#conSend", async () => { await api("/api/console", {action: "send"}); await drawConsole(); });
   act("#conOff", async () => { if (await confirm(t("console.disconnect"), t("console.disconnect.confirm"), t("console.disconnect"))) { await api("/api/console", {action: "disconnect"}); await drawConsole(); } });
+  if ($("#conRules")) { $("#conRules").checked = c.rules.accept; $("#conRules").disabled = c.rules.managed; }
+  if ($("#conRules")) $("#conRules").onchange = test(async e => { await api("/api/console", {action: "rules", accept: e.target.checked}); await drawConsole(); });
   act("#conOn", async () => { await api("/api/console", {action: "connect", url: $("#conUrl").value, key: $("#conKey").value, pin: $("#conPin").value}); await drawConsole(); });
 });
 // Il server di inferenza in rete: di serie ogni PC usa il suo modello; uno puo' prestarlo agli altri, oppure usare quello di un altro.

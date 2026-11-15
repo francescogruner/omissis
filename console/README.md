@@ -9,6 +9,16 @@ names only: never the texts people write, never the replaced values.
 
 Italiano: [README.it.md](README.it.md).
 
+## What you do from there
+
+- **Rules for the PCs**: which AI services to protect or block, files, updates, set per customer and sent to the PCs
+  that chose to accept them. The console can change the rules, not where the PCs send their data.
+- **Alerts**: a PC that turns protection off, one that goes quiet, a new AI tool. On the page, to a web address
+  (Teams, Slack) or by e-mail.
+- **Compliance log**: who signed in and what they changed, with a CSV to hand to an auditor and a chain of
+  fingerprints that catches altered rows.
+- **Logins**: with a name and password, or with the organisation's Microsoft account (Entra ID).
+
 ## Free up to 5 PCs
 
 The console is **free up to 5 PCs of a single customer**, with no time limit and nothing to register. To follow
@@ -44,6 +54,7 @@ The whole guide, with the Internet-facing setup, backups and troubleshooting, is
 ## What has been tested, and what has not
 
 Automatic tests on a single computer cover the console's calls, the page, the licence, the first start and the
-compiled package installed without scheduled tasks. Not tested yet: a PC connecting from another machine on the
+compiled package installed without scheduled tasks. Rules, alerts and the log are tested automatically with the real program and fake destinations; sign-in with a
+Microsoft account only against a fake sign-in service, not with a real organisation. Not tested yet: a PC connecting from another machine on the
 network, the server restart and the nightly backup, the installation of the compiled package as administrator.
 The program is not code-signed: Windows may warn when you run it.

@@ -184,7 +184,7 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 - Native messaging instead of the local HTTP bridge for the extension; store publication
 - Firefox
 - Redacted image output for scans; automatic restore of files downloaded from chats
-- Central console: changing the rules of the PCs from the console, sign-in with a Microsoft account, alerts
+- Central console: live tests of rules from the console, alerts and sign-in with a Microsoft account (built, tested automatically); Mac
 
 ## Licence
 

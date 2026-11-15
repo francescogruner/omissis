@@ -114,6 +114,9 @@ pulsante «Vedi che cosa parte» mostra il riepilogo esatto.
   nell'intestazione `Authorization`. La console è un programma a parte, non aperto: si scarica compilata dalla
   pagina delle versioni ed è gratuita fino a 5 PC (vedi [`../console/README.it.md`](../console/README.it.md)).
 - Un rinvio verso un altro indirizzo non viene seguito, e un indirizzo non `https` viene rifiutato.
+- **Regole dalla console.** Con `"console_rules": true` il PC applica le regole che la console gli manda in risposta
+  al riepilogo (per servizio, file, allegati, aggiornamenti, analisi, protezione ridotta: nient'altro). Di serie è
+  spento. Ciò che è scritto in questa chiave di registro vince sempre sulle regole della console.
 - **Console in rete locale.** Una console interna non ha un nome pubblico né un certificato firmato da
   un'autorità: si fa il certificato da sé e ne dà l'impronta. Con `"console_pin": "<impronta SHA-256>"` il PC si
   collega solo al server che presenta proprio quel certificato, e lo controlla prima di mandare la chiave. Così

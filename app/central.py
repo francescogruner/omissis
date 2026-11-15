@@ -12,6 +12,11 @@ riepilogo esatto prima che parta.
 
 Con console_names spento il riepilogo non porta il nome del computer ne' quello dell'utente.
 
+Che cosa torna indietro: la console risponde con le regole che vorrebbe imporre ai PC di quell'organizzazione. Questo
+PC le applica SOLO se nelle impostazioni c'e' console_rules (di serie spento); altrimenti le ignora e non le conserva.
+Sono regole e basta (quali servizi proteggere o bloccare, i file, gli aggiornamenti: l'elenco e' in settings.py):
+la console non puo' cambiare a chi il PC manda qualcosa. Le regole dell'amministratore del PC vincono sempre.
+
 Di chi ci si fida: senza altro, del certificato della console come farebbe un browser (un nome pubblico, un
 certificato valido). Una console in rete locale non ha ne' l'uno ne' l'altro: si fa il certificato da se' e da' la
 sua impronta (console_pin) insieme alla chiave di collegamento. Con l'impronta il programma si collega SOLO al
@@ -40,7 +45,7 @@ from version import VERSION
 
 DAYS = 35                 # quanti giorni porta ogni riepilogo: un PC rimasto spento recupera da solo
 FORMAT = 1
-STATE = {"last": "", "error": "", "sent": 0}
+STATE = {"last": "", "error": "", "sent": 0, "again": False}
 RX_LABEL, RX_SERVICE = re.compile(r"[A-Z][A-Z_]{1,23}"), re.compile(r"[a-z0-9][a-z0-9_.-]{0,39}")
 
 
@@ -111,11 +116,44 @@ def summary(phase):
            "channel": updates.channel(), "os": platform.platform()[:80], "protection": str(phase), "model": str(cfg.get("model"))[:40],
            "updates": updates.mode(), "groups_off": list(cfg.get("groups_off") or []),
            "managed": lock["keys"] + [f"policies.{s}" for s in lock["policies"]],
+           "rules_accept": cfg.get("console_rules") is True, "rules_version": rules()["version"],
            "days": days(), "tools": tools()}
     if cfg.get("console_names", True):
         out["computer"] = (os.environ.get("COMPUTERNAME") or socket.gethostname())[:64]
         out["user"] = (os.environ.get("USERNAME") or "")[:64]
     return out
+
+
+def rules():
+    """Le regole della console in vigore su questo PC: quante sono e che versione hanno (0 = nessuna)."""
+    found = settings.from_console()
+    n = len([k for k in found if k != "policies"]) + len(found.get("policies") or {})
+    received, cfg = settings.console_file(), settings.read()
+    mine = cfg.get("console_rules") is True and received.get("url") == cfg.get("console_url")
+    return {"version": int(received.get("version") or 0) if mine else 0, "count": n}
+
+
+def receive(cfg, answer):
+    """Cio' che la console ha risposto al riepilogo. Se questo PC accetta le regole, quelle arrivate vengono messe da
+    parte (settings.py le legge da li'); se non le accetta, non resta nulla. Una console che non parla di regole (una
+    versione di prima) lascia tutto com'e'."""
+    if cfg.get("console_rules") is not True:
+        settings.CONSOLE_FILE.unlink(missing_ok=True)
+        return
+    try:
+        data = json.loads(answer.decode("utf-8"))
+        new, version = data["rules"], int(data.get("rules_version") or 0)
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return
+    if not isinstance(new, dict):
+        return
+    before = settings.console_file()
+    if (before.get("url"), before.get("version"), before.get("rules")) == (cfg["console_url"], version, new):
+        return
+    settings.CONSOLE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    settings.CONSOLE_FILE.write_text(json.dumps({"url": cfg["console_url"], "version": version, "rules": new, "received": time.strftime("%Y-%m-%d %H:%M")},
+                                                ensure_ascii=False, indent=1), encoding="utf-8")
+    STATE["again"] = True   # tra poco un altro riepilogo dice alla console che le regole nuove sono in vigore
 
 
 def configured(cfg=None):
@@ -135,8 +173,9 @@ def send(phase):
                                      headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["console_key"],
                                               "User-Agent": f"Omissis/{VERSION}"})
         with _opener(cfg).open(req, timeout=20) as r:
-            r.read(4096)
+            answer = r.read(512 * 1024)
         STATE.update(last=time.strftime("%Y-%m-%d %H:%M"), error="", sent=STATE["sent"] + 1)
+        receive(cfg, answer)
     except urllib.error.HTTPError as ex:
         STATE.update(error=f"http_{ex.code}")
     except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, ValueError) as ex:
@@ -152,6 +191,8 @@ def state():
     host = urllib.parse.urlsplit(cfg.get("console_url") or "").netloc
     return {"configured": configured(cfg), "host": host, "url": cfg.get("console_url") or "", "has_key": bool(cfg.get("console_key")),
             "names": bool(cfg.get("console_names", True)), "pinned": bool(cfg.get("console_pin")), "managed": "console_url" in lock or "console_key" in lock,
+            "rules": {"accept": cfg.get("console_rules") is True, "managed": "console_rules" in lock, **rules(),
+                      "received": settings.console_file().get("received", "") if cfg.get("console_rules") is True else ""},
             "last": STATE["last"], "error": STATE["error"]}
 
 
@@ -164,4 +205,5 @@ def loop(phase, after=90, every=3600):
                 send(phase())
         except Exception:   # noqa: BLE001  (un invio andato male non deve mai fermare il programma)
             STATE.update(error="unreachable")
-        time.sleep(every if not STATE["error"] else 600)
+        again, STATE["again"] = STATE["again"], False
+        time.sleep(60 if again else every if not STATE["error"] else 600)

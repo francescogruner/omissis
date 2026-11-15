@@ -35,6 +35,7 @@ DEFAULTS = {
     "console_key": "",            # chiave di collegamento data dalla console: dice a quale organizzazione appartiene il PC
     "console_names": True,        # False: il riepilogo non porta il nome del computer ne' quello dell'utente
     "console_pin": "",            # impronta SHA-256 del certificato della console, per quelle in rete locale che se lo fanno da se'
+    "console_rules": False,       # True: questo PC applica le regole che la console gli manda (solo quelle di CONSOLE_RULES)
     "onboarded": False,           # la configurazione guidata del primo avvio e' gia' stata vista (o saltata)
     # server di inferenza in rete (facoltativo, vedi remote.py). Un PC o presta il suo modello o lo chiede a un altro
     "engine_url": "",             # indirizzo https del server: il modello lo ha lui, questo PC gli chiede il riconoscimento
@@ -45,7 +46,12 @@ DEFAULTS = {
 }
 # impostazioni che l'amministratore impone voce per voce: il resto della tabella resta dell'utente
 MERGED = {"policies"}
-_cache = {"mtime": None, "managed": None, "data": None}
+# Che cosa una console puo' imporre a un PC che ha scelto di accettarne le regole. Restano fuori, apposta, gli indirizzi a
+# cui il PC manda qualcosa (console, server di inferenza, gateway), le cartelle che apre, il nome nel riepilogo e questa
+# stessa scelta: chi entra in una console non deve poter dirottare i dati dei PC.
+CONSOLE_RULES = {"policies", "block_files", "attachments", "box", "updates", "scan", "groups_off"}
+CONSOLE_FILE = paths.DATA / "console_rules.json"
+_cache = {"mtime": None, "managed": None, "console": None, "data": None}
 
 
 def _own():
@@ -57,11 +63,11 @@ def _own():
         return {}
 
 
-def imposed():
-    """Le impostazioni imposte da chi amministra il PC (managed.py), ripulite come quelle dell'utente."""
+def _typed(source, allowed=None):
+    """I valori arrivati da fuori (registro di Windows, console), tenuti solo se hanno il tipo dell'impostazione."""
     raw = {}
-    for k, v in managed.read().items():
-        if k not in DEFAULTS:
+    for k, v in source.items():
+        if k not in DEFAULTS or (allowed is not None and k not in allowed):
             continue
         kind = type(DEFAULTS[k])
         if kind is bool:
@@ -79,10 +85,50 @@ def imposed():
     return {k: clean[k] for k in raw}
 
 
+def _admin():
+    """Le impostazioni imposte da chi amministra il PC (managed.py), ripulite come quelle dell'utente."""
+    return _typed(managed.read())
+
+
+def console_file():
+    """Cio' che la console ha mandato l'ultima volta (lo scrive central.py): {"url", "version", "rules", "received"}."""
+    try:
+        data = json.loads(CONSOLE_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) and isinstance(data.get("rules"), dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def from_console(admin=None):
+    """Le regole della console in vigore su questo PC. Valgono solo se il PC ha scelto di accettarle (console_rules), e'
+    collegato a una console, e le regole vengono proprio da quella: cambiando console quelle vecchie non restano."""
+    admin = _admin() if admin is None else admin
+    own = {**DEFAULTS, **_own(), **{k: v for k, v in admin.items() if k not in MERGED}}
+    received = console_file()
+    if own.get("console_rules") is not True or not (own.get("console_url") and own.get("console_key")) or received.get("url") != own["console_url"]:
+        return {}
+    return _typed(received["rules"], CONSOLE_RULES)
+
+
+def imposed():
+    """Tutto cio' che l'utente non puo' cambiare: le impostazioni dell'amministratore del PC e, sotto, le regole della
+    console. Dove dicono cose diverse vince l'amministratore del PC."""
+    admin = _admin()
+    console = from_console(admin)
+    out = {**console, **admin}
+    if console.get("policies") and admin.get("policies"):
+        out["policies"] = {**console["policies"], **admin["policies"]}
+    return out
+
+
 def locked(cfg_imposed=None):
     """Che cosa l'utente non puo' cambiare: le impostazioni imposte per intero e, per le regole, i singoli servizi."""
     data = imposed() if cfg_imposed is None else cfg_imposed
-    return {"keys": sorted(k for k in data if k not in MERGED), "policies": sorted(data.get("policies") or {})}
+    admin = _admin()
+    console = from_console(admin)   # da dove viene il vincolo, per dirlo nel pannello: qui solo cio' che la console impone davvero
+    by_console = sorted(k for k in console if k not in MERGED and k not in admin) + \
+        sorted(f"policies.{s}" for s in (console.get("policies") or {}) if s not in (admin.get("policies") or {}))
+    return {"keys": sorted(k for k in data if k not in MERGED), "policies": sorted(data.get("policies") or {}), "console": by_console}
 
 
 def first_run(test=False):
@@ -96,12 +142,16 @@ def read():
         m = FILE.stat().st_mtime
     except OSError:
         m = None
+    try:
+        c = CONSOLE_FILE.stat().st_mtime
+    except OSError:
+        c = None
     source = managed.read()
-    if _cache["data"] is None or _cache["mtime"] != m or _cache["managed"] is not source:
+    if _cache["data"] is None or _cache["mtime"] != m or _cache["managed"] is not source or _cache["console"] != c:
         data, fixed = {**DEFAULTS, **_own()}, imposed()
         for k, v in fixed.items():
             data[k] = {**(data[k] if isinstance(data[k], dict) else {}), **v} if k in MERGED else v
-        _cache.update(mtime=m, managed=source, data=data)
+        _cache.update(mtime=m, managed=source, console=c, data=data)
     return _cache["data"]
 
 
@@ -194,6 +244,7 @@ def _clean(data):
     clean["console_url"] = address if console_address_ok(address) else ""
     clean["console_key"] = re.sub(r"[^A-Za-z0-9_.-]", "", str(clean["console_key"] or ""))[:200]
     clean["console_names"] = clean["console_names"] not in (False, 0, "false", "0")
+    clean["console_rules"] = clean["console_rules"] is True
     pin = re.sub(r"(?i)^sha-?256[:=]|[\s:]", "", str(clean["console_pin"] or "")).lower()
     clean["console_pin"] = pin if re.fullmatch(r"[0-9a-f]{64}", pin) else ""
     address = str(clean["engine_url"] or "").strip().rstrip("/")

@@ -803,6 +803,10 @@ class Handler(BaseHTTPRequestHandler):
                     central.STATE.update(last="", error="")
                     if action == "connect":
                         central.send(SUP.phase)
+                elif action == "rules":   # accettare o no le regole che la console manda: lo sceglie chi usa il PC, o chi lo amministra
+                    guard("console_rules")
+                    settings.write({**settings.read(), "console_rules": data.get("accept") is True})
+                    central.send(SUP.phase)   # accettandole arrivano subito; rifiutandole spariscono subito
                 elif action == "send":
                     central.send(SUP.phase)
                 elif action == "preview":

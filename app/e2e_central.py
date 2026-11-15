@@ -84,7 +84,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
         managed.read(fresh=True)
 
     # ---- impostazioni imposte
-    check("senza vincoli: nulla è bloccato", settings.locked() == {"keys": [], "policies": []})
+    check("senza vincoli: nulla è bloccato", settings.locked() == {"keys": [], "policies": [], "console": []})
     check("primo avvio: la configurazione guidata viene proposta, ma non durante le prove automatiche",
           settings.first_run() and not settings.first_run(test=True))
     settings.write({**settings.read(), "updates": "notify", "policies": {"deepseek": "record", "chatgpt": "record"}, "groups_off": ["it"]})
@@ -96,7 +96,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     check("regole: imposto solo il servizio scritto, gli altri restano dell'utente", cfg["policies"] == {"deepseek": "block", "chatgpt": "record"}, str(cfg["policies"]))
     check("PC con impostazioni imposte: la configurazione guidata non viene proposta", not settings.first_run())
     check("un valore scritto male o un nome sconosciuto non impone nulla",
-          settings.locked() == {"keys": ["groups_off", "restore", "updates"], "policies": ["deepseek"]}, str(settings.locked()))
+          settings.locked() == {"keys": ["groups_off", "restore", "updates"], "policies": ["deepseek"], "console": []}, str(settings.locked()))
     after = settings.write({**settings.read(), "updates": "automatic", "groups_off": ["payments"], "policies": {**cfg["policies"], "deepseek": "ignore", "chatgpt": "block"},
                             "theme": "dark"})
     check("salvare non scavalca un vincolo, ma cambia il resto", after["updates"] == "never" and after["groups_off"] == [] and after["theme"] == "dark"
@@ -108,6 +108,48 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     cfg = settings.read()
     check("tolto il vincolo tornano le scelte dell'utente", cfg["updates"] == "notify" and cfg["groups_off"] == ["it"] and cfg["policies"]["deepseek"] == "record"
           and cfg["restore"] is True and settings.locked()["keys"] == [])
+    # ---- regole mandate dalla console: valgono solo se il PC ha scelto di accettarle, e solo quelle ammesse
+    answer = json.dumps({"ok": True, "rules_version": 4, "rules": {
+        "policies": {"deepseek": "block", "non-esiste": "block", "claude": "spegni"}, "block_files": True, "updates": "never", "groups_off": [],
+        "engine_url": "https://altrove.example", "console_url": "https://altrove.example", "gateway_upstreams": {"openai": "https://altrove.example"},
+        "console_names": False, "console_rules": False, "mcp_folders": ["C:\\"]}}).encode("utf-8")
+    settings.write({**settings.read(), "console_url": "https://console.example", "console_key": "omk_prova"})
+    central.receive(settings.read(), answer)
+    check("regole dalla console: di serie il PC non le accetta e non le conserva",
+          not settings.CONSOLE_FILE.exists() and settings.read()["block_files"] is False and settings.locked()["console"] == [] and central.summary("active")["rules_accept"] is False)
+    settings.write({**settings.read(), "console_rules": True})
+    central.receive(settings.read(), answer)
+    cfg, lock = settings.read(), settings.locked()
+    check("accettate, valgono quelle ammesse: servizi, file, aggiornamenti, protezione ridotta", cfg["block_files"] is True and cfg["updates"] == "never" and cfg["groups_off"] == []
+          and cfg["policies"] == {"deepseek": "block", "chatgpt": "block"}, f"{cfg['block_files']} {cfg['updates']} {cfg['groups_off']} {cfg['policies']}")
+    check("la console non sposta indirizzi, cartelle, nome nel riepilogo, né la scelta di accettarla", cfg["engine_url"] == "" and cfg["console_url"] == "https://console.example"
+          and cfg["gateway_upstreams"] == {} and cfg["console_names"] is True and cfg["console_rules"] is True and cfg["mcp_folders"] == [])
+    check("nel pannello risultano bloccate, e si sa che vengono dalla console", lock == {"keys": ["block_files", "groups_off", "updates"], "policies": ["deepseek"],
+                                                                                         "console": ["block_files", "groups_off", "updates", "policies.deepseek"]}, str(lock))
+    check("il riepilogo dice alla console quale versione delle regole è in vigore", central.summary("active")["rules_accept"] is True
+          and central.summary("active")["rules_version"] == 4 and central.state()["rules"]["count"] == 4 and central.STATE["again"] is True, str(central.state()["rules"]))
+    tried = settings.write({**settings.read(), "block_files": False, "updates": "automatic"})
+    check("chi usa il PC non le scavalca dal pannello", tried["block_files"] is True and tried["updates"] == "never")
+    impose({"updates": "automatic", "policies": {"deepseek": "ignore"}})
+    cfg = settings.read()
+    check("dove dicono cose diverse vince l'amministratore del PC", cfg["updates"] == "automatic" and cfg["policies"]["deepseek"] == "ignore" and cfg["block_files"] is True
+          and settings.locked()["console"] == ["block_files", "groups_off"], str(settings.locked()))
+    impose({"console_rules": 0})
+    check("l'amministratore del PC può vietare le regole della console", settings.read()["block_files"] is False and settings.locked() == {"keys": ["console_rules"], "policies": [], "console": []})
+    impose(None)
+    central.receive(settings.read(), b"non json")
+    central.receive(settings.read(), json.dumps({"ok": True}).encode("utf-8"))
+    check("una risposta rotta, o di una console che non parla di regole, lascia quelle che c'erano", settings.read()["block_files"] is True and settings.console_file()["version"] == 4)
+    central.receive(settings.read(), json.dumps({"ok": True, "rules": {}, "rules_version": 5}).encode("utf-8"))
+    check("quando la console toglie le regole tornano le scelte dell'utente", settings.read()["block_files"] is False and settings.read()["updates"] == "notify"
+          and settings.locked()["console"] == [] and central.summary("active")["rules_version"] == 5)
+    central.receive(settings.read(), answer)
+    settings.write({**settings.read(), "console_url": "https://altra-console.example"})
+    check("collegato a un'altra console, le regole della prima non restano in vigore", settings.read()["block_files"] is False and settings.locked()["console"] == []
+          and central.summary("active")["rules_version"] == 0)
+    settings.write({**settings.read(), "console_url": "", "console_key": "", "console_rules": False})
+    settings.CONSOLE_FILE.unlink(missing_ok=True)
+    central.STATE["again"] = False
     again = settings.first_run()
     settings.write({**settings.read(), "onboarded": "si"})   # solo un vero «vista» la chiude, non un valore qualsiasi
     still = settings.first_run()
@@ -149,7 +191,8 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     check("giorni: richieste, valori per tipo, servizi e richieste fermate di oggi",
           d == [{"day": today, "requests": 2, "blocked": 1, "replacements": {"PERSONA": 2, "EMAIL": 1, "IBAN": 1}, "services": {"chatgpt": 1, "claude": 1}}], str(d))
     s = central.summary("active")
-    allowed = {"v", "device", "sent", "version", "channel", "os", "protection", "model", "updates", "groups_off", "managed", "days", "tools", "computer", "user"}
+    allowed = {"v", "device", "sent", "version", "channel", "os", "protection", "model", "updates", "groups_off", "managed", "days", "tools", "computer", "user",
+               "rules_accept", "rules_version"}   # se questo PC accetta le regole della console, e quale versione ha in vigore
     check("riepilogo: solo le voci previste", set(s) == allowed, str(sorted(set(s) ^ allowed)))
     check("l'identificativo del PC è a caso e resta lo stesso", len(s["device"]) == 32 and central.summary("active")["device"] == s["device"]
           and s["device"] not in (os.environ.get("COMPUTERNAME", "?").lower(), ""))

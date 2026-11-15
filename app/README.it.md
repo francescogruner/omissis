@@ -694,6 +694,24 @@ al server che presenta proprio quel certificato, e lo controlla appena finita la
 la richiesta con la chiave. La console che riceve i riepiloghi è un prodotto a
 parte e non sta in questo repository; il protocollo è una `POST` a `<console_url>/api/v1/report`.
 
+**Regole dalla console.** La console risponde a ogni riepilogo con le regole che vorrebbe imporre ai PC di
+quell'organizzazione. Di serie il PC **le ignora e non le conserva**. Le applica solo se si accende `console_rules`
+(Impostazioni > Console centrale > «Accetta le regole da questa console», oppure imposto da chi amministra il PC):
+da quel momento valgono come le impostazioni bloccate, il pannello dice quante sono e quando sono arrivate, e
+nell'elenco dei vincoli risulta che vengono dalla console (`settings.from_console`). Tre limiti, scritti nel codice:
+
+- la console può imporre **solo** le regole per servizio (`policies`), `block_files`, `attachments`, `box`,
+  `updates`, `scan` e `groups_off` (`settings.CONSOLE_RULES`). Non può toccare gli indirizzi a cui il PC manda
+  qualcosa (console, server di inferenza, gateway), le cartelle, il nome nel riepilogo, né questa stessa scelta:
+  chi entrasse in una console senza diritto potrebbe allentare le regole, non farsi mandare i dati;
+- dove console e amministratore del PC dicono cose diverse **vince l'amministratore del PC** (il registro di
+  Windows), che può anche vietare le regole della console imponendo `console_rules` spento;
+- le regole valgono solo finché il PC è collegato alla console che le ha mandate: scollegato, o collegato a
+  un'altra, non restano in vigore.
+
+Il riepilogo successivo dice alla console se il PC accetta le regole e quale versione ha applicato. Provato con
+la console vera sullo stesso computer (`e2e_central.py` e le prove della console); non ancora tra due macchine.
+
 Conteggi per singola persona possono essere un controllo a distanza dei lavoratori: un'organizzazione che
 collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serve, informare i dipendenti.
 
@@ -933,7 +951,8 @@ dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'est
 `e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
 inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2e_central.py`
-(29 controlli): le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
+(40 controlli): le regole mandate dalla console (accettate solo per scelta, solo quelle ammesse, mai sopra
+l'amministratore del PC), le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
 registro dell'utente, mai da quelle di sistema) e il riepilogo per la console centrale, mandato a un servizio
 finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta, e una console con un certificato
 fatto da sé, accettata solo con l'impronta giusta.
@@ -945,7 +964,7 @@ impronta sbagliate vengano rifiutate, che a server spento non parta nulla, e la 
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (64 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (66 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi, `OMISSIS_MANAGED_FILE` per le impostazioni imposte) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,

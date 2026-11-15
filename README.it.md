@@ -168,7 +168,7 @@ Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 - Firma del codice dell'installer e pubblicazione sul Microsoft Store
 - Messaggistica nativa del browser per l'estensione e pubblicazione sugli store; Firefox
 - Scansioni restituite come immagine oscurata; ripristino automatico dei file scaricati dalle chat
-- Console centrale: cambiare le regole dei PC dalla console, accesso con l'account Microsoft, avvisi
+- Console centrale: prove dal vivo di regole dalla console, avvisi e accesso con l'account Microsoft (fatti, provati in automatico); Mac
 
 ## Licenza
 
