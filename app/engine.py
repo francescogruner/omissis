@@ -339,8 +339,9 @@ class Engine:
                 out.append([s, e, l])
         return out
 
-    def mask(self, texts, exclude=(), never=(), also=None):
-        """escludi: etichette da NON sostituire in questa chiamata (es. quelle tecniche nel contesto di un agente).
+    def mask(self, texts, exclude=(), never=(), also=None, keep=True):
+        """keep=False: una prova con dati d'esempio. I segnaposto valgono solo per questa risposta e nell'archivio non entra nulla.
+        escludi: etichette da NON sostituire in questa chiamata (es. quelle tecniche nel contesto di un agente).
         mai: termini da non sostituire in questa chiamata (es. i nomi degli strumenti dichiarati da un agente).
         anche: {termine: etichetta} da sostituire comunque, ovunque compaiano (le correzioni fatte a mano nel pannello)."""
         # i gruppi di dati che chi usa il PC ha spento nelle impostazioni valgono per ogni strada (browser, app, terminale,
@@ -384,11 +385,21 @@ class Engine:
                 if forced:
                     by_text[i] = sorted(forced + [sp for sp in by_text[i] if not any(sp[0] < f[1] and f[0] < sp[1] for f in forced)])
         mapping, counts, exited, positions = {}, collections.Counter(), [], []
+        example, numbers = {}, collections.Counter()   # keep=False: segnaposto di questa risposta soltanto
+
+        def placeholder(label, value):
+            if keep:
+                return self.vault.placeholder(label, value, commit=False)
+            k = (label, Vault.key(value))
+            if k not in example:
+                numbers[label] += 1
+                example[k] = f"[{label}_{numbers[label]}]"
+            return example[k]
         try:
             for t, sp in zip(texts, by_text):
                 chunks, pos, where = [], 0, []
                 for s, e, l in sp:
-                    seg = self.vault.placeholder(l, t[s:e], commit=False)
+                    seg = placeholder(l, t[s:e])
                     mapping.setdefault(seg, t[s:e])
                     counts[l] += 1
                     chunks += [t[pos:s], seg]
@@ -467,7 +478,7 @@ def serve(engine, port, token, extension_token, bridge):
                     self._respond(404 if outcome is None else 200, {"error": "percorso sconosciuto"} if outcome is None else outcome)
                 elif self.path == "/mask":
                     self._respond(200, engine.mask([str(t) for t in data["texts"]], {str(e) for e in data.get("exclude") or []}, data.get("never") or (),
-                                                           data.get("also") if isinstance(data.get("also"), dict) else None))
+                                                           data.get("also") if isinstance(data.get("also"), dict) else None, keep=not data.get("demo")))
                 elif self.path == "/values":
                     self._respond(200, engine.values([str(s) for s in data["placeholder"]]))
                 elif self.path == "/vault":

@@ -155,7 +155,7 @@ def main():
                 # --- configurazione guidata (qui la si apre a mano: durante le prove non si propone da sola)
                 try:
                     today = lambda: call(code, "/api/status")["stats"]["today"]["messages"]   # noqa: E731
-                    counted = today()
+                    counted, stored = today(), call(code, "/api/status")["entries"]
                     call(code, "/api/settings", {"onboarded": False})
                     pag.goto(PANEL + "/#/welcome")
                     pag.reload()
@@ -187,8 +187,9 @@ def main():
                     pag.keyboard.press("Escape")
                     wait_until(lambda: call(code, "/api/settings")["onboarded"] is True)
                     contact = pag.get_attribute("#contact", "href") or ""
-                    mark(f"{language}: configurazione guidata, prova con dati inventati (fuori dai conteggi), scelte, estensione, fine; saltarla vale come vista",
-                         "[PERSONA_" in tried and "Ferraresi" not in tried and today() == counted and browser == "absent" and closed
+                    mark(f"{language}: configurazione guidata, prova con dati inventati (fuori dai conteggi e dall'archivio), scelte, estensione, fine; saltarla vale come vista",
+                         "[PERSONA_1]" in tried and "Ferraresi" not in tried and today() == counted and call(code, "/api/status")["entries"] == stored
+                         and browser == "absent" and closed
                          and not untranslated and not unnamed and not pag.evaluate("document.getElementById('welcome').open")
                          and contact.startswith("https://francescogruner.it/") and bool(pag.inner_text("#contact").strip()),
                          f"sostituiti: {'[PERSONA_' in tried} · conteggi {counted}->{today()} · estensione {browser} · chiusa {closed} · senza traduzione {sorted(untranslated)[:3]} · senza nome {unnamed[:2]}")

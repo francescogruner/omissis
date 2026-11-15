@@ -1123,7 +1123,8 @@ function welcome(from = 0) {
     if (to) { if (view !== "advanced") changeView(true); location.hash = to; }
     else if (location.hash === "#/welcome") location.hash = "#/start";
   };
-  const move = by => { const all = steps(), i = Math.max(0, all.indexOf(st.step)); st.step = all[Math.max(0, Math.min(all.length - 1, i + by))]; session("welcome_step", String(st.step)); draw(); };
+  // dopo un cambio di passo il fuoco va al pulsante per proseguire: chi usa la tastiera continua con Invio
+  const move = by => { const all = steps(), i = Math.max(0, all.indexOf(st.step)); st.step = all[Math.max(0, Math.min(all.length - 1, i + by))]; session("welcome_step", String(st.step)); draw(); $("#welcomeNext").focus(); };
   const body = {
     1: () => `<textarea id="welcomeText" aria-label="${esc(t("welcome.1.field"))}">${esc(t("welcome.1.example"))}</textarea>
       <div class="line"><button class="button primary" id="welcomeTry">${esc(t("welcome.1.try"))}</button><button class="button" id="welcomeStart" hidden>${esc(t("start.launch"))}</button><span class="faded small" id="welcomeState" role="status"></span></div>
@@ -1195,8 +1196,9 @@ function welcome(from = 0) {
   };
   guide = {refresh};
   d.oncancel = e => { e.preventDefault(); finish(); };
-  d.showModal();
   draw();
+  d.showModal();
+  d.focus();   // all'apertura il fuoco sta sulla finestra, non su un pulsante a caso: il primo Tab porta dentro
 }
 
 // ------------------------------------------------------------------ 5. avvio

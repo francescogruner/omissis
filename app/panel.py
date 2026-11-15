@@ -842,8 +842,9 @@ class Handler(BaseHTTPRequestHandler):
                 # le correzioni fatte a mano su questo testo: cosa lasciare in chiaro e cosa mascherare comunque
                 never = [str(x)[:200] for x in data.get("never") or []][:200]
                 also = {str(k)[:200]: str(v) for k, v in list((data.get("also") or {}).items())[:200]}
-                r = engine("/mask", {"texts": [text], "never": never, "also": also})
-                if not data.get("demo"):   # l'esempio della configurazione guidata non e' uso vero: non entra nei conteggi
+                # l'esempio della configurazione guidata non e' uso vero: non entra nei conteggi ne' nell'archivio
+                r = engine("/mask", {"texts": [text], "never": never, "also": also, **({"demo": True} if data.get("demo") else {})})
+                if not data.get("demo"):
                     record_manual("text", r.get("counts"), text)
                 self._respond(200, r)
             elif p == "/api/lists/add":   # da Testo: «non mascherare mai» e «maschera sempre», senza passare dalle Impostazioni
