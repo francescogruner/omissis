@@ -21,7 +21,7 @@ Italiano: `GUIDA.it.md`.
 In both cases the connection is encrypted: the PCs accept **only** `https://`, because the summary carries the
 customer's enrolment key.
 
-You need a server that is always on: Windows Server 2019 or later (or Windows 10/11), or Linux. The console is
+You need a server that is always on: Windows Server 2019 or later (or Windows 10/11). The console is
 light: 1 processor and 1 GB of memory are enough for hundreds of PCs.
 
 ## On the local network, on Windows
@@ -87,30 +87,6 @@ certificate goes in front of it.
    Caddy requests the certificate and renews it by itself. If you would rather not open ports, use a tunnel
    (Cloudflare Tunnel or the like) that forwards the name to `http://127.0.0.1:8800`.
 3. Open `https://console.yourdomain.com/`: no warning, and the PCs need no fingerprint.
-
-## On Linux
-
-For Linux and Docker there is a separate package, `omissis-console-<version>-linux.zip`, with the program in
-Python: ask for it from <https://francescogruner.it/contatti/>. You need Python 3.10 or later, which recent distributions already have.
-As root, from the unzipped folder:
-
-```bash
-useradd --system --home /nonexistent --shell /usr/sbin/nologin omissis
-install -d /opt/omissis-console && cp -r app /opt/omissis-console/
-install -d -o omissis -g omissis -m 750 /var/lib/omissis-console
-cp linux/omissis-console*.service linux/omissis-console-backup.timer /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now omissis-console.service omissis-console-backup.timer
-sudo -u omissis python3 /opt/omissis-console/app/console.py --data /var/lib/omissis-console --add-user yourname --role msp
-```
-
-The service file is written for the "reachable from the Internet" way, with Caddy in front (`Caddyfile.example`
-as `/etc/caddy/Caddyfile`). For the local network, in the `ExecStart` line put `--https --host 0.0.0.0` in place
-of `--secure-cookie`: making the certificate needs the `openssl` command or the `python3-cryptography` package.
-
-**With Docker**, as an alternative (again with Caddy in front): put the real name in `docker/Caddyfile`, then
-`docker compose -f docker/compose.yaml up -d --build`. The login is created with
-`docker compose -f docker/compose.yaml exec console python console.py --data /data --add-user yourname --role msp`.
 
 ## Connecting the first customer
 
@@ -180,20 +156,18 @@ change a number and it stops being valid.
 | Make a backup now | `console --data <data> --backup <folder>` (it works with the console running) |
 | Remove old data | `console --data <data> --prune 400` |
 
-Here `console` stands for `C:\OmissisConsole\app\omissis-console.exe` on Windows (where `<data>` is
-`C:\OmissisConsole\data`) and for `python3 /opt/omissis-console/app/console.py` on Linux. In a script the password
+Here `console` stands for `C:\OmissisConsole\app\omissis-console.exe` and `<data>` for `C:\OmissisConsole\data`. In a script the password
 can be given with `--password-file <file>` instead of typing it. The messages of the terminal are in Italian.
 
 ## Backups and restore
 
-Every night at 02:30 a consistent copy of the archive goes to `C:\OmissisConsole\backup` (on Linux
-`/var/lib/omissis-console/backup`); the last 14 are kept. **Take them off the server too**, with the backup tool
+Every night at 02:30 a consistent copy of the archive goes to `C:\OmissisConsole\backup`; the last 14 are kept. **Take them off the server too**, with the backup tool
 you already use: they are ordinary files. On the local network also save the `data\tls` folder, once: it holds
 the certificate, and with it the fingerprint the PCs know.
 
 The licence lives in the data folder (`licence.json`): keep the file you received as well.
 
-To restore: stop the console (on Windows the "Omissis Console" task; on Linux `systemctl stop omissis-console`),
+To restore: stop the console (the "Omissis Console" scheduled task),
 copy the chosen file over `console.sqlite` in the data folder, remove any `console.sqlite-wal` and
 `console.sqlite-shm`, start it again.
 
@@ -217,7 +191,7 @@ copy the chosen file over `console.sqlite` in the data folder, remove any `conso
 
 ## What has been tested
 
-On 15 November 2026: the console's calls (39 checks) on Windows and on Linux; the built-in HTTPS with the real
+On 15 November 2026: the console's calls (39 checks); the built-in HTTPS with the real
 Omissis program (right fingerprint: the summary arrives; wrong or missing: nothing leaves); the page over HTTPS
 with the file to download; the unzipped package, with the **compiled** program, installed in a test folder
 **without** registering tasks (`-NoTasks`), started, connected, licensed, backed up, updated and removed (22
@@ -233,5 +207,4 @@ That test was made with the earlier package, which carried Python: with the comp
 administrator has to be repeated.
 
 **Not tested yet**: a restart of the server and the nightly backup made by the scheduled task; a PC connecting
-from another machine on the network; an update over a running installation; Caddy and the real certificate; the
-files for systemd and for Docker.
+from another machine on the network; an update over a running installation; Caddy and the real certificate.

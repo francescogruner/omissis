@@ -21,7 +21,7 @@ English: `GUIDE.md`.
 In tutti e due i casi il collegamento è cifrato: i PC accettano **solo** `https://`, perché il riepilogo porta la
 chiave di collegamento del cliente.
 
-Serve un server sempre acceso: Windows Server 2019 o successivo (o Windows 10/11), oppure Linux. La console è
+Serve un server sempre acceso: Windows Server 2019 o successivo (o Windows 10/11). La console è
 leggera: 1 processore e 1 GB di memoria bastano per centinaia di PC.
 
 ## In rete locale, su Windows
@@ -86,30 +86,6 @@ con un certificato vero.
    Caddy chiede il certificato e lo rinnova da solo. Chi non vuole aprire porte può usare un tunnel (Cloudflare
    Tunnel o simili) che inoltra il nome a `http://127.0.0.1:8800`.
 3. Apri `https://console.tuodominio.it/`: nessun avviso, e ai PC non serve l'impronta.
-
-## Su Linux
-
-Per Linux e Docker c'è un pacchetto a parte, `omissis-console-<versione>-linux.zip`, con il programma in Python: si
-chiede dalla pagina <https://francescogruner.it/contatti/>. Serve Python 3.10 o successivo, che le distribuzioni recenti hanno già. Come
-root, dalla cartella scompattata:
-
-```bash
-useradd --system --home /nonexistent --shell /usr/sbin/nologin omissis
-install -d /opt/omissis-console && cp -r app /opt/omissis-console/
-install -d -o omissis -g omissis -m 750 /var/lib/omissis-console
-cp linux/omissis-console*.service linux/omissis-console-backup.timer /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now omissis-console.service omissis-console-backup.timer
-sudo -u omissis python3 /opt/omissis-console/app/console.py --data /var/lib/omissis-console --add-user tuonome --role msp
-```
-
-Il file del servizio è scritto per la via «raggiungibile da Internet», con Caddy davanti (`Caddyfile.example` in
-`/etc/caddy/Caddyfile`). Per la rete locale, nella riga `ExecStart` metti `--https --host 0.0.0.0` al posto di
-`--secure-cookie`: per creare il certificato serve il comando `openssl` oppure il pacchetto `python3-cryptography`.
-
-**Con Docker**, in alternativa (sempre con Caddy davanti): metti il nome vero in `docker/Caddyfile`, poi
-`docker compose -f docker/compose.yaml up -d --build`. L'accesso si crea con
-`docker compose -f docker/compose.yaml exec console python console.py --data /data --add-user tuonome --role msp`.
 
 ## Collegare il primo cliente
 
@@ -178,21 +154,18 @@ smette di valere.
 | Fare una copia adesso | `console --data <dati> --backup <cartella>` (funziona anche a console accesa) |
 | Togliere i dati vecchi | `console --data <dati> --prune 400` |
 
-Qui `console` sta per `C:\OmissisConsole\app\omissis-console.exe` su Windows (dove `<dati>` è
-`C:\OmissisConsole\data`) e per `python3 /opt/omissis-console/app/console.py` su Linux. In uno script la password si
+Qui `console` sta per `C:\OmissisConsole\app\omissis-console.exe` e `<dati>` per `C:\OmissisConsole\data`. In uno script la password si
 può dare con `--password-file <file>` invece di scriverla.
 
 ## Copie di sicurezza e ripristino
 
-Ogni notte alle 02:30 una copia coerente dell'archivio finisce in `C:\OmissisConsole\backup` (su Linux
-`/var/lib/omissis-console/backup`); restano le ultime 14. **Portale anche fuori dal server**, con lo strumento
+Ogni notte alle 02:30 una copia coerente dell'archivio finisce in `C:\OmissisConsole\backup`; restano le ultime 14. **Portale anche fuori dal server**, con lo strumento
 di backup che usi già: sono file normali. In rete locale salva anche la cartella `data\tls`, una volta: contiene
 il certificato, e con lui l'impronta che i PC conoscono.
 
 La licenza sta nella cartella dei dati (`licence.json`): conserva anche il file che hai ricevuto.
 
-Per ripristinare: ferma la console (su Windows l'attività «Omissis Console»; su Linux
-`systemctl stop omissis-console`), copia il file scelto sopra `console.sqlite` nella cartella dei dati, togli gli
+Per ripristinare: ferma la console (l'attività pianificata «Omissis Console»), copia il file scelto sopra `console.sqlite` nella cartella dei dati, togli gli
 eventuali `console.sqlite-wal` e `console.sqlite-shm`, riavvia.
 
 ## Aggiornare e togliere
@@ -215,7 +188,7 @@ eventuali `console.sqlite-wal` e `console.sqlite-shm`, riavvia.
 
 ## Che cosa è stato provato
 
-Il 15 novembre 2026: le chiamate della console (39 controlli) su Windows e su Linux; l'HTTPS integrato con il
+Il 15 novembre 2026: le chiamate della console (39 controlli); l'HTTPS integrato con il
 programma vero di Omissis (impronta giusta: il riepilogo arriva; sbagliata o assente: non parte nulla); la pagina
 in HTTPS con il file da scaricare; il pacchetto scompattato, con il programma **compilato**, installato in una
 cartella di prova **senza** registrare attività (`-NoTasks`), acceso, collegato, messo sotto licenza, salvato,
@@ -233,4 +206,4 @@ l'installazione da amministratore va rifatta.
 
 **Non ancora provato**: il riavvio del server e la copia notturna fatta dall'attività pianificata; un PC che si
 collega da un'altra macchina della rete; un aggiornamento sopra un'installazione in funzione; Caddy e il
-certificato vero; i file per systemd e per Docker.
+certificato vero.

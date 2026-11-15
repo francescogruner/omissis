@@ -40,8 +40,6 @@ Di serie la console è per la rete locale: fa HTTPS con un certificato che si cr
 dall'impronta di quel certificato. Niente nome pubblico, niente porte 80 e 443, nient'altro da installare. La guida
 completa, con la messa in rete su Internet, le copie di sicurezza e i problemi tipici, è in [GUIDA.it.md](GUIDA.it.md).
 
-Per Linux e Docker c'è un pacchetto a parte, su richiesta: <https://francescogruner.it/contatti/>.
-
 ## Che cosa è provato e che cosa no
 
 Le prove automatiche, su un solo computer, coprono le chiamate della console, la pagina, la licenza, il primo avvio

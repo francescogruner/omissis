@@ -41,8 +41,6 @@ By default the console is for the local network: it speaks HTTPS with a certific
 recognise it by the fingerprint of that certificate. No public name, no ports 80 and 443, nothing else to install.
 The whole guide, with the Internet-facing setup, backups and troubleshooting, is in [GUIDE.md](GUIDE.md).
 
-For Linux and Docker there is a separate package, on request: <https://francescogruner.it/contatti/>.
-
 ## What has been tested, and what has not
 
 Automatic tests on a single computer cover the console's calls, the page, the licence, the first start and the
