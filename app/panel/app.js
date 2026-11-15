@@ -6,6 +6,8 @@
 const CODE = document.querySelector('meta[name="omissis-code"]').content;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+// dove scrivere a chi fa Omissis: un collegamento e basta, che si apre solo se lo si preme
+const CONTACT = "https://francescogruner.it/contatti/", LINKEDIN = "https://www.linkedin.com/in/francescogruner/";
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 
 // ------------------------------------------------------------------ 1. strumenti
@@ -120,6 +122,8 @@ let S = null;              // l'ultimo stato letto dal programma
 let view = "simple";    // semplice | avanzata
 let opened = {id: "", card: ""};
 let extension = null;     // ciò che dice di sé l'estensione, se questo browser ce l'ha
+let guide = null;         // la configurazione guidata, mentre è aperta
+let wantConnect = false;  // la pagina è stata aperta dall'estensione appena installata, per collegarla
 
 function drawMenu() {
   const entry = v => `<a href="#/${v.id}" data-view="${v.id}">${icon(v.id)}<span>${esc(t(`menu.${v.id}`))}</span></a>`;
@@ -129,6 +133,8 @@ function drawMenu() {
     + VIEWS.filter(v => v.advanced).map(v => entry(v).replace("<a ", '<a class="only-advanced" ')).join("");
   $("#skip").textContent = t("general.skip");
   $("#advancedText").textContent = t("menu.advanced");
+  $("#contact").href = CONTACT;
+  $("#contact").textContent = t("general.made_by");
 }
 
 function path() {
@@ -176,6 +182,7 @@ const readStatus = test(async () => {
   $("#sideText").textContent = t(`status.short.${phase}`);
   $("#version").textContent = t("general.version", {v: S.version});
   REFRESH[opened.id]?.(S);
+  guide?.refresh();
 });
 
 // ------------------------------------------------------------------ 3. le viste
@@ -470,7 +477,11 @@ DRAW.guide = el => {
     + card(`<h2>${esc(t("guide.keyboard"))}</h2>${steps("guide.keyboard", 4)}<p class="help">${t("guide.keyboard.note")}</p>`)
     + card(`<h2>${esc(t("guide.documents"))}</h2>${steps("guide.documents", 3)}`)
     + card(`<h2>${esc(t("guide.automatic"))}</h2><p>${t("guide.automatic.text")}</p>`)
-    + card(`<h2>${esc(t("guide.know"))}</h2><ul class="listing">${[1, 2, 3, 4].map(i => `<li>${t(`guide.know.${i}`)}</li>`).join("")}</ul>`);
+    + card(`<h2>${esc(t("guide.know"))}</h2><ul class="listing">${[1, 2, 3, 4].map(i => `<li>${t(`guide.know.${i}`)}</li>`).join("")}</ul>`)
+    + card(`<h2>${esc(t("guide.welcome"))}</h2><p>${esc(t("guide.welcome.text"))}</p>`, `<button class="button" id="welcomeAgain">${esc(t("guide.welcome.again"))}</button>`)
+    + card(`<h2>${esc(t("guide.contact"))}</h2><p>${esc(t("guide.contact.text"))}</p>`,
+        `<a class="button" href="${CONTACT}" target="_blank" rel="noopener">${esc(t("general.write_me"))}</a><a class="button" href="${LINKEDIN}" target="_blank" rel="noopener">LinkedIn</a>`);
+  $("#welcomeAgain").onclick = () => welcome(1);
 };
 
 // ---- Impostazioni
@@ -491,7 +502,7 @@ const drawConsole = test(async () => {
     ? line(t("console.connected", {host: c.host}), esc(t(c.names ? "console.sends.names" : "console.sends")) + (c.pinned ? " " + esc(t("console.pinned")) : "") + (c.managed ? " " + esc(t("managed.locked")) : ""),
         label(problem || (c.last ? t("console.last", {when: c.last}) : t("console.never")), problem ? "error" : c.last ? "ok" : ""))
       + `<div class="setting"><span class="help">${esc(t("console.what"))}</span><span class="command"><button class="button" id="conPreview">${esc(t("console.preview"))}</button><button class="button" id="conSend">${esc(t("console.send"))}</button>${c.managed ? "" : `<button class="button" id="conOff">${esc(t("console.disconnect"))}</button>`}</span></div><pre id="conData" hidden></pre>`
-    : `<div class="setting"><span class="name">${esc(t("console.none"))}</span><span class="help">${esc(t("console.none.below"))}</span></div>
+    : `<div class="setting"><span class="name">${esc(t("console.none"))}</span><span class="help">${esc(t("console.none.below"))} <a href="${CONTACT}" target="_blank" rel="noopener">${esc(t("console.contact"))}</a></span></div>
        <div class="setting"><span class="help"><input type="text" class="wide" id="conUrl" placeholder="https://" aria-label="${esc(t("console.url"))}"> <input type="text" class="wide" id="conKey" placeholder="${esc(t("console.key"))}" aria-label="${esc(t("console.key"))}" autocomplete="off"> <input type="text" class="wide" id="conPin" placeholder="${esc(t("console.pin"))}" aria-label="${esc(t("console.pin"))}" autocomplete="off"></span><span class="command"><button class="button" id="conOn">${esc(t("console.connect"))}</button></span></div>`;
   const act = (id, f) => { if ($(id)) $(id).onclick = test(async e => { e.target.disabled = true; try { await f(); } finally { e.target.disabled = false; } }); };
   act("#conPreview", async () => { const p = $("#conData"); p.textContent = JSON.stringify((await api("/api/console", {action: "preview"})).preview, null, 1); p.hidden = false; });
@@ -1010,7 +1021,98 @@ DRAW.vault = el => {
   read();
 };
 
-// ------------------------------------------------------------------ 4. avvio
+// ------------------------------------------------------------------ 4. configurazione guidata
+
+// Al primo avvio, e quando la si richiama dalla Guida: pochi passi, ognuno saltabile. Non decide nulla che non si possa
+// cambiare dopo dalle pagine normali; alla chiusura il programma si ricorda che e' stata vista.
+const session = (key, value) => { try { if (value === undefined) return sessionStorage.getItem(key); sessionStorage.setItem(key, value); } catch { /* memoria del browser non disponibile */ } return null; };
+const connectThis = test(async () => { const d = await extensionData(); window.postMessage({omissis: "connect", token: d.token, port: d.port}, location.origin); });
+
+function welcome(from = 0) {
+  const d = $("#welcome");
+  if (d.open) return;
+  // se la pagina viene ricaricata a meta' (serve dopo aver installato l'estensione) si riprende dal passo in cui si era
+  const st = {step: from || Number(session("welcome_step")) || 1, where: {browser: true, app: false, terminal: false}, tried: false};
+  try { if (!from) Object.assign(st.where, JSON.parse(session("welcome_where") || "{}")); } catch { /* si riparte dalle scelte di serie */ }
+  const steps = () => [1, 2, ...(st.where.browser ? [3] : []), 4];
+  const finish = async to => {
+    guide = null;
+    session("welcome_step", ""); session("welcome_where", "");
+    if (d.open) d.close();
+    await api("/api/settings", {onboarded: true}).catch(() => {});
+    if (to) { if (view !== "advanced") changeView(true); location.hash = to; }
+    else if (location.hash === "#/welcome") location.hash = "#/start";
+  };
+  const move = by => { const all = steps(), i = Math.max(0, all.indexOf(st.step)); st.step = all[Math.max(0, Math.min(all.length - 1, i + by))]; session("welcome_step", String(st.step)); draw(); };
+  const body = {
+    1: () => `<textarea id="welcomeText" aria-label="${esc(t("welcome.1.field"))}">${esc(t("welcome.1.example"))}</textarea>
+      <div class="line"><button class="button primary" id="welcomeTry">${esc(t("welcome.1.try"))}</button><button class="button" id="welcomeStart" hidden>${esc(t("start.launch"))}</button><span class="faded small" id="welcomeState" role="status"></span></div>
+      <div class="outcome" id="welcomeResult" aria-live="polite" hidden></div><p class="help" id="welcomeFound" hidden></p>`,
+    2: () => ["browser", "app", "terminal"].map(k => `<label class="pick"><input type="checkbox" data-where="${k}" ${st.where[k] ? "checked" : ""}><span><b>${esc(t(`welcome.where.${k}`))}</b><span class="help">${esc(t(`welcome.where.${k}.below`))}</span></span></label>`).join(""),
+    3: () => `<div class="line"><span class="label" id="welcomeExt">…</span><span class="space"></span><button class="button primary" id="welcomeConnect" hidden>${esc(t("browser.connect"))}</button></div>
+      <div id="welcomeInstall" hidden><p class="help">${esc(t("welcome.3.absent"))}</p><ol class="listing"><li>${t("browser.installation.1")}</li><li>${t("browser.installation.2")}<div class="line"><code id="welcomeFolder">…</code></div></li><li>${esc(t("welcome.3.reload"))}</li></ol></div>`,
+    4: () => `<ul class="listing"><li>${esc(t("welcome.4.default"))}</li><li>${esc(t("welcome.4.icon"))}</li>${st.where.app || st.where.terminal ? `<li>${esc(t("welcome.4.more"))}</li>` : ""}</ul>`,
+  };
+  const refresh = () => {
+    if (st.step === 1 && $("#welcomeTry")) {
+      const phase = !S ? "startup" : PHASES.includes(S.phase) ? S.phase : "stop", sc = S && S.downloading;
+      $("#welcomeTry").disabled = phase !== "active";
+      $("#welcomeStart").hidden = !["stop", "error"].includes(phase);
+      $("#welcomeState").textContent = phase === "active" ? ""
+        : phase === "model" && sc && sc.total ? t("status.model.progress", {completed: megabyte(sc.completed), total: megabyte(sc.total), pc: Math.min(100, Math.floor(100 * sc.completed / sc.total))})
+        : phase === "error" ? S.error : t(`status.${phase}`);
+    }
+    if (st.step === 3 && $("#welcomeExt")) {
+      const status = !extension ? "absent" : !extension.connected ? "to_connect" : extension.ok ? "connected" : "no_response";
+      const e = $("#welcomeExt");
+      e.dataset.status = status;
+      e.className = "label " + (status === "connected" ? "ok" : status === "absent" ? "" : "warning");
+      e.textContent = t(`browser.status.${status}`);
+      $("#welcomeConnect").hidden = !extension || status === "connected";
+      $("#welcomeInstall").hidden = !!extension;
+    }
+  };
+  const draw = () => {
+    const all = steps(), i = Math.max(0, all.indexOf(st.step)), last = i === all.length - 1;
+    st.step = all[i];
+    d.dataset.step = st.step;
+    d.innerHTML = `<div class="inside">
+        <div class="line"><span class="faded small" id="welcomeCount">${esc(t("welcome.step", {n: i + 1, total: all.length}))}</span><span class="space"></span><button class="button" id="welcomeSkip">${esc(t("welcome.skip"))}</button></div>
+        <h2 id="welcomeTitle">${esc(t(`welcome.${st.step}.title`))}</h2><p class="faded">${esc(t(`welcome.${st.step}.below`))}</p>${body[st.step]()}</div>
+      <div class="footer">${i ? `<button class="button" id="welcomeBack">${esc(t("welcome.back"))}</button>` : ""}${
+        last && (st.where.app || st.where.terminal) ? `<button class="button" id="welcomeMore">${esc(t("welcome.4.open_connections"))}</button>` : ""}
+        <button class="button${st.step !== 1 || st.tried ? " primary" : ""}" id="welcomeNext">${esc(t(last ? "welcome.finish" : "welcome.next"))}</button></div>`;
+    $("#welcomeSkip").onclick = () => finish();
+    if ($("#welcomeBack")) $("#welcomeBack").onclick = () => move(-1);
+    if ($("#welcomeMore")) $("#welcomeMore").onclick = () => finish(`#/connections/${st.where.app ? "app" : "terminal"}`);
+    $("#welcomeNext").onclick = () => last ? finish() : move(1);
+    if (st.step === 1) {
+      $("#welcomeStart").onclick = test(async () => { await api("/api/protection", {action: "launch"}); readStatus(); });
+      $("#welcomeTry").onclick = test(async () => {
+        const r = await api("/api/try", {text: $("#welcomeText").value, demo: true});
+        const out = $("#welcomeResult"), found = $("#welcomeFound"), n = Object.values(r.counts || {}).reduce((a, b) => a + b, 0);
+        out.innerHTML = esc(r.texts[0]).replace(new RegExp(RX_PLACEHOLDER, "g"), s => `<span class="placeholder">${s}</span>`);
+        found.textContent = n ? t("welcome.1.found", {n: num(n)}) : t("welcome.1.nothing");
+        out.hidden = found.hidden = false;
+        st.tried = true;
+        $("#welcomeNext").className = "button primary";
+      });
+    }
+    if (st.step === 2) $$("#welcome input[data-where]").forEach(c => { c.onchange = () => { st.where[c.dataset.where] = c.checked; session("welcome_where", JSON.stringify(st.where)); }; });
+    if (st.step === 3) {
+      $("#welcomeConnect").onclick = connectThis;
+      api("/api/extension").then(x => { if ($("#welcomeFolder")) $("#welcomeFolder").textContent = x.folder; }).catch(() => {});
+      window.postMessage({omissis: "ping"}, location.origin);
+    }
+    refresh();
+  };
+  guide = {refresh};
+  d.oncancel = e => { e.preventDefault(); finish(); };
+  d.showModal();
+  draw();
+}
+
+// ------------------------------------------------------------------ 5. avvio
 
 function applyTheme(theme) {
   if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
@@ -1029,6 +1131,9 @@ window.addEventListener("message", e => {
   if (e.source !== window || e.origin !== location.origin || !d || d.omissis !== "extension") return;
   extension = d;
   drawExtension(); channels();
+  // aperta dalla pagina di benvenuto dell'estensione: il collegamento parte da solo, una volta
+  if (wantConnect && !d.just) { wantConnect = false; if (!(d.connected && d.ok)) connectThis(); }
+  guide?.refresh();
   if (d.just) notify(t(d.ok ? "browser.connected_now" : "browser.connected_no_response"), !d.ok);
 });
 
@@ -1047,7 +1152,11 @@ async function launch() {
   drawMenu(); applyView();
   $("#advanced").onchange = e => changeView(e.target.checked);
   addEventListener("hashchange", () => show());
+  wantConnect = location.hash === "#/connect";
+  const again = location.hash === "#/welcome";
+  if (wantConnect) history.replaceState(null, "", "#/start");
   show(false);
+  if (i.first_run || again) welcome(again ? 1 : 0);
   window.postMessage({omissis: "ping"}, location.origin);
   await readStatus();
   setInterval(() => { readStatus(); if (opened.id === "start") channels(); appListingQuiet(); }, 3000);

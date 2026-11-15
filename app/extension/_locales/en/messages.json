@@ -86,6 +86,33 @@
  "managed_note": {
   "message": "Rule set by your organisation: suspending does not apply on this site."
  },
+ "welcome_title": {
+  "message": "Omissis is installed in this browser"
+ },
+ "welcome_below": {
+  "message": "It replaces personal data in your messages to AI services before they leave, and puts it back in the answers. It works together with the Omissis program on this PC: until it is connected, on protected services messages are not sent."
+ },
+ "welcome_to_connect": {
+  "message": "One step left: connect it to the program"
+ },
+ "welcome_connected": {
+  "message": "Connected: you are protected in this browser"
+ },
+ "welcome_step_program": {
+  "message": "Open Omissis on this PC (the icon next to the clock). If you do not have it yet, install it: the extension alone is not enough."
+ },
+ "welcome_step_connect": {
+  "message": "Press the button below: the Omissis panel opens and connects by itself."
+ },
+ "welcome_connect": {
+  "message": "Connect this browser"
+ },
+ "welcome_step_use": {
+  "message": "Go back to your chats: there is nothing else to do."
+ },
+ "welcome_done": {
+  "message": "You can close this tab. The Omissis icon next to the address bar shows what is happening on the open site."
+ },
  "option_suspend": {
   "message": "Pause protection in this browser"
  },

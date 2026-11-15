@@ -86,6 +86,33 @@
  "managed_note": {
   "message": "Regola scelta dalla tua organizzazione: su questo sito la sospensione non vale."
  },
+ "welcome_title": {
+  "message": "Omissis è installata in questo browser"
+ },
+ "welcome_below": {
+  "message": "Sostituisce i dati personali nei messaggi ai servizi AI prima che partano, e li rimette nelle risposte. Lavora insieme al programma Omissis su questo PC: finché non è collegata, sui servizi protetti i messaggi non partono."
+ },
+ "welcome_to_connect": {
+  "message": "Manca un passo: collegarla al programma"
+ },
+ "welcome_connected": {
+  "message": "Collegata: su questo browser sei protetto"
+ },
+ "welcome_step_program": {
+  "message": "Apri Omissis su questo PC (l'icona vicino all'orologio). Se non lo hai ancora, installalo: l'estensione da sola non basta."
+ },
+ "welcome_step_connect": {
+  "message": "Premi qui sotto: si apre il pannello di Omissis e il collegamento si fa da solo."
+ },
+ "welcome_connect": {
+  "message": "Collega questo browser"
+ },
+ "welcome_step_use": {
+  "message": "Torna alle tue chat: non devi fare altro."
+ },
+ "welcome_done": {
+  "message": "Puoi chiudere questa scheda. L'icona di Omissis accanto alla barra degli indirizzi mostra che cosa succede nel sito aperto."
+ },
  "option_suspend": {
   "message": "Sospendi la protezione in questo browser"
  },

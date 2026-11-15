@@ -85,6 +85,8 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
 
     # ---- impostazioni imposte
     check("senza vincoli: nulla è bloccato", settings.locked() == {"keys": [], "policies": []})
+    check("primo avvio: la configurazione guidata viene proposta, ma non durante le prove automatiche",
+          settings.first_run() and not settings.first_run(test=True))
     settings.write({**settings.read(), "updates": "notify", "policies": {"deepseek": "record", "chatgpt": "record"}, "groups_off": ["it"]})
     impose({"updates": "never", "policies": {"deepseek": "block"}, "groups_off": [], "restore": 0, "vault_days": "molti", "inventata": 1,
             "mcp_folders": "non un elenco"})
@@ -92,6 +94,7 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     check("le scelte imposte vincono su quelle dell'utente", cfg["updates"] == "never" and cfg["groups_off"] == [] and cfg["restore"] is False,
           f"{cfg['updates']} {cfg['groups_off']} {cfg['restore']}")
     check("regole: imposto solo il servizio scritto, gli altri restano dell'utente", cfg["policies"] == {"deepseek": "block", "chatgpt": "record"}, str(cfg["policies"]))
+    check("PC con impostazioni imposte: la configurazione guidata non viene proposta", not settings.first_run())
     check("un valore scritto male o un nome sconosciuto non impone nulla",
           settings.locked() == {"keys": ["groups_off", "restore", "updates"], "policies": ["deepseek"]}, str(settings.locked()))
     after = settings.write({**settings.read(), "updates": "automatic", "groups_off": ["payments"], "policies": {**cfg["policies"], "deepseek": "ignore", "chatgpt": "block"},
@@ -105,6 +108,11 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     cfg = settings.read()
     check("tolto il vincolo tornano le scelte dell'utente", cfg["updates"] == "notify" and cfg["groups_off"] == ["it"] and cfg["policies"]["deepseek"] == "record"
           and cfg["restore"] is True and settings.locked()["keys"] == [])
+    again = settings.first_run()
+    settings.write({**settings.read(), "onboarded": "si"})   # solo un vero «vista» la chiude, non un valore qualsiasi
+    still = settings.first_run()
+    settings.write({**settings.read(), "onboarded": True})
+    check("configurazione guidata: vista una volta non torna più", again and still and not settings.first_run())
 
     # ---- lettura dal registro: una chiave di prova tra quelle dell'utente, tolta alla fine
     if sys.platform == "win32":

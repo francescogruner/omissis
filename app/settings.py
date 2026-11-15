@@ -36,6 +36,7 @@ DEFAULTS = {
     "console_key": "",            # chiave di collegamento data dalla console: dice a quale organizzazione appartiene il PC
     "console_names": True,        # False: il riepilogo non porta il nome del computer ne' quello dell'utente
     "console_pin": "",            # impronta SHA-256 del certificato della console, per quelle in rete locale che se lo fanno da se'
+    "onboarded": False,           # la configurazione guidata del primo avvio e' gia' stata vista (o saltata)
 }
 # impostazioni che l'amministratore impone voce per voce: il resto della tabella resta dell'utente
 MERGED = {"policies"}
@@ -77,6 +78,12 @@ def locked(cfg_imposed=None):
     """Che cosa l'utente non puo' cambiare: le impostazioni imposte per intero e, per le regole, i singoli servizi."""
     data = imposed() if cfg_imposed is None else cfg_imposed
     return {"keys": sorted(k for k in data if k not in MERGED), "policies": sorted(data.get("policies") or {})}
+
+
+def first_run(test=False):
+    """Va proposta la configurazione guidata? Solo a chi apre il programma per la prima volta e lo configura da se':
+    su un PC con impostazioni imposte ha gia' deciso chi lo amministra, e nelle prove automatiche coprirebbe la pagina."""
+    return not test and not read()["onboarded"] and not any(locked().values())
 
 
 def read():
@@ -162,6 +169,7 @@ def _clean(data):
     clean = {k: data.get(k, v) for k, v in DEFAULTS.items()}
     clean["policies"] = {k: v for k, v in (clean["policies"] or {}).items()
                            if k in catalog.PER_ID and v in catalog.POLICIES}
+    clean["onboarded"] = clean["onboarded"] is True
     date = clean["shortcuts"] if isinstance(clean["shortcuts"], dict) else {}
     clean["shortcuts"] = {k: str(date.get(k, v)).strip().lower()[:40] for k, v in DEFAULTS["shortcuts"].items()}
     clean["categories"] = sorted({str(x) for x in clean["categories"] or [] if str(x).isupper() and len(str(x)) <= 24})

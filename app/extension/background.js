@@ -188,6 +188,7 @@ async function handle(m, sender) {
       return {ok: !!(health && health.ok), reason: health && health.reason, version: VERSION};
     }
     case 'present': {
+      await refresh(false);   // chi chiede (il pannello, la pagina di benvenuto) vuole lo stato di adesso, non quello di un minuto fa
       const {token, health} = await chrome.storage.local.get(['token', 'health']);
       return {version: VERSION, build: BUILD, connected: !!token, ok: !!(health && health.ok)};
     }
@@ -224,6 +225,18 @@ chrome.runtime.onMessage.addListener((m, sender, respond) => {
   return true;
 });
 
-chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create('status', {periodInMinutes: 1}); refresh(true); });
+// Appena installata, una pagina dice che cosa manca perche' funzioni: il collegamento al programma sul PC. Una volta sola,
+// non dopo una ricarica o un aggiornamento, e mai dalla copia di prova.
+async function greet(details) {
+  if (!details || details.reason !== 'install') return false;
+  const {token, welcomed} = await chrome.storage.local.get(['token', 'welcomed']);
+  if (token || welcomed) return false;
+  try { if ((await (await fetch(chrome.runtime.getURL('build.json'), {cache: 'no-store'})).json()).test) return false; } catch (e) { /* senza impronta si saluta lo stesso */ }
+  await chrome.storage.local.set({welcomed: true});
+  await chrome.tabs.create({url: chrome.runtime.getURL('welcome.html')});
+  return true;
+}
+
+chrome.runtime.onInstalled.addListener(details => { chrome.alarms.create('status', {periodInMinutes: 1}); refresh(true); greet(details); });
 chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('status', {periodInMinutes: 1}); refresh(true); });
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'status') refresh(true); });

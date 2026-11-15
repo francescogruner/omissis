@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Omissis</title>
+<style>
+  /* stesso stile della finestrella e del pannello del programma */
+  :root { color-scheme: light dark; --background: #fff; --background-2: #fafafa; --text: #171717; --text-2: #5c5c5c; --border: #eaeaea; --border-2: #c9c9c9;
+    --ok: #0a7a33; --ok-background: #e8f7ed; --warning: #8a5a00; --warning-background: #fff4d6; --ring: #0070f3; }
+  @media (prefers-color-scheme: dark) { :root { --background: #0a0a0a; --background-2: #111; --text: #ededed; --text-2: #a1a1a1; --border: #262626; --border-2: #454545;
+    --ok: #5fc27a; --ok-background: #0e2916; --warning: #f2c14e; --warning-background: #33270a; --ring: #52a8ff; } }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 15px/1.6 "Geist", "Inter", system-ui, "Segoe UI", sans-serif; color: var(--text); background: var(--background-2); }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+  main { max-width: 560px; margin: 8vh auto; padding: 28px 28px 24px; display: grid; gap: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--background); }
+  header { display: flex; align-items: center; gap: 8px; }
+  header svg { width: 22px; height: 22px; }
+  header b { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+  h1 { margin: 6px 0 0; font-size: 22px; line-height: 1.25; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance; }
+  p { margin: 0; }
+  .faded { color: var(--text-2); }
+  .state { display: inline-flex; align-items: center; gap: 8px; justify-self: start; padding: 4px 12px; border-radius: 99px; font-size: 13px; font-weight: 500; color: var(--warning); background: var(--warning-background); }
+  .state i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .state[data-status="connected"] { color: var(--ok); background: var(--ok-background); }
+  ol { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+  .button { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; margin-top: 8px; padding: 0 16px; border: 1px solid var(--text); border-radius: 6px; background: var(--text); color: var(--background); font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; }
+  @media (max-width: 600px) { main { margin: 0; border: 0; border-radius: 0; min-height: 100vh; align-content: start; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,4 58,14 58,34 32,60 6,34 6,14" fill="currentColor"/><polyline points="20,32 29,41 45,23" fill="none" stroke="var(--background)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <b>Omissis</b>
+  </header>
+  <h1 data-t="welcome_title"></h1>
+  <p class="faded" data-t="welcome_below"></p>
+  <span class="state" id="state" role="status"><i></i><span id="stateText">…</span></span>
+  <ol id="steps">
+    <li data-t="welcome_step_program"></li>
+    <li><span data-t="welcome_step_connect"></span><br><a class="button" id="connect" target="_blank" rel="noopener" data-t="welcome_connect"></a></li>
+    <li data-t="welcome_step_use"></li>
+  </ol>
+  <p id="done" data-t="welcome_done" hidden></p>
+</main>
+<script src="welcome.js"></script>
+</body>
+</html>

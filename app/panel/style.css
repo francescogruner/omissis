@@ -207,6 +207,17 @@ details summary { cursor: pointer; color: var(--text-2); font-size: 12.5px; }
 .notice.error { border-color: var(--error); color: var(--error); }
 dialog { border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); color: var(--text); padding: 0; max-width: min(460px, calc(100vw - 32px)); }
 dialog::backdrop { background: rgba(0, 0, 0, .5); }
+dialog#welcome { width: 620px; max-width: min(620px, calc(100vw - 32px)); }
+dialog#welcome textarea { min-height: 96px; }
+dialog#welcome h2 { font-size: 20px; letter-spacing: -0.02em; }
+dialog#welcome .outcome { min-height: 0; }
+#welcomeBack { margin-right: auto; }
+.pick { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-small); cursor: pointer; }
+.pick:has(input:checked) { border-color: var(--text); }
+.pick:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+.pick b { display: block; font-weight: 600; }
+.pick input { margin-top: 3px; flex: none; }
+.side-footer a.version { color: inherit; }
 dialog .inside { padding: 24px; display: flex; flex-direction: column; gap: 10px; }
 dialog .footer { padding: 12px 24px; border-top: 1px solid var(--border); background: var(--background-2); display: flex; justify-content: flex-end; gap: 8px; }
 

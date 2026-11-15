@@ -579,7 +579,8 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/settings":
                 # la chiave di collegamento alla console non torna alla pagina: le basta sapere se c'e' (/api/console)
                 self._respond(200, {**{k: v for k, v in settings.read().items() if k != "console_key"}, "certificate": certificate(),
-                                     "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON, "managed": settings.locked()})
+                                     "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON, "managed": settings.locked(),
+                                     "first_run": settings.first_run(SUP.test)})
             elif u.path == "/api/console":
                 self._respond(200, central.state())
             elif u.path == "/api/lists":
@@ -752,7 +753,8 @@ class Handler(BaseHTTPRequestHandler):
                 never = [str(x)[:200] for x in data.get("never") or []][:200]
                 also = {str(k)[:200]: str(v) for k, v in list((data.get("also") or {}).items())[:200]}
                 r = engine("/mask", {"texts": [text], "never": never, "also": also})
-                record_manual("text", r.get("counts"), text)
+                if not data.get("demo"):   # l'esempio della configurazione guidata non e' uso vero: non entra nei conteggi
+                    record_manual("text", r.get("counts"), text)
                 self._respond(200, r)
             elif p == "/api/lists/add":   # da Testo: «non mascherare mai» e «maschera sempre», senza passare dalle Impostazioni
                 list_name, term = ("never" if data.get("list_name") == "never" else "always"), str(data.get("term", "")).strip()[:200]

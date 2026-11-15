@@ -354,6 +354,18 @@ def main():
         fin.reload()
         wait_for(fin, "#title", "active")
         mark("blocco tolto", sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.length)") == 0)
+        # --- la pagina di benvenuto, a estensione collegata, lo dice e non chiede altro
+        hello = ctx.new_page()
+        hello.goto(f"chrome-extension://{ident}/welcome.html")
+        try:
+            hello.wait_for_selector('#state[data-status="connected"]', timeout=15000)
+            mark("pagina di benvenuto: a estensione collegata lo dice e non chiede altro", hello.is_visible("#done") and not hello.is_visible("#steps"))
+        except Exception as ex:   # noqa: BLE001
+            mark("pagina di benvenuto: a estensione collegata lo dice e non chiede altro", False, str(ex)[:160])
+        if "--screenshots" in sys.argv:
+            hello.set_viewport_size({"width": 900, "height": 640})
+            hello.screenshot(path=str(HERE / "screenshots" / f"extension-welcome-{LANGUAGE}.png"))
+        hello.close()
         if "--screenshots" in sys.argv:
             fin.set_viewport_size({"width": 336, "height": 420})
             fin.screenshot(path=str(HERE / "screenshots" / f"extension-popup-{LANGUAGE}.png"))
@@ -395,6 +407,25 @@ def main():
                 after = f"nessuna ricarica ({type(ex).__name__})"
             mark("file cambiati sul disco: l'estensione si ricarica da sola e riparte con quelli nuovi",
                   len(before) == 16 and stays and after == fresh and quiet, f"{before} -> {after} · alla copia di prova non passa: {stays}")
+
+            # --- appena installata (e non di prova, non ancora collegata) apre la pagina di benvenuto, una volta sola
+            try:
+                now = ctx.service_workers[-1]
+                already = [p.url for p in ctx.pages if p.url.endswith("/welcome.html")]   # una ricarica non deve averla aperta
+                not_on_update = now.evaluate("greet({reason: 'update'})") is False
+                with ctx.expect_page(timeout=15000) as opening:
+                    opened_now = now.evaluate("greet({reason: 'install'})")
+                hello = opening.value
+                hello.wait_for_selector('#state[data-status="to_connect"]', timeout=10000)
+                link = hello.get_attribute("#connect", "href")
+                words = hello.inner_text("main")
+                once = now.evaluate("greet({reason: 'install'})") is False
+                mark("appena installata: si apre la pagina di benvenuto, una volta sola, con il collegamento al pannello",
+                      not already and not_on_update and opened_now and once and link == "http://127.0.0.1:8766/#/connect"
+                      and hello.is_visible("#steps") and "welcome_" not in words and len(words) > 200, f"dopo una ricarica: {len(already)} · collegamento: {link}")
+                hello.close()
+            except Exception as ex:   # noqa: BLE001
+                mark("appena installata: si apre la pagina di benvenuto", False, str(ex)[:200])
 
             # --- la finestrella (letta dal disco ogni volta) davanti a un servizio in background rimasto a una versione che non
             # la capisce: ricarica l'estensione da sola, una volta; se nemmeno cosi' si capiscono, lo dice

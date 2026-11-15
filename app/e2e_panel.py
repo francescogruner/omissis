@@ -152,6 +152,73 @@ def main():
                 mark(f"{language}: ogni pagina ha un titolo solo e il titolo della scheda", not without_title, ", ".join(without_title))
                 errors.clear()
 
+                # --- configurazione guidata (qui la si apre a mano: durante le prove non si propone da sola)
+                try:
+                    today = lambda: call(code, "/api/status")["stats"]["today"]["messages"]   # noqa: E731
+                    counted = today()
+                    call(code, "/api/settings", {"onboarded": False})
+                    pag.goto(PANEL + "/#/welcome")
+                    pag.reload()
+                    pag.wait_for_selector("#welcome[open] #welcomeTry:not([disabled])", timeout=30000)
+                    untranslated = set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
+                    pag.click("#welcomeTry")
+                    pag.wait_for_selector("#welcomeResult:not([hidden])", timeout=30000)
+                    tried = pag.inner_text("#welcomeResult")
+                    pag.click("#welcomeNext")
+                    pag.wait_for_selector('#welcome[data-step="2"]')
+                    pag.check('#welcome input[data-where="app"]')
+                    untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
+                    pag.click("#welcomeNext")
+                    pag.wait_for_selector('#welcome[data-step="3"] #welcomeInstall:not([hidden])')
+                    browser = pag.get_attribute("#welcomeExt", "data-status")
+                    untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
+                    pag.click("#welcomeNext")
+                    pag.wait_for_selector('#welcome[data-step="4"] #welcomeMore')
+                    untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
+                    unnamed = pag.evaluate(WITHOUT_NAME)
+                    pag.click("#welcomeNext")
+                    wait_until(lambda: call(code, "/api/settings")["onboarded"] is True)
+                    closed = not pag.evaluate("document.getElementById('welcome').open") and pag.evaluate("location.hash") == "#/start"
+                    # saltata con Esc vale come vista; e dalla Guida la si puo' rivedere
+                    call(code, "/api/settings", {"onboarded": False})
+                    pag.goto(PANEL + "/#/guide")
+                    pag.click("#welcomeAgain")
+                    pag.wait_for_selector("#welcome[open]")
+                    pag.keyboard.press("Escape")
+                    wait_until(lambda: call(code, "/api/settings")["onboarded"] is True)
+                    contact = pag.get_attribute("#contact", "href") or ""
+                    mark(f"{language}: configurazione guidata, prova con dati inventati (fuori dai conteggi), scelte, estensione, fine; saltarla vale come vista",
+                         "[PERSONA_" in tried and "Ferraresi" not in tried and today() == counted and browser == "absent" and closed
+                         and not untranslated and not unnamed and not pag.evaluate("document.getElementById('welcome').open")
+                         and contact.startswith("https://francescogruner.it/") and bool(pag.inner_text("#contact").strip()),
+                         f"sostituiti: {'[PERSONA_' in tried} · conteggi {counted}->{today()} · estensione {browser} · chiusa {closed} · senza traduzione {sorted(untranslated)[:3]} · senza nome {unnamed[:2]}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: configurazione guidata", False, str(ex)[:200])
+                    call(code, "/api/settings", {"onboarded": True})
+                    pag.goto(PANEL + "/#/start")
+                    pag.reload()
+                    pag.wait_for_selector("#menu a")
+                errors.clear()
+
+                # --- aperta dalla pagina di benvenuto dell'estensione, la pagina consegna da sola il codice di collegamento
+                if language == "it":
+                    try:
+                        other = ctx.new_page()
+                        other.add_init_script("window.__posted = []; window.addEventListener('message', e => { if (e.data && e.data.omissis === 'connect') window.__posted.push({token: typeof e.data.token === 'string' && e.data.token.length > 10, port: e.data.port}); });")
+                        other.goto(PANEL + "/#/connect")
+                        other.wait_for_selector("#menu a")
+                        quiet = other.evaluate("window.__posted.length") == 0   # senza estensione non parte nulla
+                        other.evaluate("window.postMessage({omissis: 'extension', version: '0', connected: false, ok: false}, location.origin)")
+                        wait_until(lambda: other.evaluate("window.__posted.length") >= 1)
+                        other.evaluate("window.postMessage({omissis: 'extension', version: '0', connected: false, ok: false}, location.origin)")
+                        other.wait_for_timeout(600)
+                        posted = other.evaluate("window.__posted")
+                        mark("pagina aperta dall'estensione appena installata: il codice di collegamento parte da solo, una volta",
+                             quiet and len(posted) == 1 and posted[0]["token"] and other.evaluate("location.hash") == "#/start", f"consegne: {len(posted)}")
+                        other.close()
+                    except Exception as ex:   # noqa: BLE001
+                        mark("pagina aperta dall'estensione appena installata", False, str(ex)[:200])
+
                 # --- dalla tastiera: il primo Tab porta al collegamento "vai al contenuto", le linguette si scorrono con le frecce
                 pag.goto(f"{PANEL}/#/connections/browser")
                 pag.wait_for_selector("[role=tab]")

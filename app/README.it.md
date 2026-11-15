@@ -58,6 +58,17 @@ Le sezioni, senza doppioni:
 | Attività | il registro delle richieste | tecnico |
 | Archivio | la corrispondenza tra segnaposto e valori: ricerca, eliminazioni mirate, pulizia | tecnico |
 
+**Configurazione guidata.** La prima volta che si apre il pannello compare una finestra di pochi passi,
+ognuno saltabile: una prova con dati inventati (che non entra nei conteggi), dove si usa l'AI (browser, app
+installate, terminale), il collegamento dell'estensione del browser, e due righe su che cosa sapere. Chiusa o
+saltata, non torna più (`onboarded` nelle impostazioni); si rivede dalla Guida. Non compare sui PC con
+impostazioni imposte da chi li amministra. L'estensione, appena installata, apre a sua volta una pagina che
+dice che cosa manca (il collegamento al programma) e lo fa fare con un clic: il pannello aperto da lì
+(`#/connect`) consegna da solo il codice di collegamento a quel browser.
+
+**Contatti.** In fondo al menu e nella Guida c'è il collegamento per scrivere a chi fa Omissis. È un
+collegamento e basta: si apre solo se lo si preme, e il programma non manda nulla.
+
 **Lingue.** Italiano e inglese. Ogni frase che l'utente vede (pagina, menu dell'icona, notifiche,
 messaggi d'errore) sta in `panel\locales\it.json` e `en.json`, con le stesse chiavi; il codice
 contiene solo le chiavi. «Automatica» segue la lingua di Windows (inglese se non è tra quelle
@@ -675,7 +686,7 @@ collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serv
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
-| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 37 controlli); pagine vere solo aperte, senza accedere |
+| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 39 controlli); pagine vere solo aperte, senza accedere |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
 da Servizi AI dopo averli provati con dati inventati.
@@ -899,7 +910,7 @@ dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'est
 `e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
 inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2e_central.py`
-(26 controlli): le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
+(29 controlli): le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
 registro dell'utente, mai da quelle di sistema) e il riepilogo per la console centrale, mandato a un servizio
 finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta, e una console con un certificato
 fatto da sé, accettata solo con l'impronta giusta.
@@ -907,7 +918,7 @@ fatto da sé, accettata solo con l'impronta giusta.
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (60 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (63 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi, `OMISSIS_MANAGED_FILE` per le impostazioni imposte) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,
