@@ -298,6 +298,34 @@ def main():
         finally:
             imposed.unlink(missing_ok=True)
             fin.bring_to_front()
+
+        # --- protezione che non si puo' spegnere (always_on, imposta da chi amministra il PC o dalla console): la sospensione non vale su nessun servizio
+        try:
+            imposed.write_text(json.dumps({"always_on": True}), encoding="utf-8")
+            page.wait_for_timeout(2600)
+            sw.evaluate("refresh(true)")
+            if not sw.evaluate(known):
+                print("SALTATO protezione che non si può spegnere: questo programma non legge le impostazioni imposte da un file (manca OMISSIS_MANAGED_FILE)")
+            else:
+                page.wait_for_timeout(500)
+                page.bring_to_front()
+                fin.reload()
+                wait_for(fin, "#title", "active")
+                note = fin.is_visible("#managed")
+                page.evaluate("t => test('whole', t)", TEXT)
+                held = json.dumps(seen()["body"], ensure_ascii=False)
+                imposed.unlink()
+                page.wait_for_timeout(2600)
+                sw.evaluate("refresh(true)")
+                page.wait_for_timeout(500)
+                fin.reload()
+                wait_for(fin, "#title", "suspended")
+                mark("protezione che non si può spegnere: la sospensione dalla finestrella non vale su nessun servizio, e torna a valere quando il vincolo sparisce",
+                      note and "[PERSONA_" in held and not any(s in held for s in SENSITIVE) and not fin.is_visible("#managed"),
+                      f"avviso nella finestrella: {note} · in chiaro con il vincolo: {sum(s in held for s in SENSITIVE)}")
+        finally:
+            imposed.unlink(missing_ok=True)
+            fin.bring_to_front()
         fin.uncheck("#suspended")
         wait_for(fin, "#title", "active")
         page.wait_for_timeout(300)

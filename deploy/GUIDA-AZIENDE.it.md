@@ -37,7 +37,7 @@ nessun codice di licenza: il programma dei PC resta quello gratuito. La console 
    a mano dal pannello di ciascuno (Impostazioni → Console centrale, nella vista avanzata).
 3. Entro un'ora i PC compaiono nella console. Togliendo le tre impostazioni tutto torna com'era.
    Dalla console si possono anche **mandare le regole ai PC** (quali servizi proteggere o bloccare, file,
-   aggiornamenti), ricevere **avvisi** e tenere un **registro di conformità**. Le regole valgono solo sui PC che
+   aggiornamenti, divieto di spegnere la protezione; per cliente e, dove serve, per singolo PC), ricevere **avvisi** e tenere un **registro di conformità**. Le regole valgono solo sui PC che
    le accettano: `"console_rules": true` nello stesso file. La console non può cambiare a chi i PC mandano i dati.
 4. **Oltre i 5 PC, o con più di un cliente**: nella console, scheda «Licenza» → «Richiedi una licenza». Prepara un
    file con l'identificativo dell'installazione; lo si manda da <https://francescogruner.it/contatti/> e si riceve

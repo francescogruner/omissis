@@ -11,8 +11,9 @@ Italiano: [README.it.md](README.it.md).
 
 ## What you do from there
 
-- **Rules for the PCs**: which AI services to protect or block, files, updates, set per customer and sent to the PCs
-  that chose to accept them. The console can change the rules, not where the PCs send their data.
+- **Rules for the PCs**: which AI services to protect or block, files, updates, the ban on turning protection off, set
+  per customer and sent to the PCs that chose to accept them; a single PC can have rules of its own, on top of the
+  customer's. The console can change the rules, not where the PCs send their data.
 - **Alerts**: a PC that turns protection off, one that goes quiet, a new AI tool. On the page, to a web address
   (Teams, Slack) or by e-mail.
 - **Compliance log**: who signed in and what they changed, with a CSV to hand to an auditor and a chain of

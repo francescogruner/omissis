@@ -143,6 +143,15 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     central.receive(settings.read(), json.dumps({"ok": True, "rules": {}, "rules_version": 5}).encode("utf-8"))
     check("quando la console toglie le regole tornano le scelte dell'utente", settings.read()["block_files"] is False and settings.read()["updates"] == "notify"
           and settings.locked()["console"] == [] and central.summary("active")["rules_version"] == 5)
+    free = settings.read()["always_on"] is False and settings.write({**settings.read(), "always_on": True})["always_on"] is True
+    settings.write({**settings.read(), "always_on": False})
+    central.receive(settings.read(), json.dumps({"ok": True, "rules": {"always_on": True}, "rules_version": 6}).encode("utf-8"))
+    check("la console può stabilire che la protezione non si spenga, e chi usa il PC non lo toglie", free and settings.read()["always_on"] is True
+          and settings.locked()["console"] == ["always_on"] and settings.write({**settings.read(), "always_on": False})["always_on"] is True, str(settings.locked()))
+    impose({"always_on": 0})
+    check("anche su questo vince l'amministratore del PC", settings.read()["always_on"] is False and settings.locked()["console"] == []
+          and settings.locked()["keys"] == ["always_on"])
+    impose(None)
     central.receive(settings.read(), answer)
     settings.write({**settings.read(), "console_url": "https://altra-console.example"})
     check("collegato a un'altra console, le regole della prima non restano in vigore", settings.read()["block_files"] is False and settings.locked()["console"] == []

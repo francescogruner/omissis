@@ -263,7 +263,8 @@ class Supervisor:
                 "update": updates.status(),
                 "model": Path(info["model"]).name if info.get("model") else None, "device": info.get("device"),
                 "threshold": info.get("threshold"), "entries": info.get("entries"), "port": settings.read()["port"],
-                "groups_off": list(settings.read().get("groups_off") or [])}   # gruppi di dati spenti a mano: la pagina iniziale lo dice
+                "groups_off": list(settings.read().get("groups_off") or []),   # gruppi di dati spenti a mano: la pagina iniziale lo dice
+                "always_on": settings.read()["always_on"]}   # la protezione non si puo' fermare: la pagina tiene fermo il pulsante
 
 
 def server_state():
@@ -460,6 +461,18 @@ def inventory_status():
 def analyze(origin):
     """Fotografa il PC e la rete, salva l'analisi e restituisce le novita' rispetto alla precedente."""
     return inventory.record(scan.pc(), scan.network(), origin)
+
+
+def keep_on(every=30):
+    """Dove e' stabilito che la protezione resti accesa (always_on): se e' ferma, la riaccende. Un errore di avvio resta
+    com'e', cosi' si legge nel pannello invece di ripetersi all'infinito."""
+    while True:
+        time.sleep(every)
+        try:
+            if SUP.phase == "stop" and settings.read()["always_on"]:
+                SUP.launch()
+        except Exception:   # noqa: BLE001
+            pass
 
 
 def watch():
@@ -688,6 +701,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, {"name": name, "data": base64.b64encode(fresh).decode("ascii"), "counts": counts})
             elif p == "/api/protection":
                 if data.get("action") == "stop":
+                    if settings.read()["always_on"]:   # deciso da chi amministra il PC o dalla console: da qui non si spegne
+                        raise Refusal(i18n.t("managed.always_on"))
                     SUP.stop()
                 else:
                     if data.get("action") == "restart":
@@ -695,8 +710,8 @@ class Handler(BaseHTTPRequestHandler):
                     SUP.launch()
                 self._respond(200, SUP.status())
             elif p == "/api/settings":
-                # la console e il server di inferenza hanno le loro chiamate: qui non si toccano
-                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith(("console_", "engine_", "serve"))}
+                # la console e il server di inferenza hanno le loro chiamate: qui non si toccano. always_on si puo' solo imporre
+                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith(("console_", "engine_", "serve")) and k != "always_on"}
                 guard(*changes, changes=changes)
                 new_ones = {k: v for k, v in settings.write({**settings.read(), **changes}).items() if k not in ("console_key", "engine_key")}
                 if "shortcuts" in data and SHORTCUTS is not None:
@@ -961,10 +976,21 @@ def icon(server):
     def open_up(*_):
         webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
 
+    def stays_on():   # chi amministra il PC, o la console, ha stabilito che la protezione non si spenga
+        return settings.read()["always_on"]
+
     def change(ic, _):
-        SUP.stop() if SUP.phase == "active" else SUP.launch()
+        if SUP.phase != "active":
+            SUP.launch()
+        elif stays_on():
+            notify(i18n.t("managed.always_on"))
+        else:
+            SUP.stop()
 
     def exit_app(ic, _):
+        if stays_on():
+            notify(i18n.t("managed.always_on"))
+            return
         SUP.stop()
         ic.stop()
         threading.Thread(target=server.shutdown, daemon=True).start()
@@ -987,8 +1013,9 @@ def icon(server):
         pystray.MenuItem(lambda _: with_keystrokes("mask"), on_clipboard("mask")),
         pystray.MenuItem(lambda _: with_keystrokes("restore"), on_clipboard("restore")),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem(lambda _: i18n.t("icon.stop" if SUP.phase == "active" else "icon.launch"), change),
-        pystray.MenuItem(lambda _: i18n.t("icon.exit_app"), exit_app)))
+        pystray.MenuItem(lambda _: i18n.t("icon.stop" if SUP.phase == "active" else "icon.launch"), change,
+                         enabled=lambda _: not (SUP.phase == "active" and stays_on())),
+        pystray.MenuItem(lambda _: i18n.t("icon.exit_app"), exit_app, enabled=lambda _: not stays_on())))
 
     def refresh():
         latest, notified = None, ""
@@ -1063,6 +1090,7 @@ def main():
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
     threading.Thread(target=updates.loop, daemon=True).start()
+    threading.Thread(target=keep_on, args=(3 if a.test else 30,), daemon=True).start()   # non fa nulla finche' always_on e' spento
     if not a.test:   # nelle prove niente lavoro in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
         threading.Thread(target=watch, daemon=True).start()
         threading.Thread(target=watch_apps, daemon=True).start()

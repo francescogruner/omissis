@@ -30,6 +30,9 @@ DEFAULTS = {
     "mcp_folders": [],            # cartelle in piu' che il server MCP puo' usare, oltre a Documenti, Desktop e Download
     "gateway_upstreams": {},      # chi ha gia' un proprio gateway: nome usato nell'indirizzo (anthropic, openai...) -> dove inoltrare
     "groups_off": [],             # gruppi di dati che chi usa il PC ha scelto di NON sostituire (vedi GROUPS): di serie nessuno
+    # True: la protezione non si ferma dal pannello ne' dall'icona, e il programma non si chiude dall'icona. Nel pannello non
+    # c'e': la impone chi amministra il PC, oppure la console. Non ferma chi chiude il programma da Gestione attivita'
+    "always_on": False,
     # console centrale (facoltativa, per le organizzazioni): dove mandare il riepilogo di questo PC. Vuoto = non parte nulla
     "console_url": "",            # indirizzo https della console
     "console_key": "",            # chiave di collegamento data dalla console: dice a quale organizzazione appartiene il PC
@@ -49,7 +52,7 @@ MERGED = {"policies"}
 # Che cosa una console puo' imporre a un PC che ha scelto di accettarne le regole. Restano fuori, apposta, gli indirizzi a
 # cui il PC manda qualcosa (console, server di inferenza, gateway), le cartelle che apre, il nome nel riepilogo e questa
 # stessa scelta: chi entra in una console non deve poter dirottare i dati dei PC.
-CONSOLE_RULES = {"policies", "block_files", "attachments", "box", "updates", "scan", "groups_off"}
+CONSOLE_RULES = {"policies", "block_files", "attachments", "box", "updates", "scan", "groups_off", "always_on"}
 CONSOLE_FILE = paths.DATA / "console_rules.json"
 _cache = {"mtime": None, "managed": None, "console": None, "data": None}
 
@@ -225,6 +228,7 @@ def _clean(data):
     clean["policies"] = {k: v for k, v in (clean["policies"] or {}).items()
                            if k in catalog.PER_ID and v in catalog.POLICIES}
     clean["onboarded"] = clean["onboarded"] is True
+    clean["always_on"] = clean["always_on"] is True
     date = clean["shortcuts"] if isinstance(clean["shortcuts"], dict) else {}
     clean["shortcuts"] = {k: str(date.get(k, v)).strip().lower()[:40] for k, v in DEFAULTS["shortcuts"].items()}
     clean["categories"] = sorted({str(x) for x in clean["categories"] or [] if str(x).isupper() and len(str(x)) <= 24})

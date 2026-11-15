@@ -130,8 +130,21 @@ them; a customer with read-only access sees its own alerts and nothing else.
 
 Choose a customer at the top: the card "Rules for this customer's PCs" appears. There you set the rules per service
 (protect, record, block, ignore), file uploads, attachments, replacement in the writing box, updates, the scan for AI
-tools, and you can forbid reduced protection. "Save and send to the PCs": each PC receives them in the answer to its
-next summary, so within an hour, and at once with "Send now" from its panel.
+tools, and you can forbid reduced protection and turning protection off. "Save and send to the PCs": each PC receives
+them in the answer to its next summary, so within an hour, and at once with "Send now" from its panel. With "All
+customers" the card is not there: rules belong to one customer.
+
+**A PC that must differ from the others.** In the table of PCs every row has a "Rules" button: it opens the rules of
+that PC alone, which start from its customer's. Each item can stay "Same as the customer", have a value of its own,
+which wins over the customer's, or be "Free on this PC": the PC is exempted from that rule of the customer, and there
+whoever uses it decides again. It is for the technician's PC that must be able to stop protection, for example, or
+for someone who works with a service that is blocked for everyone else. The PC's row carries the mark "own rules";
+"Back to the customer's rules" removes them. Every change goes into the compliance log, with the PC's name.
+
+**"Turning protection off: Forbidden".** On the PC the panel's "Stop" button stays disabled, the icon next to the
+clock neither stops protection nor quits the program, and if protection is stopped the program starts it again by
+itself. It is not a lock: Omissis runs as the user who uses it, and whoever closes it from Task Manager, or uninstalls
+it, succeeds. In that case the console says so, with the alert "Protection off" or "Gone quiet".
 
 Three things to know:
 
@@ -292,10 +305,10 @@ Someone with a read-only customer login asks whoever manages the console for a n
 
 ## What has been tested
 
-On 15 November 2026: the console's calls (92 checks); the built-in HTTPS with the real
+On 15 and 16 November 2026: the console's calls (101 checks, including the rules for a single PC); the built-in HTTPS with the real
 Omissis program (right fingerprint: the summary arrives; wrong or missing: nothing leaves); the page over HTTPS
 with the file to download; the unzipped package, with the **compiled** program, installed in a test folder
-**without** registering tasks (`-NoTasks`), started, connected, licensed, backed up, updated and removed (22
+**without** registering tasks (`-NoTasks`), started, connected, licensed, backed up, updated and removed (21
 checks); the first login created from the page, only from the console's own computer; the licence: free threshold, signed file, tampered file refused, licence of another installation
 refused, expiry.
 

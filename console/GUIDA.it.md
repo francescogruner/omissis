@@ -129,8 +129,21 @@ console; il cliente con accesso in sola lettura vede i suoi avvisi e nient'altro
 
 Scegli un cliente in alto: compare la scheda «Regole per i PC di questo cliente». Lì si fissano le regole per servizio
 (proteggi, registra, blocca, ignora), il caricamento di file, gli allegati, la sostituzione nella casella di scrittura,
-gli aggiornamenti, l'analisi degli strumenti AI, e si può vietare la protezione ridotta. «Salva e manda ai PC»: ogni PC
-le riceve in risposta al suo prossimo riepilogo, quindi entro un'ora, e subito con «Invia ora» dal suo pannello.
+gli aggiornamenti, l'analisi degli strumenti AI, e si possono vietare la protezione ridotta e lo spegnimento della
+protezione. «Salva e manda ai PC»: ogni PC le riceve in risposta al suo prossimo riepilogo, quindi entro un'ora, e
+subito con «Invia ora» dal suo pannello. Con «Tutti i clienti» la scheda non c'è: le regole sono di un cliente.
+
+**Un PC che deve fare diversamente dagli altri.** Nella tabella dei PC ogni riga ha il pulsante «Regole»: apre le
+regole di quel solo PC, che partono da quelle del suo cliente. Ogni voce può restare «Come il cliente», avere un valore
+suo, che vince su quello del cliente, oppure essere «Libera su questo PC»: il PC è esentato da quella regola del
+cliente, e lì torna a decidere chi lo usa. Serve, per esempio, al PC del tecnico che deve poter fermare la protezione,
+o a chi lavora proprio con un servizio che agli altri è bloccato. La riga del PC porta il segno «regole proprie»;
+«Torna alle regole del cliente» le toglie. Ogni cambio finisce nel registro di conformità, con il nome del PC.
+
+**«Spegnere la protezione: Vietato».** Sul PC il pulsante «Ferma» del pannello resta fermo, dall'icona vicino
+all'orologio non si ferma la protezione e non si chiude il programma, e se la protezione è ferma il programma la
+riaccende da solo. Non è una serratura: Omissis gira con l'utente che lo usa, e chi lo chiude da Gestione attività, o
+lo disinstalla, ci riesce. In quel caso la console lo dice, con l'avviso «Protezione spenta» o «Non si fa sentire».
 
 Tre cose da sapere:
 
@@ -288,11 +301,11 @@ Chi ha un accesso da cliente, in sola lettura, chiede la password nuova a chi ge
 
 ## Che cosa è stato provato
 
-Il 15 novembre 2026: le chiamate della console (92 controlli); l'HTTPS integrato con il
+Il 15 e 16 novembre 2026: le chiamate della console (101 controlli, comprese le regole per singolo PC); l'HTTPS integrato con il
 programma vero di Omissis (impronta giusta: il riepilogo arriva; sbagliata o assente: non parte nulla); la pagina
 in HTTPS con il file da scaricare; il pacchetto scompattato, con il programma **compilato**, installato in una
 cartella di prova **senza** registrare attività (`-NoTasks`), acceso, collegato, messo sotto licenza, salvato,
-aggiornato e tolto (22 controlli); il primo accesso creato dalla pagina, solo dal computer della console; la licenza: soglia gratuita, file firmato, file toccato rifiutato, licenza di
+aggiornato e tolto (21 controlli); il primo accesso creato dalla pagina, solo dal computer della console; la licenza: soglia gratuita, file firmato, file toccato rifiutato, licenza di
 un'altra installazione rifiutata, scadenza.
 
 Sempre il 15 novembre 2026, `Install-Console.ps1` lanciato come amministratore su un Windows 11 in italiano: la

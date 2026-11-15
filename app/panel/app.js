@@ -229,7 +229,10 @@ REFRESH.start = s => {
   const b = $("#main_switch"), is_on = phase === "active" || phase === "model";
   b.textContent = t(phase === "model" ? "general.cancel" : is_on ? "start.stop" : "start.launch");
   b.className = "button" + (is_on ? "" : " primary");
-  b.disabled = phase === "startup";
+  const fixed = !!s.always_on && is_on;   // deciso da chi amministra il PC o dalla console: qui non si ferma
+  b.disabled = phase === "startup" || fixed;
+  b.title = fixed ? t("managed.always_on") : "";
+  if (fixed && phase === "active") below.textContent += " · " + t("managed.always_on");
   $("#restart").hidden = !s.restart_needed;
   updateNotice(s.update);
   // chi ha spento un gruppo di dati lo deve vedere ogni volta che apre il programma, non solo nelle impostazioni

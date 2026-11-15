@@ -11,8 +11,9 @@ English: [README.md](README.md).
 
 ## Che cosa si fa da lì
 
-- **Regole per i PC**: quali servizi AI proteggere o bloccare, i file, gli aggiornamenti, fissati per cliente e mandati
-  ai PC che hanno scelto di accettarli. La console può cambiare le regole, non a chi i PC mandano i dati.
+- **Regole per i PC**: quali servizi AI proteggere o bloccare, i file, gli aggiornamenti, il divieto di spegnere la
+  protezione, fissati per cliente e mandati ai PC che hanno scelto di accettarli; un singolo PC può avere regole sue,
+  sopra quelle del cliente. La console può cambiare le regole, non a chi i PC mandano i dati.
 - **Avvisi**: un PC che spegne la protezione, uno che non si fa più sentire, uno strumento AI nuovo. Nella pagina, a un
   indirizzo web (Teams, Slack) o per posta.
 - **Registro di conformità**: chi è entrato e che cosa ha cambiato, con il CSV da dare a chi fa un controllo e una

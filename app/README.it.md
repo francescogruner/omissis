@@ -701,13 +701,19 @@ da quel momento valgono come le impostazioni bloccate, il pannello dice quante s
 nell'elenco dei vincoli risulta che vengono dalla console (`settings.from_console`). Tre limiti, scritti nel codice:
 
 - la console può imporre **solo** le regole per servizio (`policies`), `block_files`, `attachments`, `box`,
-  `updates`, `scan` e `groups_off` (`settings.CONSOLE_RULES`). Non può toccare gli indirizzi a cui il PC manda
+  `updates`, `scan`, `groups_off` e `always_on` (`settings.CONSOLE_RULES`). Non può toccare gli indirizzi a cui il PC manda
   qualcosa (console, server di inferenza, gateway), le cartelle, il nome nel riepilogo, né questa stessa scelta:
   chi entrasse in una console senza diritto potrebbe allentare le regole, non farsi mandare i dati;
 - dove console e amministratore del PC dicono cose diverse **vince l'amministratore del PC** (il registro di
   Windows), che può anche vietare le regole della console imponendo `console_rules` spento;
 - le regole valgono solo finché il PC è collegato alla console che le ha mandate: scollegato, o collegato a
   un'altra, non restano in vigore.
+
+**Protezione che non si spegne** (`always_on`). Nel pannello non c'è: la impone chi amministra il PC (registro di
+Windows) oppure la console. Con `always_on` il pannello rifiuta di fermare la protezione e tiene fermo il pulsante,
+dall'icona non si ferma la protezione e non si chiude il programma, e se la protezione è ferma il programma la riaccende
+(`panel.keep_on`; un errore di avvio resta com'è, per poterlo leggere). Non ferma chi chiude il programma da Gestione
+attività o lo disinstalla: Omissis è installato nel profilo dell'utente. In quel caso la console riceve l'avviso.
 
 Il riepilogo successivo dice alla console se il PC accetta le regole e quale versione ha applicato. Provato con
 la console vera sullo stesso computer (`e2e_central.py` e le prove della console); non ancora tra due macchine.
@@ -727,7 +733,7 @@ collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serv
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
-| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 39 controlli); pagine vere solo aperte, senza accedere |
+| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 40 controlli); pagine vere solo aperte, senza accedere |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
 da Servizi AI dopo averli provati con dati inventati.
@@ -951,7 +957,7 @@ dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'est
 `e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
 inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2e_central.py`
-(40 controlli): le regole mandate dalla console (accettate solo per scelta, solo quelle ammesse, mai sopra
+(42 controlli): le regole mandate dalla console (accettate solo per scelta, solo quelle ammesse, mai sopra
 l'amministratore del PC), le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
 registro dell'utente, mai da quelle di sistema) e il riepilogo per la console centrale, mandato a un servizio
 finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta, e una console con un certificato
@@ -964,7 +970,7 @@ impronta sbagliate vengano rifiutate, che a server spento non parta nulla, e la 
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (66 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (68 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi, `OMISSIS_MANAGED_FILE` per le impostazioni imposte) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,

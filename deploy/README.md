@@ -49,8 +49,11 @@ source: it is downloaded compiled from the releases page and is free up to 5 PCs
 by `console_pin`, the SHA-256 fingerprint of that certificate: the PC connects only to the server presenting it,
 and checks before sending the key. Without `console_pin` the certificate must be valid as for a browser.
 With `"console_rules": true` the PC applies the rules the console sends back with each summary (per service, files,
-attachments, updates, scan, reduced protection: nothing else). It is off by default, and whatever is written in this
-registry key always wins over the console's rules.
+attachments, updates, scan, reduced protection, the ban on turning protection off: nothing else). It is off by default,
+and whatever is written in this registry key always wins over the console's rules.
+
+`"always_on": true` in the locked settings means protection cannot be stopped from the panel or from the icon next to
+the clock, and the program cannot be quit from the icon. It does not stop a user who closes it from Task Manager.
 
 Tested on 14 November 2026 on a single Windows 11 PC with Windows PowerShell 5.1 (silent install in 21 seconds,
 state, removal with nothing left behind); `Set-OmissisPolicy.ps1` on a scratch key of the user and, without

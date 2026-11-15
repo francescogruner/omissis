@@ -367,6 +367,48 @@ def main():
                     if os.environ.get("OMISSIS_MANAGED_FILE"):
                         Path(os.environ["OMISSIS_MANAGED_FILE"]).unlink(missing_ok=True)
 
+                # --- protezione che non si puo' spegnere (imposta da chi amministra il PC, o dalla console): pulsante fermo, richiesta rifiutata
+                try:
+                    imposed = os.environ.get("OMISSIS_MANAGED_FILE")
+                    if not imposed:
+                        print("SALTATO protezione sempre accesa: senza OMISSIS_MANAGED_FILE la prova non può imporre nulla")
+                    else:
+                        try:   # da sola non si accende dal pannello: si puo' solo imporre
+                            own = call(code, "/api/settings", {"always_on": True}).get("always_on") is False
+                        except urllib.error.HTTPError:
+                            own = False
+                        Path(imposed).write_text(json.dumps({"always_on": True}), encoding="utf-8")
+                        fixed = wait_until(lambda: call(code, "/api/status").get("always_on") is True, timeout=15)
+                        pag.goto(f"{PANEL}/#/start")
+                        pag.wait_for_selector("#main_switch")
+                        shown = wait(pag, "() => document.getElementById('main_switch').disabled && !!document.getElementById('main_switch').title "
+                                          "&& document.getElementById('belowStatus').textContent.includes(document.getElementById('main_switch').title)", timeout=15)
+                        try:
+                            call(code, "/api/protection", {"action": "stop"})
+                            refused = False
+                        except urllib.error.HTTPError as ex:
+                            refused = ex.code == 422
+                        still = call(code, "/api/status")["phase"] == "active"
+                        Path(imposed).unlink()
+                        back = wait_until(lambda: call(code, "/api/status").get("always_on") is False, timeout=15)
+                        released = wait(pag, "() => !document.getElementById('main_switch').disabled && !document.getElementById('main_switch').title", timeout=15)
+                        relit = True
+                        if language == "it":   # il vincolo arriva mentre la protezione e' ferma: il programma la riaccende da solo
+                            call(code, "/api/protection", {"action": "stop"})
+                            stopped = call(code, "/api/status")["phase"] == "stop"
+                            Path(imposed).write_text(json.dumps({"always_on": True}), encoding="utf-8")
+                            relit = stopped and wait_until(lambda: call(code, "/api/status")["phase"] == "active", timeout=120)
+                            Path(imposed).unlink()
+                            wait_until(lambda: call(code, "/api/status").get("always_on") is False, timeout=15)
+                        mark(f"{language}: protezione che non si può spegnere: non si sceglie dal pannello; imposta, il pulsante è fermo e la richiesta è rifiutata; ferma, si riaccende; tolta, torna libero",
+                             own and fixed and shown and refused and still and back and released and relit,
+                             f"dal pannello {own} · imposta {fixed} · pagina {shown} · rifiuto {refused} · ancora attiva {still} · tolta {back} · libero {released} · riaccesa {relit}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: protezione che non si può spegnere", False, str(ex)[:160])
+                finally:
+                    if os.environ.get("OMISSIS_MANAGED_FILE"):
+                        Path(os.environ["OMISSIS_MANAGED_FILE"]).unlink(missing_ok=True)
+
                 # --- console centrale: di serie il PC non manda nulla; un indirizzo non https è rifiutato; si vede che cosa partirebbe
                 try:
                     pag.goto(f"{PANEL}/#/settings/general")
