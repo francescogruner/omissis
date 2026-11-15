@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """Scrive i file dell'estensione che dipendono dal catalogo dei servizi: manifest.json (su quali
 siti gira), defaults.js (le politiche di partenza, usate finche' l'estensione non e' collegata
-al programma) e le icone.   Va rilanciato quando cambia catalog.py.
+al programma), build.json (l'impronta dei file) e le icone.   Va rilanciato quando cambia catalog.py
+e ogni volta che si tocca un file dell'estensione: e' dall'impronta che una copia gia' caricata in
+un browser si accorge che sul disco i file sono cambiati, e si ricarica da sola.
 
-  .venv\\Scripts\\python.exe build_extension.py [--test]
+  .venv\\Scripts\\python.exe build_extension.py [--test | --check]
 
 --test aggiunge http://localhost (il servizio finto) ai siti su cui l'estensione gira.
+--check non scrive nulla: esce con 1 se build.json non corrisponde ai file (va rilanciato senza opzioni).
 """
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -59,14 +63,31 @@ def manifest(test):
     }
 
 
-def defaults(test):
+def stamp(folder=None):
+    """L'impronta dell'estensione cosi' come la riceve chi la installa. Quella di prova ha la stessa impronta: cambia
+    solo l'elenco dei siti, e un browser che ha gia' caricato l'estensione vera non deve passare a quella di prova."""
+    folder = Path(folder) if folder else EST
+    h = hashlib.sha256()
+    h.update(json.dumps(manifest(False), sort_keys=True).encode("utf-8"))
+    h.update(defaults(False, "").encode("utf-8"))
+    generated = {"manifest.json", "defaults.js", "build.json"}
+    for f in sorted(folder.rglob("*"), key=lambda f: f.relative_to(folder).as_posix()):
+        rel = f.relative_to(folder)
+        if f.is_file() and rel.as_posix() not in generated and rel.parts[0] != "icons" and not rel.name.startswith("."):
+            h.update(rel.as_posix().encode("utf-8") + b"\0" + f.read_bytes().replace(b"\r\n", b"\n") + b"\0")
+    return h.hexdigest()[:16]
+
+
+def defaults(test, build=None):
     services = [{"id": s["id"], "name": s["name"], "domains": s["domains"], "policy": catalog.default_policy(s),
                 "readable": bool(s["adapter"])} for s in catalog.SERVICES if not s["radar"]]
     if test:
         services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True})
     return ("// generato da build_extension.py: politiche di partenza, finche' il programma non manda le sue\n"
             "globalThis.MSP_DEFAULTS = " + json.dumps({"services": services, "restore": True, "block_files": False},
-                                                         ensure_ascii=False, separators=(",", ":")) + ";\n")
+                                                         ensure_ascii=False, separators=(",", ":")) + ";\n"
+            # l'impronta dei file con cui questa copia e' stata scritta: il browser la tiene in memoria insieme al codice
+            + "globalThis.MSP_BUILD = " + json.dumps(stamp() if build is None else build) + ";\n")
 
 
 def icons():
@@ -82,8 +103,18 @@ def icons():
 
 if __name__ == "__main__":
     test = "--test" in sys.argv
+    if "--check" in sys.argv:
+        try:
+            written = json.loads((EST / "build.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            written = {}
+        if written.get("build") != stamp() or f'"{stamp()}"' not in (EST / "defaults.js").read_text(encoding="utf-8"):
+            sys.exit("build.json non corrisponde ai file dell'estensione: rilanciare build_extension.py")
+        print(f"impronta dell'estensione: {stamp()}" + (" (estensione di prova)" if written.get("test") else ""))
+        sys.exit(0)
     EST.mkdir(exist_ok=True)
     (EST / "manifest.json").write_text(json.dumps(manifest(test), ensure_ascii=False, indent=1), encoding="utf-8")
     (EST / "defaults.js").write_text(defaults(test), encoding="utf-8")
+    (EST / "build.json").write_text(json.dumps({"build": stamp(), "test": test}) + "\n", encoding="utf-8")
     icons()
     print(f"estensione scritta in {EST}" + (" (con il servizio finto)" if test else ""))

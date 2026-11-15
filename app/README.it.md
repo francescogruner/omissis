@@ -332,8 +332,17 @@ Cosa fa, servizio per servizio, lo decide la sezione Servizi AI (le stesse scelt
 Come è fatta: `page.js` (dentro la pagina: intercetta `fetch` e `XMLHttpRequest`), `content.js`
 (accanto alla pagina: tramite, avvisi, valori veri nel testo), `background.js` (parla con il programma,
 applica i blocchi), `bridge.py` (nel motore: riusa gli adattatori di `restore.py`, gli stessi
-del proxy). `build_extension.py` riscrive `manifest.json` dal catalogo: va rilanciato quando
-cambia `catalog.py`.
+del proxy). `build_extension.py` riscrive `manifest.json` dal catalogo e `build.json` con l'impronta
+dei file: va rilanciato quando cambia `catalog.py` e ogni volta che si tocca un file dell'estensione
+(`build_extension.py --check` dice se è stato dimenticato).
+
+**Quando il programma si aggiorna.** Un'estensione caricata da una cartella resta, nel browser, quella
+letta al momento del caricamento: se il programma si aggiorna e nella cartella i file cambiano,
+continuerebbe a girare il codice di prima. Per questo l'estensione rilegge `build.json` dal disco (al
+massimo ogni minuto) e, se l'impronta non è più la sua, si ricarica da sola; lo stesso fa la
+finestrella dell'icona quando il servizio in background non la capisce. Dopo una ricarica le pagine
+già aperte chiedono di essere ricaricate, e fino ad allora i messaggi non partono. Installata da uno
+store, i file cambiano solo insieme all'estensione e non succede nulla.
 
 Limiti dell'estensione:
 
@@ -663,7 +672,7 @@ collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serv
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
-| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 33 controlli); pagine vere solo aperte, senza accedere |
+| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 36 controlli); pagine vere solo aperte, senza accedere |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
 da Servizi AI dopo averli provati con dati inventati.

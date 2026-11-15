@@ -7,7 +7,23 @@ for (const e of document.querySelectorAll('[data-t]')) e.textContent = T(e.datas
 for (const e of document.querySelectorAll('[data-name]')) { e.setAttribute('aria-label', T(e.dataset.name)); e.placeholder = T(e.dataset.name); }
 
 async function show() {
-  const d = await chrome.runtime.sendMessage({t: 'win'});
+  let d = null;
+  try { d = await chrome.runtime.sendMessage({t: 'win'}); } catch (e) { /* il servizio in background non risponde */ }
+  if (!d || !d.health) {
+    // Questa finestrella il browser la legge dal disco ogni volta, il servizio in background no: se non si capiscono, lui e'
+    // rimasto a una versione precedente. L'estensione si ricarica da sola, una volta; se non basta lo si dice a chi guarda.
+    const {popup_reload} = await chrome.storage.local.get('popup_reload');
+    if (!popup_reload || Date.now() - popup_reload > 60000) {
+      await chrome.storage.local.set({popup_reload: Date.now()});
+      chrome.runtime.reload();
+      return;
+    }
+    el('title').dataset.status = 'not_active';
+    el('textTitle').textContent = T('status_not_active');
+    el('fault').hidden = false;
+    el('fault').textContent = T('fault_outdated');
+    return;
+  }
   const fault = !d.connected ? T('fault_not_connected')
     : !d.health.ok ? T(d.health.reason === 'invalid_code' ? 'fault_code' : 'fault_program') : '';
   const status = fault ? 'not_active' : d.suspended ? 'suspended' : 'active';

@@ -35,6 +35,9 @@
  "fault_program": {
   "message": "The protection program is not responding: start it from the icon next to the clock."
  },
+ "fault_outdated": {
+  "message": "This extension is still an earlier version: restart the browser, or reload it from the extensions page."
+ },
  "connect_help": {
   "message": "To connect it, open the program's panel, Connections section, and press \"Connect this browser\". Or paste here the code shown by the panel."
  },

@@ -35,6 +35,9 @@
  "fault_program": {
   "message": "Il programma di protezione non risponde: avvialo dall'icona vicino all'orologio."
  },
+ "fault_outdated": {
+  "message": "Questa estensione è rimasta a una versione precedente: riavvia il browser, oppure ricaricala dalla pagina delle estensioni."
+ },
  "connect_help": {
   "message": "Per collegarla apri il pannello del programma, sezione Collegamenti, e premi «Collega questo browser». In alternativa incolla qui il codice mostrato dal pannello."
  },

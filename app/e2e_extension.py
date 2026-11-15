@@ -213,6 +213,21 @@ def main():
             mark(f"allegato per {how}: arriva la copia anonimizzata", len(r) == 1 and r[0]["how"] == how and r[0]["name"] == "appunti.anon.txt"
                   and "[PERSONA_" in r[0]["text"] and not any(s in r[0]["text"] for s in SENSITIVE), r[0]["name"] if r else "nothing")
 
+        # --- allegati spenti nelle impostazioni del programma: l'estensione lo viene a sapere e lascia stare i file
+        call_settings = CALL_SERVICES.replace("/api/services", "/api/settings")
+        pan.evaluate(call_settings, {"attachments": False})
+        sw.evaluate("refresh(true)")
+        page.wait_for_timeout(800)
+        page.evaluate("window.__file.length = 0")
+        page.set_input_files("#allega", str(folder / "lettera.txt"))
+        r = received(1, seconds=15)
+        known = sw.evaluate("chrome.storage.local.get('status').then(d => d.status.attachments)")
+        mark("allegati spenti nelle impostazioni: il file passa com'è", known is False and len(r) == 1 and r[0]["name"] == "lettera.txt",
+              f"l'estensione sa che sono spenti: {known is False} · alla pagina: {r[0]['name'] if r else 'nothing'}")
+        pan.evaluate(call_settings, {"attachments": True})
+        sw.evaluate("refresh(true)")
+        page.wait_for_timeout(800)
+
         # --- XMLHttpRequest (come Gemini): richiesta mascherata, risposta sistemata nel testo della pagina
         raw = page.evaluate("t => test('gemini', t)", TEXT)
         arrived = json.dumps(seen()["body"], ensure_ascii=False)
@@ -314,6 +329,71 @@ def main():
             pan.set_viewport_size({"width": 1180, "height": 820})
             pan.screenshot(path=str(HERE / "screenshots" / "browser.png"))
         ctx.close()
+
+        # --- i file cambiano sul disco (il programma si e' aggiornato): l'estensione gia' caricata se ne accorge da sola
+        import shutil
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as second, tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as profile2:
+            copy = Path(shutil.copytree(est, Path(second) / "extension"))
+            ctx = pw.chromium.launch_persistent_context(profile2, **which, headless="--headed" not in sys.argv,
+                                                        args=[f"--disable-extensions-except={copy}", f"--load-extension={copy}", f"--lang={LANGUAGE}",
+                                                              "--disable-features=DisableLoadExtensionCommandLineSwitch", "--no-first-run", "--no-default-browser-check"])
+            sw = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker", timeout=20000)
+            before = sw.evaluate("BUILD")
+            # chi carica l'estensione da una cartella ha per forza la modalita' sviluppatore accesa; il browser di prova no, e
+            # senza quella una ricarica la lascerebbe spenta: la si accende, come nel caso vero
+            dev = ctx.new_page()
+            dev.goto("chrome://extensions")
+            dev.evaluate("() => new Promise(r => chrome.developerPrivate.updateProfileConfiguration({inDeveloperMode: true}, r))")
+            # sul disco compare una copia di prova: quella caricata non deve passarci da sola
+            (copy / "build.json").write_text(json.dumps({"build": "0" * 16, "test": True}), encoding="utf-8")
+            stays = sw.evaluate("outdated()") is False
+            fresh, after = "f" * 16, ""
+            (copy / "defaults.js").write_text((copy / "defaults.js").read_text(encoding="utf-8").replace(before, fresh), encoding="utf-8")
+            (copy / "build.json").write_text(json.dumps({"build": fresh, "test": False}), encoding="utf-8")
+            try:
+                with ctx.expect_event("serviceworker", timeout=30000) as arrived:
+                    try:
+                        sw.evaluate("refresh(true)")
+                    except Exception:   # noqa: BLE001  (il servizio in background si chiude mentre risponde: e' la ricarica)
+                        pass
+                after = arrived.value.evaluate("BUILD")
+                quiet = arrived.value.evaluate("outdated()") is False   # ricaricata, non deve ricominciare
+            except Exception as ex:   # noqa: BLE001
+                quiet = False
+                after = f"nessuna ricarica ({type(ex).__name__})"
+            mark("file cambiati sul disco: l'estensione si ricarica da sola e riparte con quelli nuovi",
+                  len(before) == 16 and stays and after == fresh and quiet, f"{before} -> {after} · alla copia di prova non passa: {stays}")
+
+            # --- la finestrella (letta dal disco ogni volta) davanti a un servizio in background rimasto a una versione che non
+            # la capisce: ricarica l'estensione da sola, una volta; se nemmeno cosi' si capiscono, lo dice
+            told, reloads = "", 0
+            try:
+                js = (copy / "background.js").read_text(encoding="utf-8")
+                (copy / "background.js").write_text(js.replace("case 'win': {", "case 'win_di_prima': {"), encoding="utf-8")
+                ident2 = sw.url.split("/")[2]
+                for attempt in (1, 2):
+                    with ctx.expect_event("serviceworker", timeout=30000):
+                        if attempt == 1:   # il browser carica il servizio «vecchio»
+                            try:
+                                ctx.service_workers[-1].evaluate("chrome.runtime.reload()")
+                            except Exception:   # noqa: BLE001
+                                pass
+                        else:              # la finestrella non riceve risposta sensata: deve ricaricare lei
+                            win = ctx.new_page()
+                            try:
+                                win.goto(f"chrome-extension://{ident2}/popup.html")
+                            except Exception:   # noqa: BLE001  (la pagina si chiude con la ricarica)
+                                pass
+                    reloads += 1
+                win = ctx.new_page()
+                win.goto(f"chrome-extension://{ident2}/popup.html")
+                wait_for(win, "#title", "not_active")
+                told = win.inner_text("#fault")
+            except Exception as ex:   # noqa: BLE001
+                told = told or f"({type(ex).__name__}: {str(ex)[:80]})"
+            mark("finestrella e servizio in background di versioni diverse: una ricarica da sola, poi l'avviso",
+                  reloads == 2 and len(told) > 30 and not told.startswith("("), f"ricariche: {reloads} · «{told[:70]}»")
+            ctx.close()
 
     # --- registro: solo conteggi, con l'indicazione "via estensione"
     new_ones = [json.loads(r) for r in (paths.DATA / "activity.jsonl").read_text(encoding="utf-8").splitlines()[lines_before:]]

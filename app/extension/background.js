@@ -4,6 +4,7 @@ importScripts('defaults.js');
 
 const PORT = 8765;
 const VERSION = chrome.runtime.getManifest().version;
+const BUILD = globalThis.MSP_BUILD || '';   // l'impronta dei file con cui questa copia e' partita (la scrive build_extension.py)
 let lastCheck = 0;
 
 const conf = () => chrome.storage.local.get({token: '', port: PORT, suspended: false, notices: true});
@@ -73,13 +74,30 @@ async function signal() {
   await chrome.action.setTitle({title: await T(!token ? 'icon_not_connected' : fault ? 'icon_not_responding' : suspended ? 'suspended_icon' : 'active_icon')});
 }
 
+// Caricata da una cartella, l'estensione resta quella che il browser ha letto quel giorno: se il programma si aggiorna e
+// nella cartella i file cambiano, qui continua a girare il codice di prima, che il programma nuovo puo' non capire piu'.
+// build.json si legge dal disco ogni volta: se porta un'impronta diversa dalla nostra, l'estensione si ricarica da sola.
+// Installata da uno store, i file cambiano solo insieme all'estensione e le due impronte restano uguali.
+async function outdated() {
+  let disk;
+  try { disk = await (await fetch(chrome.runtime.getURL('build.json'), {cache: 'no-store'})).json(); } catch (e) { return false; }
+  if (!disk || !disk.build || disk.test || disk.build === BUILD) return false;   // alla copia di prova non si passa mai da soli
+  const {reloaded} = await chrome.storage.local.get('reloaded');
+  if (reloaded === disk.build) return false;   // gia' provato per questi file: niente giro di ricariche
+  await chrome.storage.local.set({reloaded: disk.build});
+  chrome.runtime.reload();
+  return true;
+}
+
 async function refresh(force) {
   if (!force && Date.now() - lastCheck < 15000) return;
   lastCheck = Date.now();
+  if (await outdated()) return;
   let health;
   try {
     const r = await engine('status', {version: VERSION}, 5000);
-    const fresh = {services: r.services, restore: !!r.restore, block_files: !!r.block_files, box: r.box !== false};
+    const fresh = {services: r.services, restore: !!r.restore, block_files: !!r.block_files, box: r.box !== false,
+      attachments: r.attachments !== false};
     const {status} = await chrome.storage.local.get('status');
     if (JSON.stringify(status) !== JSON.stringify(fresh)) await chrome.storage.local.set({status: fresh});
     await rules(fresh);
@@ -161,7 +179,7 @@ async function handle(m, sender) {
     }
     case 'present': {
       const {token, health} = await chrome.storage.local.get(['token', 'health']);
-      return {version: VERSION, connected: !!token, ok: !!(health && health.ok)};
+      return {version: VERSION, build: BUILD, connected: !!token, ok: !!(health && health.ok)};
     }
     case 'configure': {
       if (!internal(sender)) return {};
@@ -181,7 +199,7 @@ async function handle(m, sender) {
       try { host = new URL(card.url).hostname; } catch (e) { /* scheda senza indirizzo leggibile */ }
       const s = find(d.status || MSP_DEFAULTS, host);
       const key = 'c' + (card ? card.id : '');
-      return {version: VERSION, connected: !!d.token, health: d.health || {ok: false}, suspended: !!d.suspended, notices: d.notices !== false,
+      return {version: VERSION, build: BUILD, connected: !!d.token, health: d.health || {ok: false}, suspended: !!d.suspended, notices: d.notices !== false,
         restore: !!(d.status && d.status.restore), host, service: s && {name: s.name, policy: s.policy, readable: s.readable},
         counts: (await chrome.storage.session.get(key))[key] || null};
     }
