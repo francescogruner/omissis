@@ -196,6 +196,7 @@ DRAW.start = el => {
       <button class="button" id="restart" hidden>${esc(t("start.restart"))}</button><button class="button primary" id="main_switch">…</button>
     </div></div></section>
     <div id="reduced"></div>
+    <div id="remoteDown"></div>
     <div id="update"></div>
     <div class="badges">${["text", "documents", "guide"].map(v => `<a class="badge" href="#/${v}">${icon(v)}<b>${esc(t(`start.badge.${v}`))}</b><span>${esc(t(`start.badge.${v}.below`))}</span></a>`).join("")}</div>
     <div class="grid">${["messages", "replacements", "blocked"].map(k => card(`<div class="number" id="n-${k}">0</div><div class="faded small">${esc(t(`start.today.${k}`))}</div>`)).join("")}
@@ -221,7 +222,7 @@ REFRESH.start = s => {
     below.innerHTML = `${esc(t("status.model.progress", {completed: megabyte(sc.completed), total: megabyte(sc.total), pc}))}
       <progress class="progress" max="100" value="${pc}" aria-label="${esc(t("status.model"))}"></progress>`;
   } else {
-    below.textContent = phase === "active" ? t("status.active.below", {model: s.model, where: t(s.device === "cuda" ? "status.graphics_card" : "status.cpu")})
+    below.textContent = phase === "active" ? t("status.active.below", {model: s.model, where: t(s.device === "server" ? "status.on_server" : s.device === "cuda" ? "status.graphics_card" : "status.cpu")})
       : phase === "error" ? s.error + (sc && sc.missing && sc.downloadable ? " " + t("status.retry") : "")
       : t(`status.${phase}.below`);
   }
@@ -236,6 +237,12 @@ REFRESH.start = s => {
   if ($("#reduced").dataset.off !== off) {
     $("#reduced").dataset.off = off;
     $("#reduced").innerHTML = off ? `<div class="note warning"><span class="space">${esc(t("groups.reduced", {listing: off}))}</span><a class="button" href="#/settings/recognition">${esc(t("groups.reduced.change"))}</a></div>` : "";
+  }
+  // chi usa il modello di un server della rete deve sapere subito se quello non risponde: i suoi messaggi vengono fermati
+  const down = s.remote && s.remote.ok === false ? s.remote.host || "" : null;
+  if ($("#remoteDown").dataset.down !== String(down)) {
+    $("#remoteDown").dataset.down = String(down);
+    $("#remoteDown").innerHTML = down === null ? "" : `<div class="note error"><span class="space">${esc(t("server.down", {host: down}))}</span></div>`;
   }
   const st = s.stats;
   for (const k of ["messages", "replacements", "blocked"]) $(`#n-${k}`).textContent = num(st.today[k]);
@@ -510,6 +517,66 @@ const drawConsole = test(async () => {
   act("#conOff", async () => { if (await confirm(t("console.disconnect"), t("console.disconnect.confirm"), t("console.disconnect"))) { await api("/api/console", {action: "disconnect"}); await drawConsole(); } });
   act("#conOn", async () => { await api("/api/console", {action: "connect", url: $("#conUrl").value, key: $("#conKey").value, pin: $("#conPin").value}); await drawConsole(); });
 });
+// Il server di inferenza in rete: di serie ogni PC usa il suo modello; uno puo' prestarlo agli altri, oppure usare quello di un altro.
+let serverSeen = "";
+const drawServer = test(async () => {
+  const el = $("#server");
+  if (!el) return;
+  const typed = $("#srvConfig")?.value || "";   // la scheda si ridisegna quando lo stato cambia: cio' che si stava scrivendo resta
+  const s = await api("/api/server");
+  el.dataset.mode = s.mode;
+  el.dataset.listening = s.server && s.server.listening ? "yes" : "no";
+  const fixed = s.managed ? " " + esc(t("managed.locked")) : "";
+  if (s.mode === "server") {
+    const sv = s.server;
+    el.innerHTML = line(t("server.sharing"), esc(t("server.sharing.below")) + fixed,
+        label(t(sv.listening ? "server.listening" : s.active ? "server.not_listening" : "server.waiting", {port: sv.port}), sv.listening ? "ok" : "warning"))
+      + `<div class="setting"><span class="name">${esc(t("server.address"))}</span><span class="help">${esc(t("server.address.below"))}</span></div>
+        <div class="inside"><div class="labels">${sv.addresses.map(a => `<code>${esc(a)}</code>`).join("")}</div></div>`
+      + line(t("server.pin"), esc(t("server.pin.below")), `<code id="srvPin">${esc(sv.pin.replace(/(.{4})/g, "$1 ").trim())}</code>`)
+      + `<div class="setting"><span class="help">${esc(t("server.give"))}</span><span class="command"><button class="button" id="srvCopy">${esc(t("server.copy"))}</button><button class="button" id="srvShow">${esc(t("server.show"))}</button>${
+          s.managed ? "" : `<button class="button" id="srvStop">${esc(t("server.stop"))}</button>`}</span></div><pre id="srvData" hidden></pre>
+        <div class="inside" id="srvClients"></div>`;
+    drawClients(sv.clients);
+  } else if (s.mode === "client") {
+    const c = s.client, problem = c.ok === false && c.error ? t(`server.error.${["refused", "certificate", "unreachable"].includes(c.error) ? c.error : "answer"}`) : "";
+    el.innerHTML = line(t("server.using", {host: c.host}), esc(t("server.using.below")) + (c.pinned ? " " + esc(t("console.pinned")) : "") + fixed,
+        label(problem || (c.ok ? t("server.answers", {model: c.model, ms: c.ms}) : t("server.waiting")), problem ? "error" : c.ok ? "ok" : "warning"))
+      + `<div class="setting"><span class="help">${esc(t("server.stays"))}</span><span class="command"><button class="button" id="srvTest">${esc(t("server.test"))}</button>${
+          s.managed ? "" : `<button class="button" id="srvLeave">${esc(t("server.leave"))}</button>`}</span></div>`;
+  } else {
+    el.innerHTML = line(t("server.local"), esc(t("server.local.below")) + fixed, s.managed ? "" : `<button class="button" id="srvShare">${esc(t("server.share"))}</button>`)
+      + (s.managed ? "" : `<div class="setting"><span class="name">${esc(t("server.use"))}</span><span class="help">${esc(t("server.use.below"))}</span></div>
+        <div class="inside"><textarea class="short" id="srvConfig" spellcheck="false" autocomplete="off" aria-label="${esc(t("server.use.field"))}" placeholder='{"engine_url": "https://…", "engine_key": "…", "engine_pin": "…"}'></textarea>
+          <div class="line"><button class="button" id="srvUse">${esc(t("server.use.button"))}</button></div></div>`);
+    if ($("#srvConfig")) $("#srvConfig").value = typed;
+  }
+  const act = (id, f) => { if ($(id)) $(id).onclick = test(async e => { e.target.disabled = true; try { await f(); } finally { e.target.disabled = false; } }); };
+  const change = async data => { await api("/api/server", data); serverSeen = ""; await readStatus(); await drawServer(); };
+  act("#srvShare", async () => { if (await confirm(t("server.share.confirm.title"), t("server.share.confirm"), t("server.share"))) await change({action: "share", on: true}); });
+  act("#srvStop", async () => { if (await confirm(t("server.stop.confirm.title"), t("server.stop.confirm"), t("server.stop"))) await change({action: "share", on: false}); });
+  act("#srvLeave", async () => { if (await confirm(t("server.leave.confirm.title"), t("server.leave.confirm"), t("server.leave"))) await change({action: "leave"}); });
+  act("#srvUse", async () => { await change({action: "use", config: $("#srvConfig").value}); notify(t("server.use.done")); });
+  act("#srvCopy", async () => copy(JSON.stringify((await api("/api/server", {action: "config"})).config, null, 1), t("server.copied")));
+  act("#srvShow", async () => { const p = $("#srvData"); p.textContent = JSON.stringify((await api("/api/server", {action: "config"})).config, null, 1); p.hidden = false; });
+  act("#srvTest", async () => { const r = (await api("/api/server", {action: "test"})).test; notify(r.ok ? t("server.test.ok", {model: r.model}) : t(`server.error.${r.error}`), !r.ok); await drawServer(); });
+});
+function drawClients(clients) {
+  const el = $("#srvClients");
+  if (!el) return;
+  const when = s => new Date(s * 1000).toLocaleString(LANGUAGE, {dateStyle: "short", timeStyle: "short"});
+  el.innerHTML = clients.length
+    ? `<h3>${esc(t("server.clients"))} <span class="faded">(${clients.length})</span></h3><div class="table"><table><thead><tr>${["name", "texts", "last"].map(c => `<th scope="col">${esc(t(`server.clients.${c}`))}</th>`).join("")}</tr></thead><tbody>${
+        clients.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${num(c.texts)}</td><td>${esc(when(c.last))}</td></tr>`).join("")}</tbody></table></div>`
+    : `<span class="faded">${esc(t("server.clients.none"))}</span>`;
+}
+// lo stato cambia da solo (il motore riparte, il server torna a rispondere, un PC chiede qualcosa): la scheda lo segue
+async function followServer(s) {
+  if (!$("#server")) return;
+  const now = [s.phase, s.shared, s.remote && s.remote.ok, s.remote && s.remote.error].join("|");
+  if (now !== serverSeen) { serverSeen = now; await drawServer(); }
+  else if ($("#srvClients")) { try { drawClients(((await api("/api/server")).server || {clients: []}).clients); } catch { /* al prossimo giro */ } }
+}
 const generalSettings = test(async el => {
   const [i, l] = await Promise.all([api("/api/settings"), api("/api/languages")]);
   const options = (entries, choice) => entries.map(([v, n]) => `<option value="${esc(v)}"${v === choice ? " selected" : ""}>${esc(n)}</option>`).join("");
@@ -576,6 +643,7 @@ const drawShortcuts = test(async () => {
   }));
 });
 REFRESH.settings = s => {
+  followServer(s);
   const a = s.update;
   if (!a || !$("#aggVersion")) return;
   $("#aggVersion").textContent = a.current;
@@ -594,6 +662,10 @@ const recognitionSettings = test(async el => {
       ${line(t("recognition.model"), esc(t("recognition.model.below")), `<select id="model" aria-label="${esc(t("recognition.model"))}"><option value="omissis-base">${esc(t("recognition.model.base"))}</option><option value="omissis-small">${esc(t("recognition.model.small"))}</option></select>`)}
       ${line(t("recognition.where"), "", `<select id="device" aria-label="${esc(t("recognition.where"))}">${["auto", "cuda", "cpu"].map(v => `<option value="${v}">${esc(t(`recognition.where.${v}`))}</option>`).join("")}</select>`)}
       ${["box", "attachments", "restore", "block_files"].map(k => line(t(`recognition.${k}`), esc(t(`recognition.${k}.below`)), toggle(k, t(`recognition.${k}`)))).join("")}
+    </section>
+    <section class="card" aria-labelledby="srvTitle">
+      <div class="inside"><h2 id="srvTitle">${esc(t("server.title"))}</h2><p>${esc(t("server.below"))}</p></div>
+      <div id="server"></div>
     </section>
     <section class="card" aria-labelledby="grpTitle">
       <div class="inside"><h2 id="grpTitle">${esc(t("groups.title"))}</h2><p>${esc(t("groups.below"))}</p></div>
@@ -632,6 +704,8 @@ const recognitionSettings = test(async el => {
   lock(i, [["#model", "model"], ["#device", "device"], ...["box", "attachments", "restore", "block_files"].map(k => [`#${k}`, k]),
            ['[id^="grp-"]', "groups_off"], ['[id^="cat-"]', "categories"]]);
   $("#always").value = l.always.join("\n"); $("#never").value = l.never.join("\n");
+  serverSeen = "";
+  drawServer();
   $("#saveLists").onclick = test(async () => {
     const r = await api("/api/lists", {always: $("#always").value.split("\n"), never: $("#never").value.split("\n")});
     notify(t("lists.saved", {always: r.always.length, never: r.never.length}));
@@ -652,11 +726,15 @@ function drawExtension() {
   $("#estConnect").disabled = !extension;
   $("#estConnect").textContent = t(extension && extension.connected ? "browser.reconnect" : "browser.connect");
 }
+// la pagina dello store da cui installare l'estensione in questo browser, se è già pubblicata (Edge accetta anche quello di Chrome)
+const storeLink = d => { const s = d.store || {}; return (/Edg\//.test(navigator.userAgent) && s.edge) || s.chrome || ""; };
 const extensionData = async () => { const d = await api("/api/extension"); if (!d.token) throw new Error(t("browser.code_not_ready")); return d; };
 const connectBrowser = test(async el => {
   el.innerHTML = card(`<h2>${esc(t("browser.connection"))}</h2><p>${esc(t("browser.connection.below"))}</p>`,
       `<span id="estStatus" class="label">…</span><span class="space"></span><button class="button primary" id="estConnect">${esc(t("browser.connect"))}</button>`)
-    + card(`<h2>${esc(t("browser.installation"))}</h2>
+    + card(`<div id="estStoreBox" hidden><h2>${esc(t("browser.store.title"))}</h2><p>${esc(t("browser.store.below"))}</p>
+        <div class="line"><a class="button primary" id="estStore" target="_blank" rel="noopener">${esc(t("browser.store"))}</a></div></div>
+      <h2>${esc(t("browser.installation"))}</h2>
       <ol class="listing"><li>${t("browser.installation.1")}</li><li>${t("browser.installation.2")}
         <div class="line"><code id="estFolder">…</code><button class="button" id="estCopyFolder">${esc(t("browser.copy_path"))}</button></div></li>
         <li>${t("browser.installation.3")}</li><li>${t("browser.installation.4")}</li></ol>`)
@@ -666,7 +744,9 @@ const connectBrowser = test(async el => {
   $("#estCopyFolder").onclick = () => copy($("#estFolder").textContent);
   $("#estCopyCode").onclick = test(async () => copy((await extensionData()).token));
   window.postMessage({omissis: "ping"}, location.origin);
-  $("#estFolder").textContent = (await api("/api/extension")).folder;
+  const ext = await api("/api/extension");
+  $("#estFolder").textContent = ext.folder;
+  if (storeLink(ext)) { $("#estStore").href = storeLink(ext); $("#estStoreBox").hidden = false; }
 });
 
 function drawApp(listing, even_if_same = true) {
@@ -1050,7 +1130,9 @@ function welcome(from = 0) {
       <div class="outcome" id="welcomeResult" aria-live="polite" hidden></div><p class="help" id="welcomeFound" hidden></p>`,
     2: () => ["browser", "app", "terminal"].map(k => `<label class="pick"><input type="checkbox" data-where="${k}" ${st.where[k] ? "checked" : ""}><span><b>${esc(t(`welcome.where.${k}`))}</b><span class="help">${esc(t(`welcome.where.${k}.below`))}</span></span></label>`).join(""),
     3: () => `<div class="line"><span class="label" id="welcomeExt">…</span><span class="space"></span><button class="button primary" id="welcomeConnect" hidden>${esc(t("browser.connect"))}</button></div>
-      <div id="welcomeInstall" hidden><p class="help">${esc(t("welcome.3.absent"))}</p><ol class="listing"><li>${t("browser.installation.1")}</li><li>${t("browser.installation.2")}<div class="line"><code id="welcomeFolder">…</code></div></li><li>${esc(t("welcome.3.reload"))}</li></ol></div>`,
+      <div id="welcomeInstall" hidden><div id="welcomeStoreBox" hidden><p class="help">${esc(t("welcome.3.store"))}</p>
+        <div class="line"><a class="button primary" id="welcomeStore" target="_blank" rel="noopener">${esc(t("browser.store"))}</a></div><p class="help">${esc(t("welcome.3.reload"))}</p></div>
+      <div id="welcomeManual"><p class="help">${esc(t("welcome.3.absent"))}</p><ol class="listing"><li>${t("browser.installation.1")}</li><li>${t("browser.installation.2")}<div class="line"><code id="welcomeFolder">…</code></div></li><li>${esc(t("welcome.3.reload"))}</li></ol></div></div>`,
     4: () => `<ul class="listing"><li>${esc(t("welcome.4.default"))}</li><li>${esc(t("welcome.4.icon"))}</li>${st.where.app || st.where.terminal ? `<li>${esc(t("welcome.4.more"))}</li>` : ""}</ul>`,
   };
   const refresh = () => {
@@ -1101,7 +1183,12 @@ function welcome(from = 0) {
     if (st.step === 2) $$("#welcome input[data-where]").forEach(c => { c.onchange = () => { st.where[c.dataset.where] = c.checked; session("welcome_where", JSON.stringify(st.where)); }; });
     if (st.step === 3) {
       $("#welcomeConnect").onclick = connectThis;
-      api("/api/extension").then(x => { if ($("#welcomeFolder")) $("#welcomeFolder").textContent = x.folder; }).catch(() => {});
+      api("/api/extension").then(x => {
+        if (!$("#welcomeFolder")) return;
+        $("#welcomeFolder").textContent = x.folder;
+        // estensione gia' pubblicata: basta un clic nello store, e le istruzioni a mano non servono
+        if (storeLink(x)) { $("#welcomeStore").href = storeLink(x); $("#welcomeStoreBox").hidden = false; $("#welcomeManual").hidden = true; }
+      }).catch(() => {});
       window.postMessage({omissis: "ping"}, location.origin);
     }
     refresh();

@@ -19,9 +19,6 @@ server che presenta proprio quel certificato, e lo controlla prima di mandare qu
 """
 import collections
 import datetime
-import hashlib
-import hmac
-import http.client
 import json
 import os
 import platform
@@ -36,6 +33,7 @@ import uuid
 
 import inventory
 import paths
+import pinned
 import settings
 import updates
 from version import VERSION
@@ -46,45 +44,9 @@ STATE = {"last": "", "error": "", "sent": 0}
 RX_LABEL, RX_SERVICE = re.compile(r"[A-Z][A-Z_]{1,23}"), re.compile(r"[a-z0-9][a-z0-9_.-]{0,39}")
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """La chiave di collegamento va solo all'indirizzo scelto: un rinvio altrove non viene seguito."""
-    def redirect_request(self, *a, **k):
-        return None
-
-
-class _Pinned(http.client.HTTPSConnection):
-    """Una connessione che vale solo se il certificato del server ha l'impronta attesa. Il controllo avviene appena
-    finita la stretta di mano, prima che parta la richiesta: a un server diverso la chiave non arriva mai."""
-
-    def __init__(self, host, pin="", **more):
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        context.check_hostname, context.verify_mode = False, ssl.CERT_NONE   # al posto dell'autorita' che firma, vale l'impronta
-        super().__init__(host, context=context, **more)
-        self._pin = pin
-
-    def connect(self):
-        super().connect()
-        found = hashlib.sha256(self.sock.getpeercert(binary_form=True) or b"").hexdigest()
-        if not hmac.compare_digest(found, self._pin):
-            self.close()
-            raise ssl.SSLCertVerificationError("pin")
-
-
-class _PinnedHandler(urllib.request.HTTPSHandler):
-    def __init__(self, pin):
-        super().__init__()
-        self._pin = pin
-
-    def https_open(self, req):
-        return self.do_open(lambda host, **more: _Pinned(host, pin=self._pin, **more), req)
-
-
 def _opener(cfg):
-    """Con l'impronta: collegamento diretto (niente proxy in mezzo) al solo server con quel certificato."""
-    if cfg.get("console_pin") and cfg["console_url"].startswith("https://"):
-        return urllib.request.build_opener(urllib.request.ProxyHandler({}), _PinnedHandler(cfg["console_pin"]), _NoRedirect)
-    return urllib.request.build_opener(_NoRedirect)
+    """Con l'impronta: collegamento diretto (niente proxy in mezzo) al solo server con quel certificato (pinned.py)."""
+    return pinned.opener(cfg["console_pin"] if cfg.get("console_pin") and cfg["console_url"].startswith("https://") else "")
 
 
 def device_id():

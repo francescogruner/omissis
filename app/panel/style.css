@@ -218,6 +218,10 @@ dialog#welcome .outcome { min-height: 0; }
 .pick b { display: block; font-weight: 600; }
 .pick input { margin-top: 3px; flex: none; }
 .side-footer a.version { color: inherit; }
+#server > .inside { padding: 0 20px 16px; display: flex; flex-direction: column; gap: 10px; }
+#server > .setting:first-child { border-top: 1px solid var(--border); }
+#server > .setting + .inside { margin-top: -6px; }
+#server pre { margin: 0 20px 16px; }
 dialog .inside { padding: 24px; display: flex; flex-direction: column; gap: 10px; }
 dialog .footer { padding: 12px 24px; border-top: 1px solid var(--border); background: var(--background-2); display: flex; justify-content: flex-end; gap: 8px; }
 

@@ -56,6 +56,7 @@ Solo le chiavi scritte nel file vengono imposte; ogni altra impostazione resta c
 | `groups_off` | `payments`, `organizations`, `it`, `records` | Gruppi di dati da **non** sostituire. Di serie nessuno: spegnerne uno riduce la protezione |
 | `view` | `simple`, `advanced` | Che cosa vede l'utente quando apre il pannello |
 | `language` | `it`, `en`, `auto` | La lingua del pannello |
+| `engine_url`, `engine_key`, `engine_pin` | la configurazione data dal PC che presta il modello | Il PC non carica il modello: lo chiede a quel server della rete (vedi `app/README.it.md`, «Server di inferenza in rete») |
 
 L'utente può cambiare queste impostazioni dal pannello: rilanciare lo script le rimette. Per impedirglielo
 ci sono le impostazioni bloccate, qui sotto.

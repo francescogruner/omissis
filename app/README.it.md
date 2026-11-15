@@ -647,6 +647,29 @@ toglie o spegne l'estensione dal browser: quello si impedisce solo con i criteri
 Non c'è una password di amministratore: comanda chi ha i diritti di amministratore su quel PC. E non è una
 difesa da chi manomette il programma, che è installato nel profilo dell'utente.
 
+**Server di inferenza in rete.** Di serie ogni PC carica il suo modello. Dove non tutti lo reggono (poca
+memoria, PC vecchi, terminali) un PC con Omissis può **prestare il suo modello** agli altri: Impostazioni →
+Riconoscimento → «Server di inferenza in rete» (`remote.py`). Il PC che presta apre una seconda porta (8770) in
+HTTPS, con un certificato che si fa da sé e una chiave; la pagina dà la **configurazione** da incollare negli
+altri PC (`engine_url`, `engine_key`, `engine_pin`), che così partono senza caricare né scaricare il modello.
+
+- In rete viaggia, cifrato, il testo da controllare, e tornano **solo le posizioni** dei dati trovati dal
+  modello. Regole, elenchi personali, segnaposto e archivio con i valori veri restano sul PC che ha chiesto.
+- Il server non scrive i testi e non li mette nel registro: tiene, finché è acceso, il conto di quali PC hanno
+  chiesto e quanti testi.
+- Il PC parla solo con il server che presenta il certificato atteso (l'impronta) e il server risponde solo a
+  chi ha la chiave; chi prova chiavi a caso viene lasciato fuori per un minuto.
+- Le categorie in più accese su un PC valgono per le richieste di quel PC, non per il server né per gli altri.
+- **Se il server non risponde, sul PC non viene mascherato nulla e quindi non parte nulla**: la pagina iniziale
+  lo dice. Non c'è ripiego sul modello locale, che su quel PC può non esserci: un portatile fuori dall'ufficio
+  resta fermo finché non torna in rete o non torna al suo modello.
+- Chi amministra i PC può imporre le tre impostazioni con `Set-OmissisPolicy.ps1`, come le altre.
+- Sul PC che presta, la prima volta Windows chiede se consentire l'accesso alla rete: senza quel consenso (o una
+  regola del firewall per la porta 8770) gli altri PC non lo raggiungono.
+
+Non provato: due PC veri in rete (qui server e PC erano due copie sullo stesso computer, attraverso
+`127.0.0.1`), il firewall di Windows, più PC insieme.
+
 **Console centrale.** Di serie Omissis non manda nulla a nessuno. Se nelle impostazioni ci sono `console_url`
 (un indirizzo `https://`) e `console_key` (la chiave di collegamento), il programma manda a quell'indirizzo,
 una volta all'ora, un riepilogo (`central.py`):
@@ -914,11 +937,15 @@ inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2
 registro dell'utente, mai da quelle di sistema) e il riepilogo per la console centrale, mandato a un servizio
 finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta, e una console con un certificato
 fatto da sé, accettata solo con l'impronta giusta.
+`e2e_remote.py` (13 controlli, serve la copia di prova accesa) prova il server di inferenza in rete: le fa prestare
+il modello e lancia un secondo motore senza modello, con dati suoi, che glielo chiede in HTTPS. Controlla che dal PC
+escano solo segnaposto, che regole, elenchi e archivio restino sul PC, che il server non scriva nulla, che chiave e
+impronta sbagliate vengano rifiutate, che a server spento non parta nulla, e la scheda nella pagina nelle due lingue.
 `e2e_desktop.py` (17 controlli, serve la protezione attiva) prova ciò che tocca il desktop:
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (63 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (64 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi, `OMISSIS_MANAGED_FILE` per le impostazioni imposte) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,

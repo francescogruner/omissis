@@ -3,6 +3,9 @@
 ([PERSONA_1], [EMAIL_3]...) e sa riportarli al valore originale.
 
 Gira con l'ambiente Python del modello (benchmark\\.venv) e ascolta SOLO su 127.0.0.1.
+Fa eccezione il server di inferenza in rete (remote.py), spento di serie: se nelle impostazioni c'e' «serve», una
+seconda porta risponde in HTTPS agli altri PC dell'organizzazione, e solo con le posizioni dei dati trovati dal modello;
+se invece c'e' «engine_url» il modello non viene caricato e il riconoscimento lo fa quel server.
 Lo usano il proxy (addon.py) e, in futuro, qualunque altra interfaccia (estensione, gateway API).
 
   POST /mask  {"testi": [...]}        -> {"testi": [...], "mappa": {segnaposto: valore}, "conteggi": {...}, "ms": n}
@@ -35,6 +38,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 import paths   # noqa: E402
+import remote   # noqa: E402
 import settings   # noqa: E402
 
 DATA = paths.DATA
@@ -272,8 +276,13 @@ class Vault:
 
 class Engine:
     def __init__(self, model, device=None):
-        from inference import Detector
-        self.det = Detector(model, device=device)
+        cfg = settings.read()
+        self.remote = remote.configured(cfg)
+        if self.remote:   # il modello lo ha un server della rete: qui restano regole, elenchi, segnaposto e archivio
+            self.det = remote.detector(cfg)
+        else:
+            from inference import Detector
+            self.det = Detector(model, device=device)
         self.vault = Vault(DATA / "vault.sqlite")
         self.lock = threading.Lock()                # un'inferenza per volta
         self.cache = collections.OrderedDict()           # testo gia' visto -> span (le cronologie si ripetono)
@@ -301,6 +310,23 @@ class Engine:
             while len(self.cache) > 4000:
                 self.cache.popitem(last=False)
         return [self.cache[k] for k in keys]
+
+    def detect(self, texts, on=()):
+        """Per un altro PC della rete (remote.py): solo cio' che trova il modello. Niente regole ne' elenchi, che ogni PC
+        applica da se', e niente archivio: i segnaposto e i valori veri nascono e restano sul PC che ha chiesto.
+        on: le categorie in piu' accese su quel PC; valgono per questa richiesta e basta."""
+        t0 = time.perf_counter()
+        wanted = sorted(e for e in self.det.off_model if e not in set(on))
+        with self.lock:
+            mine = list(self.det.off)
+            try:
+                if wanted != mine:
+                    self.det.configure_off(wanted)
+                spans = self.det.many(texts)
+            finally:
+                if wanted != mine:
+                    self.det.configure_off(mine)
+        return {"spans": spans, "ms": round((time.perf_counter() - t0) * 1000)}
 
     @staticmethod
     def _merge(spans):
@@ -428,7 +454,8 @@ def serve(engine, port, token, extension_token, bridge):
             if self.path in ("/status", "/st" + "ato") and self._authorized():
                 self._respond(200, {"model": str(engine.det.mod.name_or_path), "device": engine.det.device,
                                      "threshold": engine.det.threshold, "entries": engine.vault.entries(),
-                                     "vault_encrypted": engine.vault.seal.is_active})
+                                     "vault_encrypted": engine.vault.seal.is_active,
+                                     "remote": dict(engine.det.state) if engine.remote else None, "shared": remote.shared()})
 
         def do_POST(self):
             if not self._authorized():
@@ -484,7 +511,18 @@ if __name__ == "__main__":
         if not f.exists():
             f.write_text(secrets.token_urlsafe(32), encoding="utf-8")
     m = Engine(a.model, a.device)
-    m.mask(["warmup"])
+    try:
+        m.mask(["warmup"])
+    except remote.Failure:   # il server della rete non risponde adesso: il motore parte lo stesso, e il pannello lo dice
+        pass
+    cfg = settings.read()
+    if cfg.get("serve") and not m.remote:   # presta il modello agli altri PC: certificato e chiave li ha preparati il pannello
+        folder = DATA / "server"
+        try:
+            access = (folder / "access.txt").read_text(encoding="utf-8").strip()
+            threading.Thread(target=remote.share, args=(m, int(cfg["serve_port"]), access, folder / "cert.pem", folder / "key.pem"), daemon=True).start()
+        except OSError:
+            pass
     print(f"motore pronto su http://127.0.0.1:{a.port} | modello {Path(a.model).name} | {m.det.device} | voci in archivio: {m.vault.entries()}")
     from bridge import Bridge
     serve(m, a.port, f_token.read_text(encoding="utf-8").strip(), f_extension.read_text(encoding="utf-8").strip(), Bridge(m))

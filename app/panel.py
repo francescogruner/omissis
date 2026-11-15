@@ -44,6 +44,7 @@ import settings
 import i18n
 import weights
 import paths
+import remote
 import restore
 import scan
 from version import VERSION
@@ -161,9 +162,10 @@ class Supervisor:
                    "OMISSIS_ENGINE_URL": f"http://127.0.0.1:{ENGINE_PORT}"}
             if self.test:
                 env["OMISSIS_TEST"] = "1"
-            if not self._alive(self.engine) or self.launched_with is None or self.launched_with[:2] != (cfg["model"], cfg["device"]):
+            if not self._alive(self.engine) or self.launched_with is None or self.launched_with[0] != self._engine_choices(cfg):
                 self._stop(self.engine)
-                if weights.missing(cfg["model"]):   # primo avvio di una copia installata: i pesi si scaricano una volta
+                # primo avvio di una copia installata: i pesi si scaricano una volta. Non a chi usa il modello di un server della rete
+                if not remote.configured(cfg) and weights.missing(cfg["model"]):
                     self.phase = "model"
                     weights.download(cfg["model"])
                     self.phase = "startup"
@@ -196,7 +198,7 @@ class Supervisor:
                 if not self._alive(self.proxy):
                     raise RuntimeError(i18n.t("program.proxy_not_starting", port=cfg["port"]))
                 time.sleep(0.5)
-            self.launched_with = (cfg["model"], cfg["device"], cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
+            self.launched_with = (self._engine_choices(cfg), cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
             if self.gateway is None:   # per gli strumenti da terminale; se la porta e' occupata il resto funziona lo stesso
                 try:
                     self.gateway, self.gateway_error = gateway.Gateway().launch(), ""
@@ -208,6 +210,11 @@ class Supervisor:
         except Exception as ex:   # noqa: BLE001
             self._stop(self.proxy)
             self.phase, self.error = "error", str(ex)
+
+    @staticmethod
+    def _engine_choices(cfg):
+        """Le scelte che, cambiate, chiedono di riavviare il motore: il modello e dove gira, qui o su un server della rete."""
+        return (cfg["model"], cfg["device"], cfg["engine_url"], cfg["engine_key"], cfg["engine_pin"], cfg["serve"], cfg["serve_port"])
 
     @staticmethod
     def _stop(p):
@@ -234,7 +241,7 @@ class Supervisor:
         if self.phase != "active" or self.launched_with is None:
             return False
         cfg = settings.read()
-        return self.launched_with != (cfg["model"], cfg["device"], cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
+        return self.launched_with != (self._engine_choices(cfg), cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
 
     def status(self):
         if self.phase == "active" and not (self._alive(self.engine) and self._alive(self.proxy)):
@@ -246,11 +253,34 @@ class Supervisor:
             except Exception:   # noqa: BLE001
                 info = {}
         return {"phase": self.phase, "error": self.error, "restart_needed": self.restart_needed(), "version": VERSION,
-                "downloading": weights.status(settings.read()["model"]) if self.phase in ("model", "error") else None,
+                "downloading": weights.status(settings.read()["model"]) if self.phase in ("model", "error") and not remote.configured(settings.read()) else None,
+                "remote": info.get("remote"), "shared": bool(info.get("shared")),
                 "update": updates.status(),
                 "model": Path(info["model"]).name if info.get("model") else None, "device": info.get("device"),
                 "threshold": info.get("threshold"), "entries": info.get("entries"), "port": settings.read()["port"],
                 "groups_off": list(settings.read().get("groups_off") or [])}   # gruppi di dati spenti a mano: la pagina iniziale lo dice
+
+
+def server_state():
+    """Il server di inferenza in rete, visto da questo PC: lo usa, lo fa, oppure nessuna delle due (remote.py)."""
+    cfg, lock = settings.read(), settings.locked()["keys"]
+    info = {}
+    if SUP is not None and SUP.phase == "active":
+        try:
+            info = engine("/status", timeout=3)
+        except Exception:   # noqa: BLE001
+            info = {}
+    mode = "client" if remote.configured(cfg) else "server" if cfg["serve"] else "local"
+    out = {"mode": mode, "managed": any(k in lock for k in ("engine_url", "engine_key", "engine_pin", "serve", "serve_port")),
+           "active": SUP is not None and SUP.phase == "active"}
+    if mode == "client":
+        out["client"] = {"host": urllib.parse.urlsplit(cfg["engine_url"]).netloc, "pinned": bool(cfg["engine_pin"]),
+                         **{k: v for k, v in (info.get("remote") or {}).items() if k in ("ok", "error", "model", "device", "ms")}}
+    elif mode == "server":
+        shared = info.get("shared") or {}
+        out["server"] = {"port": cfg["serve_port"], "addresses": remote.addresses(cfg["serve_port"]), "pin": remote.fingerprint(DATA / "server" / "cert.pem"),
+                         "listening": bool(shared), "clients": shared.get("clients") or []}
+    return out
 
 
 SUP = None
@@ -480,6 +510,16 @@ def write_lists(data):
     return read_lists()
 
 
+def extension_store():
+    """Le pagine degli store da cui installare l'estensione con un clic (store.json). Finche' l'estensione non e' pubblicata
+    sono vuote, e la pagina mostra l'installazione a mano dalla cartella."""
+    try:
+        found = json.loads((HERE / "store.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        found = {}
+    return {k: v for k in ("chrome", "edge") if isinstance(v := found.get(k), str) and v.startswith("https://")}
+
+
 def extension_folder():
     """La cartella dell'estensione da indicare al browser. La copia arrivata dal Microsoft Store sta in una cartella di
     sistema che il browser non puo' leggere: se ne tiene una copia aggiornata tra i documenti dell'utente."""
@@ -578,11 +618,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, services())
             elif u.path == "/api/settings":
                 # la chiave di collegamento alla console non torna alla pagina: le basta sapere se c'e' (/api/console)
-                self._respond(200, {**{k: v for k, v in settings.read().items() if k != "console_key"}, "certificate": certificate(),
+                self._respond(200, {**{k: v for k, v in settings.read().items() if k not in ("console_key", "engine_key")}, "certificate": certificate(),
                                      "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON, "managed": settings.locked(),
                                      "first_run": settings.first_run(SUP.test)})
             elif u.path == "/api/console":
                 self._respond(200, central.state())
+            elif u.path == "/api/server":
+                self._respond(200, server_state())
             elif u.path == "/api/lists":
                 self._respond(200, read_lists())
             elif u.path == "/api/app":
@@ -598,7 +640,7 @@ class Handler(BaseHTTPRequestHandler):
                                      "upstreams": dict(settings.read().get("gateway_upstreams") or {})})
             elif u.path == "/api/extension":
                 f = DATA / "token_extension.txt"
-                self._respond(200, {"folder": str(extension_folder()), "port": ENGINE_PORT,
+                self._respond(200, {"folder": str(extension_folder()), "port": ENGINE_PORT, "store": extension_store(),
                                      "token": f.read_text(encoding="utf-8").strip() if f.exists() else ""})
             elif u.path == "/api/categories":   # le categorie in piu' che il modello in uso conosce, e quelle accese
                 try:
@@ -648,9 +690,10 @@ class Handler(BaseHTTPRequestHandler):
                     SUP.launch()
                 self._respond(200, SUP.status())
             elif p == "/api/settings":
-                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith("console_")}
+                # la console e il server di inferenza hanno le loro chiamate: qui non si toccano
+                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith(("console_", "engine_", "serve"))}
                 guard(*changes, changes=changes)
-                new_ones = {k: v for k, v in settings.write({**settings.read(), **changes}).items() if k != "console_key"}
+                new_ones = {k: v for k, v in settings.write({**settings.read(), **changes}).items() if k not in ("console_key", "engine_key")}
                 if "shortcuts" in data and SHORTCUTS is not None:
                     SHORTCUTS.configure(clipboard.choices(new_ones))
                 if "categories" in data:   # il motore rilegge quali categorie in piu' sostituire
@@ -691,6 +734,53 @@ class Handler(BaseHTTPRequestHandler):
                         raise Refusal(i18n.t("mcp.error.folder", folder=missing[0]))
                     settings.write({**settings.read(), "mcp_folders": chosen})
                 self._respond(200, mcp_state())
+            elif p == "/api/server":   # il server di inferenza in rete: prestare il modello di questo PC, o usare quello di un altro
+                action, cfg = data.get("action"), settings.read()
+                if action in ("share", "use", "leave"):
+                    guard("engine_url", "engine_key", "engine_pin", "serve", "serve_port")
+                if action == "share":
+                    on = data.get("on") is not False
+                    if on and remote.configured(cfg):
+                        raise Refusal(i18n.t("server.error.both"))
+                    if on:
+                        remote.ensure(DATA / "server")
+                    settings.write({**cfg, "serve": on})
+                elif action == "config":   # cio' che va dato ai PC: indirizzo, chiave e impronta. Resta in questa pagina
+                    if not cfg["serve"]:
+                        raise Refusal(i18n.t("server.error.not_sharing"))
+                    cert, _, access = remote.ensure(DATA / "server")
+                    self._respond(200, {"config": {"engine_url": remote.addresses(cfg["serve_port"])[0], "engine_key": access,
+                                                    "engine_pin": remote.fingerprint(cert)}})
+                    return
+                elif action == "use":
+                    given = data.get("config")
+                    if isinstance(given, str) and given.strip():   # incollata cosi' come la da' il server
+                        try:
+                            given = json.loads(given)
+                        except ValueError:
+                            raise Refusal(i18n.t("server.error.config")) from None
+                    if not isinstance(given, dict):
+                        given = {"engine_url": data.get("url"), "engine_key": data.get("key"), "engine_pin": data.get("pin")}
+                    address, key = str(given.get("engine_url") or "").strip().rstrip("/"), str(given.get("engine_key") or "").strip()
+                    pin = re.sub(r"(?i)^sha-?256[:=]|[\s:]", "", str(given.get("engine_pin") or "")).lower()
+                    if not settings.console_address_ok(address) or not key:
+                        raise Refusal(i18n.t("server.error.address"))
+                    try:   # prima si prova: una configurazione sbagliata lascerebbe questo PC senza riconoscimento
+                        remote.check(address, key, pin)
+                    except remote.Failure as ex:
+                        raise Refusal(i18n.t(f"server.error.{ex.code}")) from None
+                    settings.write({**cfg, "engine_url": address, "engine_key": key, "engine_pin": pin, "serve": False})
+                elif action == "leave":
+                    settings.write({**cfg, "engine_url": "", "engine_key": "", "engine_pin": ""})
+                elif action == "test":
+                    try:
+                        self._respond(200, {**server_state(), "test": {"ok": True, **remote.check(cfg["engine_url"], cfg["engine_key"], cfg["engine_pin"])}})
+                    except remote.Failure as ex:
+                        self._respond(200, {**server_state(), "test": {"ok": False, "error": ex.code}})
+                    return
+                if action in ("share", "use", "leave") and SUP.phase == "active":
+                    SUP.launch()   # il motore riparte con la scelta nuova: per qualche secondo la protezione e' in avvio
+                self._respond(200, server_state())
             elif p == "/api/console":   # la console centrale di un'organizzazione: collegare, vedere che cosa parte, inviare ora
                 action = data.get("action")
                 if action in ("connect", "disconnect"):

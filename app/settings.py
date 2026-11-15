@@ -37,6 +37,12 @@ DEFAULTS = {
     "console_names": True,        # False: il riepilogo non porta il nome del computer ne' quello dell'utente
     "console_pin": "",            # impronta SHA-256 del certificato della console, per quelle in rete locale che se lo fanno da se'
     "onboarded": False,           # la configurazione guidata del primo avvio e' gia' stata vista (o saltata)
+    # server di inferenza in rete (facoltativo, vedi remote.py). Un PC o presta il suo modello o lo chiede a un altro
+    "engine_url": "",             # indirizzo https del server: il modello lo ha lui, questo PC gli chiede il riconoscimento
+    "engine_key": "",             # la chiave che il server da' ai PC dell'organizzazione
+    "engine_pin": "",             # impronta SHA-256 del certificato del server: il PC parla solo con quello
+    "serve": False,               # True: questo PC presta il suo modello agli altri PC della rete
+    "serve_port": 8770,           # la porta su cui lo fa
 }
 # impostazioni che l'amministratore impone voce per voce: il resto della tabella resta dell'utente
 MERGED = {"policies"}
@@ -191,6 +197,18 @@ def _clean(data):
     clean["console_names"] = clean["console_names"] not in (False, 0, "false", "0")
     pin = re.sub(r"(?i)^sha-?256[:=]|[\s:]", "", str(clean["console_pin"] or "")).lower()
     clean["console_pin"] = pin if re.fullmatch(r"[0-9a-f]{64}", pin) else ""
+    address = str(clean["engine_url"] or "").strip().rstrip("/")
+    clean["engine_url"] = address if console_address_ok(address) else ""   # stessa regola: in chiaro solo su questo PC
+    clean["engine_key"] = re.sub(r"[^A-Za-z0-9_.-]", "", str(clean["engine_key"] or ""))[:200]
+    pin = re.sub(r"(?i)^sha-?256[:=]|[\s:]", "", str(clean["engine_pin"] or "")).lower()
+    clean["engine_pin"] = pin if re.fullmatch(r"[0-9a-f]{64}", pin) else ""
+    try:
+        port = int(clean["serve_port"])
+    except (TypeError, ValueError):
+        port = 0
+    clean["serve_port"] = port if 1024 <= port <= 65535 else DEFAULTS["serve_port"]
+    # un PC che chiede il riconoscimento a un altro non ha un modello da prestare
+    clean["serve"] = clean["serve"] is True and not (clean["engine_url"] and clean["engine_key"])
     return clean
 
 

@@ -200,6 +200,31 @@ def main():
                     pag.wait_for_selector("#menu a")
                 errors.clear()
 
+                # --- quando l'estensione e' pubblicata (store.json), la guida propone lo store al posto dell'installazione a mano
+                if language == "it":
+                    try:
+                        def published(route):
+                            answer = route.fetch()
+                            route.fulfill(response=answer, json={**answer.json(), "store": {"chrome": "https://chromewebstore.google.com/detail/esempio"}})
+                        pag.route("**/api/extension", published)
+                        pag.goto(PANEL + "/#/welcome")
+                        pag.reload()
+                        pag.wait_for_selector("#welcome[open] #welcomeNext")
+                        pag.click("#welcomeNext")
+                        pag.wait_for_selector('#welcome[data-step="2"]')
+                        pag.click("#welcomeNext")
+                        pag.wait_for_selector('#welcome[data-step="3"] #welcomeStoreBox:not([hidden])')
+                        mark("estensione pubblicata: la guida propone lo store e nasconde l'installazione a mano",
+                             pag.get_attribute("#welcomeStore", "href") == "https://chromewebstore.google.com/detail/esempio" and not pag.is_visible("#welcomeManual")
+                             and call(code, "/api/extension")["store"] == {})
+                        pag.click("#welcomeSkip")
+                    except Exception as ex:   # noqa: BLE001
+                        mark("estensione pubblicata: la guida propone lo store", False, str(ex)[:200])
+                    finally:
+                        pag.unroute("**/api/extension")
+                        call(code, "/api/settings", {"onboarded": True})
+                    errors.clear()
+
                 # --- aperta dalla pagina di benvenuto dell'estensione, la pagina consegna da sola il codice di collegamento
                 if language == "it":
                     try:

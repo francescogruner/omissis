@@ -144,6 +144,10 @@ Everything else is in [app/README.it.md](app/README.it.md).
 pre-configured, lock the settings the administrator chooses, report its state and remove it, from an RMM tool,
 Intune or a logon script.
 
+**PCs that cannot hold the model**: one PC with Omissis can lend its model to the others on the network (Settings,
+Recognition, "Inference server on the network"). The text to check travels encrypted and only the positions of the
+data found come back; placeholders, real values, rules and lists stay on each PC. Off by default.
+
 ## What Omissis does not protect you from
 
 Be clear about the limits before relying on it:

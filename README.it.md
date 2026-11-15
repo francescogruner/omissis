@@ -130,6 +130,10 @@ Tutto il resto è in [app/README.it.md](app/README.it.md).
 già configurato, bloccano le impostazioni scelte dall'amministratore, ne riferiscono lo stato e lo tolgono, da
 un RMM, da Intune o da uno script di accesso.
 
+**PC che non reggono il modello**: un PC con Omissis può prestare il suo modello agli altri della rete
+(Impostazioni, Riconoscimento, «Server di inferenza in rete»). Il testo da controllare viaggia cifrato e tornano
+solo le posizioni dei dati trovati; segnaposto, valori veri, regole ed elenchi restano su ogni PC. Di serie è spento.
+
 ## Da cosa Omissis non protegge
 
 - **È un filtro, non una garanzia.** Un modello può non riconoscere un dato. Per i termini che non può
