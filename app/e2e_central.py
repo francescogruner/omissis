@@ -24,7 +24,28 @@ def check(what, outcome, note=""):
     print(f"{'OK    ' if outcome else 'ERRORE'} {what}" + (f"   {note}" if note else ""))
 
 
-RECEIVED, ELSEWHERE = [], []
+RECEIVED, ELSEWHERE, SEEN = [], [], []
+
+
+def own_certificate(folder):
+    """Un certificato fatto da se', come quello di una console in rete locale. Restituisce (contesto per il servizio, impronta)."""
+    import datetime
+    import hashlib
+    import ssl
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+    key = ec.generate_private_key(ec.SECP256R1())
+    who = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Console di prova")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(who).issuer_name(who).public_key(key.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(days=1)).not_valid_after(now + datetime.timedelta(days=30)).sign(key, hashes.SHA256()))
+    Path(folder, "cert.pem").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    Path(folder, "key.pem").write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(str(Path(folder, "cert.pem")), str(Path(folder, "key.pem")))
+    return context, hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
 class FakeConsole(BaseHTTPRequestHandler):
@@ -34,6 +55,7 @@ class FakeConsole(BaseHTTPRequestHandler):
         pass
 
     def do_POST(self):
+        SEEN.append(self.path)
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         if self.path == "/elsewhere/api/v1/report" or self.path.startswith("/stolen"):
             ELSEWHERE.append(self.headers.get("Authorization"))
@@ -151,6 +173,31 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     server.shutdown()
     server.server_close()
     check("console spenta: errore, il programma non si ferma", central.send("active")["error"] == "unreachable")
+    # ---- una console in rete locale: certificato fatto da se', riconosciuto dall'impronta
+    try:
+        context, pin = own_certificate(folder)
+    except ImportError:
+        context = None
+        print("SALTATO console con certificato proprio: manca la libreria cryptography")
+    if context is not None:
+        local = ThreadingHTTPServer(("127.0.0.1", 0), FakeConsole)
+        local.socket = context.wrap_socket(local.socket, server_side=True)
+        threading.Thread(target=local.serve_forever, daemon=True).start()
+        address, before = f"https://127.0.0.1:{local.server_port}", (len(SEEN), len(RECEIVED))
+        settings.write({**settings.read(), "console_url": address, "console_key": "chiave-di-prova", "console_pin": ""})
+        check("certificato fatto da sé, senza impronta: rifiutato, e alla console non arriva nulla",
+              central.send("active")["error"] == "certificate" and (len(SEEN), len(RECEIVED)) == before, central.STATE["error"])
+        settings.write({**settings.read(), "console_pin": "0" * 64})
+        check("impronta sbagliata: rifiutato prima di mandare la chiave", central.send("active")["error"] == "certificate" and (len(SEEN), len(RECEIVED)) == before
+              and central.state()["pinned"], central.STATE["error"])
+        cfg = settings.write({**settings.read(), "console_pin": "SHA256:" + ":".join(pin[i:i + 2].upper() for i in range(0, 64, 2))})
+        st = central.send("active")
+        check("impronta giusta (scritta anche con i due punti): il riepilogo arriva", cfg["console_pin"] == pin and st["error"] == "" and len(RECEIVED) == before[1] + 1
+              and RECEIVED[-1][0] == "/api/v1/report", str(st["error"]))
+        check("un'impronta scritta male non vale come impronta", settings.write({**settings.read(), "console_pin": "non-è-un'impronta"})["console_pin"] == "")
+        local.shutdown()
+        local.server_close()
+    settings.write({**settings.read(), "console_pin": ""})
     impose({"console_url": "https://console.example.test", "console_key": "chiave-di-prova"})
     check("console imposta dall'amministratore: lo stato dice che è bloccata", central.state()["managed"] and central.state()["host"] == "console.example.test")
     impose(None)

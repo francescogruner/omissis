@@ -775,5 +775,8 @@
  "service.manual": "Uso manuale",
  "via.text": "sezione Testo",
  "via.clipboard": "appunti e scorciatoie",
- "via.document": "documento"
+ "via.document": "documento",
+ "console.pin": "Impronta del certificato (solo per console in rete locale)",
+ "console.pinned": "Il PC si collega solo al server che presenta il certificato atteso.",
+ "console.error.certificate": "Il certificato della console non è quello atteso"
 }

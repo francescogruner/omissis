@@ -104,6 +104,11 @@ pulsante «Vedi che cosa parte» mostra il riepilogo esatto.
 - Il protocollo è aperto (`app/central.py`): una richiesta `POST` a `<console_url>/api/v1/report` con la chiave
   nell'intestazione `Authorization`. La console in sé non fa parte di questo repository.
 - Un rinvio verso un altro indirizzo non viene seguito, e un indirizzo non `https` viene rifiutato.
+- **Console in rete locale.** Una console interna non ha un nome pubblico né un certificato firmato da
+  un'autorità: si fa il certificato da sé e ne dà l'impronta. Con `"console_pin": "<impronta SHA-256>"` il PC si
+  collega solo al server che presenta proprio quel certificato, e lo controlla prima di mandare la chiave. Così
+  basta un indirizzo come `https://192.168.1.10:8800`: niente nome, niente porte 80 e 443. Senza `console_pin` il
+  certificato deve essere valido come per un browser.
 
 ## Con un RMM (NinjaOne e simili)
 

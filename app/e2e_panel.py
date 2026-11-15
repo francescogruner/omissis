@@ -277,7 +277,7 @@ def main():
                 # --- console centrale: di serie il PC non manda nulla; un indirizzo non https è rifiutato; si vede che cosa partirebbe
                 try:
                     pag.goto(f"{PANEL}/#/settings/general")
-                    card = wait(pag, "() => !!document.getElementById('conUrl') && !!document.getElementById('conKey')", timeout=15)
+                    card = wait(pag, "() => !!document.getElementById('conUrl') && !!document.getElementById('conKey') && !!document.getElementById('conPin')", timeout=15)
                     state = call(code, "/api/console")
                     try:
                         call(code, "/api/console", {"action": "connect", "url": "http://console.example.test", "key": "chiave-di-prova"})

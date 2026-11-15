@@ -775,5 +775,8 @@
  "service.manual": "Manual use",
  "via.text": "Text section",
  "via.clipboard": "clipboard and shortcuts",
- "via.document": "document"
+ "via.document": "document",
+ "console.pin": "Certificate fingerprint (only for consoles on the local network)",
+ "console.pinned": "The PC connects only to the server that presents the expected certificate.",
+ "console.error.certificate": "The console certificate is not the expected one"
 }

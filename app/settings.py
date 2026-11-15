@@ -35,6 +35,7 @@ DEFAULTS = {
     "console_url": "",            # indirizzo https della console
     "console_key": "",            # chiave di collegamento data dalla console: dice a quale organizzazione appartiene il PC
     "console_names": True,        # False: il riepilogo non porta il nome del computer ne' quello dell'utente
+    "console_pin": "",            # impronta SHA-256 del certificato della console, per quelle in rete locale che se lo fanno da se'
 }
 # impostazioni che l'amministratore impone voce per voce: il resto della tabella resta dell'utente
 MERGED = {"policies"}
@@ -180,6 +181,8 @@ def _clean(data):
     clean["console_url"] = address if console_address_ok(address) else ""
     clean["console_key"] = re.sub(r"[^A-Za-z0-9_.-]", "", str(clean["console_key"] or ""))[:200]
     clean["console_names"] = clean["console_names"] not in (False, 0, "false", "0")
+    pin = re.sub(r"(?i)^sha-?256[:=]|[\s:]", "", str(clean["console_pin"] or "")).lower()
+    clean["console_pin"] = pin if re.fullmatch(r"[0-9a-f]{64}", pin) else ""
     return clean
 
 

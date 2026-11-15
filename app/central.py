@@ -11,14 +11,23 @@ mai i testi, mai i valori sostituiti, mai l'archivio. Dal pannello (Impostazioni
 riepilogo esatto prima che parta.
 
 Con console_names spento il riepilogo non porta il nome del computer ne' quello dell'utente.
+
+Di chi ci si fida: senza altro, del certificato della console come farebbe un browser (un nome pubblico, un
+certificato valido). Una console in rete locale non ha ne' l'uno ne' l'altro: si fa il certificato da se' e da' la
+sua impronta (console_pin) insieme alla chiave di collegamento. Con l'impronta il programma si collega SOLO al
+server che presenta proprio quel certificato, e lo controlla prima di mandare qualsiasi cosa.
 """
 import collections
 import datetime
+import hashlib
+import hmac
+import http.client
 import json
 import os
 import platform
 import re
 import socket
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -41,6 +50,41 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """La chiave di collegamento va solo all'indirizzo scelto: un rinvio altrove non viene seguito."""
     def redirect_request(self, *a, **k):
         return None
+
+
+class _Pinned(http.client.HTTPSConnection):
+    """Una connessione che vale solo se il certificato del server ha l'impronta attesa. Il controllo avviene appena
+    finita la stretta di mano, prima che parta la richiesta: a un server diverso la chiave non arriva mai."""
+
+    def __init__(self, host, pin="", **more):
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.check_hostname, context.verify_mode = False, ssl.CERT_NONE   # al posto dell'autorita' che firma, vale l'impronta
+        super().__init__(host, context=context, **more)
+        self._pin = pin
+
+    def connect(self):
+        super().connect()
+        found = hashlib.sha256(self.sock.getpeercert(binary_form=True) or b"").hexdigest()
+        if not hmac.compare_digest(found, self._pin):
+            self.close()
+            raise ssl.SSLCertVerificationError("pin")
+
+
+class _PinnedHandler(urllib.request.HTTPSHandler):
+    def __init__(self, pin):
+        super().__init__()
+        self._pin = pin
+
+    def https_open(self, req):
+        return self.do_open(lambda host, **more: _Pinned(host, pin=self._pin, **more), req)
+
+
+def _opener(cfg):
+    """Con l'impronta: collegamento diretto (niente proxy in mezzo) al solo server con quel certificato."""
+    if cfg.get("console_pin") and cfg["console_url"].startswith("https://"):
+        return urllib.request.build_opener(urllib.request.ProxyHandler({}), _PinnedHandler(cfg["console_pin"]), _NoRedirect)
+    return urllib.request.build_opener(_NoRedirect)
 
 
 def device_id():
@@ -128,13 +172,16 @@ def send(phase):
         req = urllib.request.Request(cfg["console_url"] + "/api/v1/report", data=json.dumps(summary(phase)).encode("utf-8"),
                                      headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["console_key"],
                                               "User-Agent": f"Omissis/{VERSION}"})
-        with urllib.request.build_opener(_NoRedirect).open(req, timeout=20) as r:
+        with _opener(cfg).open(req, timeout=20) as r:
             r.read(4096)
         STATE.update(last=time.strftime("%Y-%m-%d %H:%M"), error="", sent=STATE["sent"] + 1)
     except urllib.error.HTTPError as ex:
         STATE.update(error=f"http_{ex.code}")
     except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, ValueError) as ex:
-        STATE.update(error="unreachable" if not isinstance(ex, ValueError) else "address")
+        if isinstance(ex, ssl.SSLCertVerificationError) or isinstance(getattr(ex, "reason", None), ssl.SSLCertVerificationError):
+            STATE.update(error="certificate")   # non e' il server atteso (impronta diversa) o il certificato non e' valido
+        else:
+            STATE.update(error="address" if isinstance(ex, ValueError) and not isinstance(ex, OSError) else "unreachable")
     return state()
 
 
@@ -142,7 +189,7 @@ def state():
     cfg, lock = settings.read(), settings.locked()["keys"]
     host = urllib.parse.urlsplit(cfg.get("console_url") or "").netloc
     return {"configured": configured(cfg), "host": host, "url": cfg.get("console_url") or "", "has_key": bool(cfg.get("console_key")),
-            "names": bool(cfg.get("console_names", True)), "managed": "console_url" in lock or "console_key" in lock,
+            "names": bool(cfg.get("console_names", True)), "pinned": bool(cfg.get("console_pin")), "managed": "console_url" in lock or "console_key" in lock,
             "last": STATE["last"], "error": STATE["error"]}
 
 

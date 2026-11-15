@@ -693,7 +693,7 @@ class Handler(BaseHTTPRequestHandler):
             elif p == "/api/console":   # la console centrale di un'organizzazione: collegare, vedere che cosa parte, inviare ora
                 action = data.get("action")
                 if action in ("connect", "disconnect"):
-                    guard("console_url", "console_key", "console_names")
+                    guard("console_url", "console_key", "console_names", "console_pin")
                     address, key = str(data.get("url") or "").strip().rstrip("/"), str(data.get("key") or "").strip()
                     if action == "connect" and not settings.console_address_ok(address):
                         raise Refusal(i18n.t("console.error.address"))
@@ -702,6 +702,7 @@ class Handler(BaseHTTPRequestHandler):
                     cfg = settings.read()
                     settings.write({**cfg, "console_url": address if action == "connect" else "",
                                     "console_key": (key or cfg.get("console_key")) if action == "connect" else "",
+                                    "console_pin": str(data.get("pin") or "") if action == "connect" else "",
                                     "console_names": data.get("names", True) is not False})
                     central.STATE.update(last="", error="")
                     if action == "connect":

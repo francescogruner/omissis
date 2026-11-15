@@ -39,7 +39,9 @@ replaced per type and per AI service, requests stopped, names and versions of th
 never the replaced values. The panel shows the user where the PC is connected and the exact summary. Per-person
 counts can amount to monitoring of employees: check with whoever handles privacy first, or set
 `"console_names": false`. The protocol is open (`app/central.py`); the console itself is not part of this
-repository.
+repository. A console on the local network, with a certificate it made itself and no public name, is recognised
+by `console_pin`, the SHA-256 fingerprint of that certificate: the PC connects only to the server presenting it,
+and checks before sending the key. Without `console_pin` the certificate must be valid as for a browser.
 
 Tested on 14 November 2026 on a single Windows 11 PC with Windows PowerShell 5.1 (silent install in 21 seconds,
 state, removal with nothing left behind); `Set-OmissisPolicy.ps1` on a scratch key of the user and, without

@@ -641,7 +641,11 @@ scorciatoie, i documenti anonimizzati dal pannello), sotto la voce «Uso manuale
 volte conta una volta sola, un documento una volta. In Impostazioni > Console centrale (vista avanzata, o sempre se il PC è collegato)
 si vede a chi è collegato il PC, quando è partito l'ultimo riepilogo, e «Vedi che cosa parte» lo mostra per
 intero. La chiave di collegamento viaggia solo verso l'indirizzo scelto: un rinvio altrove non viene seguito, e
-un indirizzo non `https` fuori da questo PC viene rifiutato. La console che riceve i riepiloghi è un prodotto a
+un indirizzo non `https` fuori da questo PC viene rifiutato. Di serie il certificato della console deve essere
+valido come per un browser. Per una console in rete locale, che si fa il certificato da sé, c'è `console_pin`:
+l'impronta SHA-256 di quel certificato. Con l'impronta il programma si collega, senza passare da un proxy, solo
+al server che presenta proprio quel certificato, e lo controlla appena finita la stretta di mano, prima che parta
+la richiesta con la chiave. La console che riceve i riepiloghi è un prodotto a
 parte e non sta in questo repository; il protocollo è una `POST` a `<console_url>/api/v1/report`.
 
 Conteggi per singola persona possono essere un controllo a distanza dei lavoratori: un'organizzazione che
@@ -883,9 +887,10 @@ dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'est
 `e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
 inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2e_central.py`
-(22 controlli): le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
+(26 controlli): le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
 registro dell'utente, mai da quelle di sistema) e il riepilogo per la console centrale, mandato a un servizio
-finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta.
+finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta, e una console con un certificato
+fatto da sé, accettata solo con l'impronta giusta.
 `e2e_desktop.py` (17 controlli, serve la protezione attiva) prova ciò che tocca il desktop:
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
