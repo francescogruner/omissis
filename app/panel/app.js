@@ -666,7 +666,7 @@ const recognitionSettings = test(async el => {
                   details: ["DATA", "ORA", "ETA", "GENERE", "TITOLO", "PROFESSIONE", "ISTRUZIONE", "LUOGO"]};
   const groups = Object.entries(GROUPS).map(([name, entries]) => [name, entries.filter(v => cat.known.includes(v))]).filter(([, entries]) => entries.length);
   el.innerHTML = `${managedNote(i)}<section class="card" aria-label="${esc(t("settings.card.recognition"))}">
-      ${line(t("recognition.model"), esc(t("recognition.model.below")), `<select id="model" aria-label="${esc(t("recognition.model"))}"><option value="omissis-base">${esc(t("recognition.model.base"))}</option><option value="omissis-small">${esc(t("recognition.model.small"))}</option></select>`)}
+      ${line(t("recognition.model"), esc(t("recognition.model.below")), `<select id="model" aria-label="${esc(t("recognition.model"))}"><option value="omissis-small">${esc(t("recognition.model.small"))}</option><option value="omissis-base">${esc(t("recognition.model.base"))}</option></select>`)}
       ${line(t("recognition.where"), "", `<select id="device" aria-label="${esc(t("recognition.where"))}">${["auto", "cuda", "cpu"].map(v => `<option value="${v}">${esc(t(`recognition.where.${v}`))}</option>`).join("")}</select>`)}
       ${["box", "attachments", "restore", "block_files"].map(k => line(t(`recognition.${k}`), esc(t(`recognition.${k}.below`)), toggle(k, t(`recognition.${k}`)))).join("")}
     </section>

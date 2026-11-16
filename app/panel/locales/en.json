@@ -195,8 +195,8 @@
 
  "recognition.model": "Model",
  "recognition.model.below": "Changing it requires restarting protection. If the model is not on this PC it is downloaded.",
- "recognition.model.base": "omissis-base · slightly more accurate, needs 16 GB of memory (1.2 GB)",
- "recognition.model.small": "omissis-small · recommended: lighter and faster (537 MB)",
+ "recognition.model.base": "omissis-base · for long documents: twice the size, needs 16 GB of memory (1.2 GB)",
+ "recognition.model.small": "omissis-small · the default: same protection, lighter and faster (537 MB)",
  "recognition.where": "Where the model runs",
  "recognition.where.auto": "Automatic",
  "recognition.where.cuda": "Graphics card",
