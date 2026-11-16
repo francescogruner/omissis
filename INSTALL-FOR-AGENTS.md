@@ -98,7 +98,7 @@ press **Install the command** in the panel (Connections, Desktop apps, "Plugins 
 | Tool | Command |
 |---|---|
 | Claude Code | `claude plugin marketplace add francescogruner/omissis-plugin` then `claude plugin install omissis@omissis` |
-| Codex | `codex plugin marketplace add francescogruner/omissis-plugin`, then enable Omissis among the plugins |
+| Codex | `codex plugin marketplace add francescogruner/omissis-plugin`, enable Omissis among the plugins, then have the person approve its hook with `/hooks` |
 | Gemini CLI | `gemini extensions install https://github.com/francescogruner/omissis-plugin` |
 | Kimi | `/plugins install https://github.com/francescogruner/omissis-plugin` |
 

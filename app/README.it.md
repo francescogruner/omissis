@@ -616,7 +616,10 @@ Provato: `e2e_plugins.py` (11 controlli) e **Claude Code dal vivo** (16/11/2026,
 copia di prova di Omissis, dati inventati): il messaggio con dati personali è stato fermato con la spiegazione di
 Omissis, e la versione con i segnaposto, mandata subito dopo, è partita e ha avuto risposta. I controlli ufficiali dei
 plugin di Kimi (`validate_plugin.py`) e di Claude Code (`claude plugin validate`) accettano il repository. **Non
-provati dentro lo strumento vero: Kimi, Codex e Gemini CLI**, i cui plugin seguono la documentazione.
+provati dentro lo strumento vero: Kimi, Codex e Gemini CLI**, i cui plugin seguono la documentazione. Per Codex c'è
+un passo in più: esegue i controlli dei plugin solo dopo che l'utente li ha approvati con `/hooks`. Il 17/11/2026 un
+controllo passato a `codex exec` con `-c` non è scattato, e il messaggio inventato è partito com'era: finché
+l'approvazione non è fatta, il plugin in Codex non protegge.
 
 **App già aperta.** Un'app aperta dal menu Start non ha la porta, e avviarla di nuovo porterebbe solo
 in primo piano la finestra che c'è già, senza protezione. Il pannello se ne accorge (legge l'elenco
@@ -813,9 +816,9 @@ collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serv
 | Gemini | **sperimentale**: formato scritto a memoria, provato solo su un'imitazione |
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
-| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; Codex in abbonamento e gateway proprio solo qui) e **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) |
+| Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; gateway proprio solo qui), **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) e **Codex 0.164 in abbonamento dal vivo** (17/11/2026: alla domanda «scrivi il cognome» ha risposto «non indicato»; il fornitore passato con `-c`, senza toccare `config.toml`) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
-| Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**: un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura) |
+| Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**, due volte (12/11 e 17/11/2026): un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura); la seconda volta il messaggio è stato scritto e inviato dalla porta di collegamento, e alla domanda «scrivi il cognome» il servizio ha risposto «non indicato» |
 | Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 40 controlli); pagine vere solo aperte, senza accedere |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
