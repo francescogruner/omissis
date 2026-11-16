@@ -265,7 +265,7 @@ class Supervisor:
                 "update": updates.status(),
                 "model": Path(info["model"]).name if info.get("model") else None, "device": info.get("device"),
                 "threshold": info.get("threshold"), "entries": info.get("entries"), "port": settings.read()["port"],
-                "groups_off": list(settings.read().get("groups_off") or []),   # gruppi di dati spenti a mano: la pagina iniziale lo dice
+                "groups_off": settings.reduced(),   # gruppi accesi di serie e spenti a mano: la pagina iniziale lo dice
                 "always_on": settings.read()["always_on"]}   # la protezione non si puo' fermare: la pagina tiene fermo il pulsante
 
 
@@ -656,7 +656,8 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/settings":
                 # la chiave di collegamento alla console non torna alla pagina: le basta sapere se c'e' (/api/console)
                 self._respond(200, {**{k: v for k, v in settings.read().items() if k not in ("console_key", "engine_key")}, "certificate": certificate(),
-                                     "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON, "managed": settings.locked(),
+                                     "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON, "groups_optional": list(settings.OPTIONAL),
+                                     "profile_now": settings.profile_of(), "profiles": settings.PROFILES, "managed": settings.locked(),
                                      "first_run": settings.first_run(SUP.test)})
             elif u.path == "/api/console":
                 self._respond(200, central.state())
@@ -732,12 +733,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, SUP.status())
             elif p == "/api/settings":
                 # la console e il server di inferenza hanno le loro chiamate: qui non si toccano. always_on si puo' solo imporre
-                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith(("console_", "engine_", "serve")) and k != "always_on"}
+                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith(("console_", "engine_", "serve")) and k not in ("always_on", "profile")}
+                # un profilo, per chi usa il PC, e' un modo rapido di scegliere gruppi e categorie tutti insieme
+                if data.get("profile") in settings.PROFILES:
+                    changes.update({k: list(v) for k, v in settings.PROFILES[data["profile"]].items()})
                 guard(*changes, changes=changes)
                 new_ones = {k: v for k, v in settings.write({**settings.read(), **changes}).items() if k not in ("console_key", "engine_key")}
                 if "shortcuts" in data and SHORTCUTS is not None:
                     SHORTCUTS.configure(clipboard.choices(new_ones))
-                if "categories" in data:   # il motore rilegge quali categorie in piu' sostituire
+                if "categories" in changes:   # il motore rilegge quali categorie in piu' sostituire
                     try:
                         engine("/profile", {})
                     except Exception:   # noqa: BLE001  (motore spento: le leggera' all'avvio)

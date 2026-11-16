@@ -8,6 +8,6 @@
   "deepseek": "block",
   "copilot": "protect"
  },
- "groups_off": [],
+ "groups_off": ["organizations"],
  "vault_days": 0
 }

@@ -114,7 +114,7 @@ def summary(phase):
     cfg, lock = settings.read(), settings.locked()
     out = {"v": FORMAT, "device": device_id(), "sent": time.strftime("%Y-%m-%d %H:%M:%S"), "version": VERSION,
            "channel": updates.channel(), "os": platform.platform()[:80], "protection": str(phase), "model": str(cfg.get("model"))[:40],
-           "updates": updates.mode(), "groups_off": list(cfg.get("groups_off") or []),
+           "updates": updates.mode(), "groups_off": settings.reduced(cfg),
            "managed": lock["keys"] + [f"policies.{s}" for s in lock["policies"]],
            "rules_accept": cfg.get("console_rules") is True, "rules_version": rules()["version"],
            "days": days(), "tools": tools()}

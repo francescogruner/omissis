@@ -147,8 +147,9 @@ console; il cliente con accesso in sola lettura vede i suoi avvisi e nient'altro
 
 Scegli un cliente in alto: compare la scheda «Regole per i PC di questo cliente». Lì si fissano le regole per servizio
 (proteggi, registra, blocca, ignora), il caricamento di file, gli allegati, la sostituzione nella casella di scrittura,
-gli aggiornamenti, l'analisi degli strumenti AI, e si possono vietare la protezione ridotta e lo spegnimento della
-protezione. «Salva e manda ai PC»: ogni PC le riceve in risposta al suo prossimo riepilogo, quindi entro un'ora, e
+gli aggiornamenti, l'analisi degli strumenti AI, il **profilo dei dati** (che cosa sostituire: «Essenziale», «Riservato»,
+«Dati particolari» o «Massimo»; fissato da qui, chi usa il PC non lo cambia né può ridurre la protezione), e si può
+vietare lo spegnimento della protezione. «Salva e manda ai PC»: ogni PC le riceve in risposta al suo prossimo riepilogo, quindi entro un'ora, e
 subito con «Invia ora» dal suo pannello. Con «Tutti i clienti» la scheda non c'è: le regole sono di un cliente.
 
 **Un PC che deve fare diversamente dagli altri.** Nella tabella dei PC ogni riga ha il pulsante «Regole»: apre le

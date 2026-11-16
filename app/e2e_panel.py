@@ -510,6 +510,37 @@ def main():
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: gruppi di dati, spegnere chiede conferma e la pagina iniziale lo ricorda; persone e segreti non si spengono", False, str(ex)[:160])
 
+                # --- profilo dei dati: una scelta sola accende e spegne insieme gruppi e categorie; con «Essenziale» i nomi delle
+                # aziende restano in chiaro senza che sia «protezione ridotta», e toccando una voce il profilo diventa «personalizzato»
+                try:
+                    cfg = lambda: json.loads((paths.DATA / "settings.json").read_text(encoding="utf-8"))   # noqa: E731
+                    pag.goto(f"{PANEL}/#/settings/recognition")
+                    pag.wait_for_selector("#profile", timeout=15000)
+                    first = pag.input_value("#profile")   # la copia di prova parte con tutti i gruppi accesi
+                    pag.select_option("#profile", "standard")
+                    essential = wait_until(lambda: cfg().get("groups_off") == ["organizations"] and cfg().get("categories") == [])
+                    shown = wait(pag, "() => document.getElementById('grp-organizations')?.checked === false && document.getElementById('profile')?.value === 'standard'", timeout=10)
+                    pag.goto(f"{PANEL}/#/start")
+                    pag.wait_for_selector("#main_switch")
+                    pag.wait_for_timeout(1500)
+                    quiet = pag.locator("#reduced .note").count() == 0
+                    pag.goto(f"{PANEL}/#/settings/recognition")
+                    pag.wait_for_selector("#profile", timeout=15000)
+                    pag.select_option("#profile", "special")
+                    special = wait_until(lambda: cfg().get("groups_off") == [] and len(cfg().get("categories") or []) == 5)
+                    wait(pag, "() => document.getElementById('grp-organizations')?.checked === true && document.getElementById('profile')?.value === 'special'", timeout=10)
+                    pag.evaluate("document.getElementById('grp-organizations').click()")   # un gruppo facoltativo: spegnerlo non chiede conferma
+                    custom = wait_until(lambda: cfg().get("groups_off") == ["organizations"]) and wait(pag, "() => document.getElementById('profile')?.value === 'custom'", timeout=10)
+                    asked = pag.locator("#confirm[open]").count()
+                    words = pag.inner_text("#grpTitle") + pag.evaluate("document.getElementById('profile').closest('.setting').innerText")
+                    pag.select_option("#profile", "confidential")
+                    back = wait_until(lambda: cfg().get("groups_off") == [] and cfg().get("categories") == [])
+                    mark(f"{language}: profilo dei dati: «Essenziale» lascia in chiaro solo i nomi delle aziende, senza avviso di protezione ridotta; gli altri accendono insieme gruppi e categorie; una voce toccata a mano lo rende «personalizzato»",
+                         first == "confidential" and essential and shown and quiet and special and custom and asked == 0 and back and "profile." not in words,
+                         f"all'inizio {first} · essenziale {essential} · mostrato {shown} · nessun avviso {quiet} · dati particolari {special} · personalizzato {custom} · conferme {asked} · ripristinato {back}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: profilo dei dati", False, str(ex)[:160])
+
                 # --- testo: incolla -> mascherato e copiato; incolla di nuovo -> valori veri
                 pag.goto(f"{PANEL}/#/text")
                 pag.wait_for_selector("#paste")

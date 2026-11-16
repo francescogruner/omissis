@@ -147,7 +147,8 @@ them; a customer with read-only access sees its own alerts and nothing else.
 
 Choose a customer at the top: the card "Rules for this customer's PCs" appears. There you set the rules per service
 (protect, record, block, ignore), file uploads, attachments, replacement in the writing box, updates, the scan for AI
-tools, and you can forbid reduced protection and turning protection off. "Save and send to the PCs": each PC receives
+tools, the **data profile** (what to replace: "Essential", "Confidential", "Special categories" or "Maximum"; fixed
+from here, whoever uses the PC cannot change it or reduce protection), and you can forbid turning protection off. "Save and send to the PCs": each PC receives
 them in the answer to its next summary, so within an hour, and at once with "Send now" from its panel. With "All
 customers" the card is not there: rules belong to one customer.
 

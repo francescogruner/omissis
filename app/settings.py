@@ -29,7 +29,12 @@ DEFAULTS = {
     "categories": [],             # categorie in piu' da sostituire (DATA, PROFESSIONE, SALUTE...): di serie restano in chiaro
     "mcp_folders": [],            # cartelle in piu' che il server MCP puo' usare, oltre a Documenti, Desktop e Download
     "gateway_upstreams": {},      # chi ha gia' un proprio gateway: nome usato nell'indirizzo (anthropic, openai...) -> dove inoltrare
-    "groups_off": [],             # gruppi di dati che chi usa il PC ha scelto di NON sostituire (vedi GROUPS): di serie nessuno
+    # gruppi di dati che NON vengono sostituiti (vedi GROUPS). Di serie restano in chiaro solo i nomi di aziende e
+    # organizzazioni (non sono dati personali); gli altri gruppi sono accesi, e spegnerne uno riduce la protezione
+    "groups_off": ["organizations"],
+    # un profilo imposto (da chi amministra il PC, o dalla console): fissa insieme gruppi e categorie in piu' (vedi PROFILES).
+    # Chi usa il PC non lo sceglie da qui: per lui un profilo e' solo un modo rapido di accendere e spegnere le singole voci
+    "profile": "",
     # True: la protezione non si ferma dal pannello ne' dall'icona, e il programma non si chiude dall'icona. Nel pannello non
     # c'e': la impone chi amministra il PC, oppure la console. Non ferma chi chiude il programma da Gestione attivita'
     "always_on": False,
@@ -52,7 +57,7 @@ MERGED = {"policies"}
 # Che cosa una console puo' imporre a un PC che ha scelto di accettarne le regole. Restano fuori, apposta, gli indirizzi a
 # cui il PC manda qualcosa (console, server di inferenza, gateway), le cartelle che apre, il nome nel riepilogo e questa
 # stessa scelta: chi entra in una console non deve poter dirottare i dati dei PC.
-CONSOLE_RULES = {"policies", "block_files", "attachments", "box", "updates", "scan", "groups_off", "always_on"}
+CONSOLE_RULES = {"policies", "block_files", "attachments", "box", "updates", "scan", "groups_off", "always_on", "profile"}
 CONSOLE_FILE = paths.DATA / "console_rules.json"
 _cache = {"mtime": None, "managed": None, "console": None, "data": None}
 
@@ -121,6 +126,15 @@ def imposed():
     out = {**console, **admin}
     if console.get("policies") and admin.get("policies"):
         out["policies"] = {**console["policies"], **admin["policies"]}
+    # un profilo imposto fissa gruppi e categorie: chi usa il PC non li cambia. Se chi vince (l'amministratore del PC) ha
+    # scritto lui gruppi o categorie voce per voce, valgono quelli
+    chosen = PROFILES.get(out.get("profile") or "")
+    if chosen is None:
+        out.pop("profile", None)
+    else:
+        for key, value in chosen.items():
+            if key not in admin:
+                out[key] = list(value)
     return out
 
 
@@ -164,6 +178,18 @@ GROUPS = {"payments": ["IBAN", "CARTA", "CARTA_SEC", "PIVA"],
           "organizations": ["ORG"],
           "it": ["IP", "MAC", "HOSTNAME", "DOMINIO", "URL", "ACCOUNT", "ID_CLOUD", "ID_DISPOSITIVO"],
           "records": ["ID_PRATICA", "CATASTO", "ID_UTENZA", "TARGA", "ID_VEICOLO"]}
+# Questo gruppo di serie e' spento: i nomi di aziende e organizzazioni non sono dati personali. Chi vuole tenerli riservati
+# lo accende. Tenerlo spento non e' «protezione ridotta».
+OPTIONAL = ("organizations",)
+# Le categorie in piu' che il modello conosce e di serie lascia in chiaro, nei due gruppi con cui si accendono
+SPECIAL = ["SALUTE", "RELIGIONE", "POLITICA", "ORIENTAMENTO", "ORIGINE"]
+DETAILS = ["DATA", "ORA", "ETA", "GENERE", "TITOLO", "PROFESSIONE", "ISTRUZIONE", "LUOGO"]
+# I profili: combinazioni pronte di gruppi e categorie, dalla meno alla piu' stretta. Nessuno spegne un gruppo acceso di
+# serie: un profilo non riduce mai la protezione.
+PROFILES = {"standard": {"groups_off": ["organizations"], "categories": []},        # persone, identificativi, pagamenti, informatica
+            "confidential": {"groups_off": [], "categories": []},                  # anche aziende e organizzazioni
+            "special": {"groups_off": [], "categories": sorted(SPECIAL)},          # anche i dati particolari del GDPR
+            "maximum": {"groups_off": [], "categories": sorted(SPECIAL + DETAILS)}}   # tutto cio' che il modello riconosce
 # Questi non si spengono: sono il motivo per cui il programma esiste.
 ALWAYS_ON = {"people": ["PERSONA", "EMAIL", "TELEFONO", "INDIRIZZO", "CAP", "CITTA", "DATA_NASCITA", "CF", "DOC_ID"], "secrets": ["SEGRETO"]}
 
@@ -191,6 +217,21 @@ def role_mailbox(address):
     local, _, domain = str(address).strip().strip("<>.,;:").lower().partition("@")
     words = [w for w in re.split(r"[^a-z]+", local) if w]
     return bool(domain) and bool(words) and domain not in CONSUMER_DOMAINS and all(w in ROLE_WORDS for w in words)
+
+
+def reduced(cfg=None):
+    """I gruppi accesi di serie che qualcuno ha spento: e' questa la «protezione ridotta» che pannello e console segnalano."""
+    return [g for g in ((cfg or read()).get("groups_off") or []) if g in GROUPS and g not in OPTIONAL]
+
+
+def profile_of(cfg=None):
+    """Il profilo a cui corrispondono le scelte in vigore, oppure «custom» se sono state fatte voce per voce."""
+    cfg = cfg or read()
+    now = (set(cfg.get("groups_off") or []), set(cfg.get("categories") or []))
+    for name, p in PROFILES.items():
+        if now == (set(p["groups_off"]), set(p["categories"])):
+            return name
+    return "custom"
 
 
 def labels_off(cfg=None):
@@ -229,6 +270,7 @@ def _clean(data):
                            if k in catalog.PER_ID and v in catalog.POLICIES}
     clean["onboarded"] = clean["onboarded"] is True
     clean["always_on"] = clean["always_on"] is True
+    clean["profile"] = clean["profile"] if clean["profile"] in PROFILES else ""
     date = clean["shortcuts"] if isinstance(clean["shortcuts"], dict) else {}
     clean["shortcuts"] = {k: str(date.get(k, v)).strip().lower()[:40] for k, v in DEFAULTS["shortcuts"].items()}
     clean["categories"] = sorted({str(x) for x in clean["categories"] or [] if str(x).isupper() and len(str(x)) <= 24})

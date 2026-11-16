@@ -83,6 +83,34 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
         imposed_file.write_text(json.dumps(data), encoding="utf-8") if data is not None else imposed_file.unlink(missing_ok=True)
         managed.read(fresh=True)
 
+    # ---- che cosa si sostituisce di serie, e i profili
+    start = settings.read()
+    check("di serie: sostituiti persone, identificativi, pagamenti e dati informatici; in chiaro solo i nomi delle aziende, e non è «protezione ridotta»",
+          start["groups_off"] == ["organizations"] and start["categories"] == [] and settings.profile_of() == "standard" and settings.reduced() == []
+          and settings.labels_off() == {"ORG"} and settings.reduced({"groups_off": ["organizations", "it"]}) == ["it"], f"{start['groups_off']} {settings.profile_of()}")
+    names = {}
+    for name, wanted in settings.PROFILES.items():
+        after = settings.write({**settings.read(), **{k: list(v) for k, v in wanted.items()}})
+        names[name] = (settings.profile_of(), settings.reduced(), sorted(after["groups_off"]), len(after["categories"]))
+    settings.write({**settings.read(), "groups_off": ["organizations"], "categories": ["SALUTE"]})
+    odd = settings.profile_of()
+    settings.write({**settings.read(), "groups_off": ["organizations"], "categories": []})
+    check("i quattro profili, dal meno al più stretto: nessuno spegne un gruppo acceso di serie; scelte fatte voce per voce risultano «personalizzato»",
+          names == {"standard": ("standard", [], ["organizations"], 0), "confidential": ("confidential", [], [], 0), "special": ("special", [], [], 5),
+                    "maximum": ("maximum", [], [], 13)} and odd == "custom", f"{names} {odd}")
+    impose({"profile": "special"})
+    fixed, cannot = settings.read(), settings.write({**settings.read(), "groups_off": ["organizations", "it"], "categories": []})
+    check("un profilo imposto da chi amministra il PC fissa gruppi e categorie: chi usa il PC non li cambia e non riduce la protezione",
+          fixed["groups_off"] == [] and fixed["categories"] == sorted(settings.SPECIAL) and settings.locked()["keys"] == ["categories", "groups_off", "profile"]
+          and cannot["groups_off"] == [] and cannot["categories"] == sorted(settings.SPECIAL), str(settings.locked()))
+    impose({"profile": "maximum", "groups_off": ["organizations"]})
+    mixed = settings.read()
+    impose({"profile": "inventato"})
+    unknown = (settings.read()["groups_off"], settings.locked()["keys"])
+    impose(None)
+    check("una voce scritta a mano dall'amministratore vince sul profilo; un profilo che non esiste non impone nulla",
+          mixed["groups_off"] == ["organizations"] and len(mixed["categories"]) == 13 and unknown == (["organizations"], []) and settings.read()["categories"] == [], f"{mixed['groups_off']} {unknown}")
+
     # ---- impostazioni imposte
     check("senza vincoli: nulla è bloccato", settings.locked() == {"keys": [], "policies": [], "console": []})
     check("primo avvio: la configurazione guidata viene proposta, ma non durante le prove automatiche",
@@ -152,6 +180,13 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     check("anche su questo vince l'amministratore del PC", settings.read()["always_on"] is False and settings.locked()["console"] == []
           and settings.locked()["keys"] == ["always_on"])
     impose(None)
+    central.receive(settings.read(), json.dumps({"ok": True, "rules": {"profile": "confidential"}, "rules_version": 7}).encode("utf-8"))
+    by_console = (settings.read()["groups_off"], settings.read()["categories"], settings.locked()["console"], settings.write({**settings.read(), "groups_off": ["organizations"]})["groups_off"])
+    impose({"profile": "standard"})
+    over = settings.read()["groups_off"]
+    impose(None)
+    check("la console può imporre un profilo dei dati (qui: anche i nomi delle aziende); il profilo dell'amministratore del PC vince sul suo",
+          by_console == ([], [], ["profile"], []) and over == ["organizations"], f"{by_console} {over}")
     central.receive(settings.read(), answer)
     settings.write({**settings.read(), "console_url": "https://altra-console.example"})
     check("collegato a un'altra console, le regole della prima non restano in vigore", settings.read()["block_files"] is False and settings.locked()["console"] == []

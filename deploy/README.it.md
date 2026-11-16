@@ -58,7 +58,8 @@ Solo le chiavi scritte nel file vengono imposte; ogni altra impostazione resta c
 | `model` | `omissis-small` (di serie), `omissis-base` | Il modello. Su PC da ufficio il piccolo; il grande vuole 16 GB |
 | `updates` | `automatic`, `notify`, `never` | `never` se le versioni le distribuisci tu, con questo stesso script |
 | `policies` | per servizio: `protect`, `record`, `block`, `ignore` | Per esempio `"deepseek": "block"`. I nomi dei servizi sono quelli della sezione Servizi AI del pannello |
-| `groups_off` | `payments`, `organizations`, `it`, `records` | Gruppi di dati da **non** sostituire. Di serie nessuno: spegnerne uno riduce la protezione |
+| `profile` | `standard`, `confidential`, `special`, `maximum` | Il profilo dei dati, fissato per tutti: `standard` (di serie) sostituisce persone, identificativi, pagamenti e dati informatici; `confidential` anche i nomi delle aziende; `special` anche i dati particolari (salute, religione…); `maximum` tutto ciò che il modello riconosce. Imposto, l'utente non cambia né gruppi né categorie |
+| `groups_off` | `payments`, `organizations`, `it`, `records` | Gruppi di dati da **non** sostituire, scritti a mano (vince sul profilo). Di serie solo `organizations`: spegnere uno degli altri riduce la protezione |
 | `always_on` | `true` | La protezione non si ferma dal pannello né dall'icona, e il programma non si chiude dall'icona. Non ferma chi lo chiude da Gestione attività |
 | `view` | `simple`, `advanced` | Che cosa vede l'utente quando apre il pannello |
 | `language` | `it`, `en`, `auto` | La lingua del pannello |
@@ -116,7 +117,7 @@ pulsante «Vedi che cosa parte» mostra il riepilogo esatto.
   pagina delle versioni ed è gratuita fino a 5 PC (vedi [`../console/README.it.md`](../console/README.it.md)).
 - Un rinvio verso un altro indirizzo non viene seguito, e un indirizzo non `https` viene rifiutato.
 - **Regole dalla console.** Con `"console_rules": true` il PC applica le regole che la console gli manda in risposta
-  al riepilogo (per servizio, file, allegati, aggiornamenti, analisi, protezione ridotta, divieto di spegnere la
+  al riepilogo (per servizio, file, allegati, aggiornamenti, analisi, profilo dei dati, divieto di spegnere la
   protezione: nient'altro). Di serie è spento. Ciò che è scritto in questa chiave di registro vince sempre sulle regole della console.
 - **Console in rete locale.** Una console interna non ha un nome pubblico né un certificato firmato da
   un'autorità: si fa il certificato da sé e ne dà l'impronta. Con `"console_pin": "<impronta SHA-256>"` il PC si

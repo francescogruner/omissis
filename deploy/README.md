@@ -49,7 +49,7 @@ source: it is downloaded compiled from the releases page and is free up to 5 PCs
 by `console_pin`, the SHA-256 fingerprint of that certificate: the PC connects only to the server presenting it,
 and checks before sending the key. Without `console_pin` the certificate must be valid as for a browser.
 With `"console_rules": true` the PC applies the rules the console sends back with each summary (per service, files,
-attachments, updates, scan, reduced protection, the ban on turning protection off: nothing else). It is off by default,
+attachments, updates, scan, the data profile, the ban on turning protection off: nothing else). It is off by default,
 and whatever is written in this registry key always wins over the console's rules.
 
 `"always_on": true` in the locked settings means protection cannot be stopped from the panel or from the icon next to

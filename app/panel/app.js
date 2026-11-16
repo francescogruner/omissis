@@ -660,6 +660,7 @@ REFRESH.settings = s => {
 };
 const recognitionSettings = test(async el => {
   const [i, l, cat] = await Promise.all([api("/api/settings"), api("/api/lists"), api("/api/categories")]);
+  const optional = i.groups_optional || [], fixed = ((i.managed || {}).keys || []).some(k => ["groups_off", "categories", "profile"].includes(k));
   // le categorie in più del modello, in due gruppi: si accendono insieme perché da sole servono a poco
   const GROUPS = {special: ["SALUTE", "RELIGIONE", "POLITICA", "ORIENTAMENTO", "ORIGINE"],
                   details: ["DATA", "ORA", "ETA", "GENERE", "TITOLO", "PROFESSIONE", "ISTRUZIONE", "LUOGO"]};
@@ -675,6 +676,7 @@ const recognitionSettings = test(async el => {
     </section>
     <section class="card" aria-labelledby="grpTitle">
       <div class="inside"><h2 id="grpTitle">${esc(t("groups.title"))}</h2><p>${esc(t("groups.below"))}</p></div>
+      ${line(t("profile.title"), esc(t(`profile.${i.profile_now}.below`)), `<select id="profile" aria-label="${esc(t("profile.title"))}">${Object.keys(i.profiles).map(p => `<option value="${p}">${esc(t(`profile.${p}`))}</option>`).join("")}${i.profile_now === "custom" ? `<option value="custom">${esc(t("profile.custom"))}</option>` : ""}</select>`)}
       ${Object.entries(i.groups_always).map(([name, entries]) => line(t(`groups.${name}`), esc(entries.map(dataKind).join(", ")), label(t("groups.always"), "ok"))).join("")}
       ${Object.entries(i.groups).map(([name, entries]) => line(t(`groups.${name}`), esc(entries.map(dataKind).concat(tSe(`groups.${name}.more`, "") || []).join(", ")), toggle(`grp-${name}`, t(`groups.${name}`)))).join("")}
     </section>
@@ -689,14 +691,19 @@ const recognitionSettings = test(async el => {
     <div class="line"><button class="button primary" id="saveLists">${esc(t("lists.save"))}</button><span class="faded small">${esc(t("lists.note"))}</span></div>`;
   for (const k of ["model", "device"]) { $(`#${k}`).value = i[k]; $(`#${k}`).onchange = test(e => save({[k]: e.target.value})); }
   for (const k of ["box", "attachments", "restore", "block_files"]) { $(`#${k}`).checked = i[k] !== false && !!i[k]; $(`#${k}`).onchange = test(e => save({[k]: e.target.checked})); }
+  // il profilo: un modo rapido di accendere e spegnere insieme gruppi e categorie; toccando una voce diventa «personalizzato»
+  $("#profile").value = i.profile_now;
+  $("#profile").disabled = fixed;
+  $("#profile").onchange = test(async e => { if (e.target.value !== "custom") { await save({profile: e.target.value}, "profile.saved"); recognitionSettings(el); } });
   let off = (i.groups_off || []).slice();
   for (const name of Object.keys(i.groups)) {
     $(`#grp-${name}`).checked = !off.includes(name);
     $(`#grp-${name}`).onchange = test(async e => {
-      // spegnere riduce la protezione: lo si fa solo dopo una conferma, e la pagina iniziale lo ricorda
-      if (!e.target.checked && !await confirm(t("groups.confirm.title", {name: t(`groups.${name}`)}), t("groups.confirm"), t("groups.confirm.yes"))) { e.target.checked = true; return; }
+      // spegnere un gruppo acceso di serie riduce la protezione: lo si fa solo dopo una conferma, e la pagina iniziale lo ricorda
+      if (!e.target.checked && !optional.includes(name) && !await confirm(t("groups.confirm.title", {name: t(`groups.${name}`)}), t("groups.confirm"), t("groups.confirm.yes"))) { e.target.checked = true; return; }
       off = off.filter(g => g !== name).concat(e.target.checked ? [] : [name]);
       await save({groups_off: off}, e.target.checked ? "groups.saved_on" : "groups.saved_off");
+      recognitionSettings(el);
     });
   }
   let enabled = cat.enabled.slice();
@@ -705,6 +712,7 @@ const recognitionSettings = test(async el => {
     $(`#cat-${name}`).onchange = test(async e => {
       enabled = enabled.filter(v => !entries.includes(v)).concat(e.target.checked ? entries : []);
       await save({categories: enabled});
+      recognitionSettings(el);
     });
   }
   lock(i, [["#model", "model"], ["#device", "device"], ...["box", "attachments", "restore", "block_files"].map(k => [`#${k}`, k]),

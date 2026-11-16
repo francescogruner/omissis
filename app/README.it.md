@@ -215,9 +215,30 @@ dati può spegnerne il gruppo in Impostazioni → Riconoscimento → Cosa sostit
 | Persone, contatti e documenti d'identità | nomi, e-mail, telefoni, indirizzi, CAP, città, data di nascita, codice fiscale, documenti | no |
 | Password, chiavi e altri segreti | password, token, chiavi, stringhe di connessione | no |
 | Conti e pagamenti | IBAN, carte, partita IVA | sì |
-| Aziende e organizzazioni | nomi di aziende, studi, clienti; caselle generiche (info@, amministrazione@…) | sì |
+| Aziende e organizzazioni | nomi di aziende, studi, clienti; caselle generiche (info@, amministrazione@…) | sì, e **di serie è spento** |
 | Dati informatici | indirizzi IP e MAC, nomi di PC e server, domini, indirizzi web, account, identificativi cloud e di dispositivo | sì |
 | Pratiche, utenze e veicoli | polizze, protocolli, matricole, dati catastali, codici di fornitura, targhe, telai | sì |
+
+**Di serie** (dal 16/11/2026) sono accesi tutti i gruppi tranne «Aziende e organizzazioni»: i nomi delle aziende non
+sono dati personali, e chi li vuole riservati li accende. Tenerlo spento non è «protezione ridotta»
+(`settings.OPTIONAL`, `settings.reduced()`): lo è spegnere uno dei gruppi accesi di serie. Chi aveva già salvato le
+sue scelte le ritrova com'erano.
+
+**Profili** (`settings.PROFILES`): quattro combinazioni pronte di gruppi e categorie in più, dalla meno alla più
+stretta. Nessuna spegne un gruppo acceso di serie.
+
+| Profilo | Che cosa sostituisce |
+|---|---|
+| `standard` («Essenziale», di serie) | persone e contatti, identificativi, pagamenti, dati informatici, pratiche e utenze |
+| `confidential` («Riservato») | come sopra, più aziende e organizzazioni |
+| `special` («Dati particolari») | come sopra, più salute, religione, opinioni politiche, orientamento, origine |
+| `maximum` («Massimo») | tutto ciò che il modello riconosce: anche date, orari, età, genere, titoli, professione, istruzione, luoghi |
+
+Per chi usa il PC un profilo è un modo rapido di accendere e spegnere insieme le singole voci (Impostazioni →
+Riconoscimento → Profilo): toccando poi una voce a mano il profilo diventa «Personalizzato». **In azienda il profilo
+si impone**: `"profile": "confidential"` tra le impostazioni bloccate (`Set-OmissisPolicy.ps1`), oppure dalla console
+(regola «Profilo dei dati»). Imposto, fissa gruppi e categorie, e chi usa il PC non li cambia né può ridurre la
+protezione. Se l'amministratore scrive a mano anche `groups_off` o `categories`, quelle voci vincono sul profilo.
 
 Esempi: un tecnico che chiede all'AI di ragionare su una rete spegne i dati informatici e tiene
 tutto il resto; uno studio che vuole leggere i numeri di pratica nelle risposte spegne l'ultimo
@@ -763,7 +784,7 @@ da quel momento valgono come le impostazioni bloccate, il pannello dice quante s
 nell'elenco dei vincoli risulta che vengono dalla console (`settings.from_console`). Tre limiti, scritti nel codice:
 
 - la console può imporre **solo** le regole per servizio (`policies`), `block_files`, `attachments`, `box`,
-  `updates`, `scan`, `groups_off` e `always_on` (`settings.CONSOLE_RULES`). Non può toccare gli indirizzi a cui il PC manda
+  `updates`, `scan`, `groups_off`, `always_on` e `profile` (`settings.CONSOLE_RULES`). Non può toccare gli indirizzi a cui il PC manda
   qualcosa (console, server di inferenza, gateway), le cartelle, il nome nel riepilogo, né questa stessa scelta:
   chi entrasse in una console senza diritto potrebbe allentare le regole, non farsi mandare i dati;
 - dove console e amministratore del PC dicono cose diverse **vince l'amministratore del PC** (il registro di
@@ -1019,7 +1040,7 @@ dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'est
 `e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
 inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2e_central.py`
-(42 controlli): le regole mandate dalla console (accettate solo per scelta, solo quelle ammesse, mai sopra
+(47 controlli): che cosa si sostituisce di serie e i profili dei dati, le regole mandate dalla console (accettate solo per scelta, solo quelle ammesse, mai sopra
 l'amministratore del PC), le impostazioni imposte dall'amministratore (da un file di prova e da una chiave di prova del
 registro dell'utente, mai da quelle di sistema) e il riepilogo per la console centrale, mandato a un servizio
 finto: che cosa contiene, chiave rifiutata, rinvio non seguito, console spenta, e una console con un certificato
@@ -1032,7 +1053,7 @@ impronta sbagliate vengano rifiutate, che a server spento non parta nulla, e la 
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (72 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (74 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi, `OMISSIS_MANAGED_FILE` per le impostazioni imposte) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,
