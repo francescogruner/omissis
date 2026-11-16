@@ -49,8 +49,8 @@ light: 1 processor and 1 GB of memory are enough for hundreds of PCs.
    it does not know the certificate: that is expected, because no authority signed it; go on ("Advanced", then
    "Proceed"). Seeing that no login exists yet, the page asks for a name and a password (at least 12 characters)
    and lets you in. **It works only from the console's own computer**: nobody on the network can get there before
-   you. Right after, the page shows the "First steps": create a customer, give the file to the PCs, wait for the
-   first summary.
+   you. Right after, a one-minute **guided tour** starts by itself, lighting up the parts of the page one at a time,
+   and the "First steps" appear: create a customer, give the file to the PCs, wait for the first summary.
 
    If you prefer the terminal, or work without a screen (in an administrator window):
 
@@ -120,6 +120,23 @@ If the customer wants to see their own numbers, create a read-only login for the
 **Before connecting a customer** talk to whoever handles privacy there: with the names of computers and users
 the console shows how much each person uses AI services, and that can amount to remote monitoring of employees.
 With `"console_names": false` in the file only the totals arrive.
+
+## The guide inside the page
+
+At the top right there is the **"Guide"** button. Inside:
+
+- **"Take the tour of the console"**: the same tour as the first sign-in, whenever you want. To anyone signing in for
+  the first time from a browser the page offers it by itself, and "Not now" removes the offer.
+- **"How far your console is"**: six things to do, marked as done by looking at the real data (a customer created, a
+  PC connected, PCs accepting rules, rules imposed, a destination for alerts, a second login).
+- **The topics**, with a search box: connecting PCs, blocking an AI service, preventing protection from being turned
+  off, rules for a single PC, alerts, logins, Microsoft sign-in, the log, the licence, backups and passwords. In each
+  one **"Show me"** takes you to the right spot on the page and lights it up, one step at a time; where needed it
+  picks a customer by itself, or goes back to "All customers".
+
+While a tour is open the page underneath stays live: you can click, type and choose without closing it. The arrow keys
+move back and forth, and Esc closes it. A customer with read-only access sees a shorter tour and guide, without what
+concerns management.
 
 ## Managing the PCs from the console
 
@@ -320,7 +337,8 @@ script, and does not answer in plain HTTP.
 That test was made with the earlier package, which carried Python: with the compiled program the installation as
 administrator has to be repeated.
 
-The parts of "Managing the PCs from the console" are tested automatically, on the same computer: the rules reach the
+The guided tour and the guide are tested automatically in a browser, in Italian and in English (the lit spot is the
+right one, the page underneath stays live, "How far your console is" matches the data). The parts of "Managing the PCs from the console" are tested automatically, on the same computer: the rules reach the
 real program, which applies them only if it chose to accept them; alerts reach a fake web address and a fake mail
 server; the log catches a changed or removed row. **Sign-in with a Microsoft account is tested only against a fake
 sign-in service**: it has not yet been tried with a real organisation on Entra ID, nor have alerts towards a real

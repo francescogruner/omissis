@@ -49,7 +49,8 @@ leggera: 1 processore e 1 GB di memoria bastano per centinaia di PC.
    non conosce il certificato: è atteso, perché nessuna autorità lo ha firmato; si prosegue («Avanzate», poi
    «Procedi»). La pagina, vedendo che non esiste ancora nessun accesso, ti chiede nome e password (almeno 12
    caratteri) ed entri. **Funziona solo dal computer della console**: dalla rete nessuno può crearselo prima di te.
-   Subito dopo la pagina mostra i «Primi passi»: creare un cliente, dare il file ai PC, aspettare il primo riepilogo.
+   Subito dopo parte da solo un **giro guidato** di un minuto, che illumina una alla volta le parti della pagina, e
+   compaiono i «Primi passi»: creare un cliente, dare il file ai PC, aspettare il primo riepilogo.
 
    Chi preferisce il terminale, o lavora senza schermo (in una finestra da amministratore):
 
@@ -119,6 +120,23 @@ Se il cliente vuole vedere i suoi numeri, creagli un accesso in sola lettura:
 **Prima di collegare un cliente** senti chi si occupa di privacy da lui: con i nomi dei computer e degli utenti
 la console mostra quanto ogni persona usa i servizi AI, e può essere un controllo a distanza dei lavoratori.
 Con `"console_names": false` nel file arrivano solo i totali.
+
+## La guida dentro la pagina
+
+In alto a destra c'è il pulsante **«Guida»**. Dentro:
+
+- **«Fai il giro della console»**: lo stesso giro del primo ingresso, quando si vuole. A chi entra per la prima volta
+  da un browser la pagina lo propone da sé, e «Non ora» lo toglie.
+- **«A che punto è la tua console»**: sei cose da fare, segnate come fatte guardando i dati veri (un cliente creato, un
+  PC collegato, PC che accettano le regole, regole imposte, una destinazione per gli avvisi, un secondo accesso).
+- **Gli argomenti**, con la ricerca: collegare i PC, bloccare un servizio AI, impedire di spegnere la protezione, regole
+  per un solo PC, avvisi, accessi, ingresso con Microsoft, registro, licenza, copie e password. In ognuno
+  **«Fammi vedere»** porta nel punto giusto della pagina e lo illumina, un passo alla volta; dove serve sceglie da sé
+  un cliente, o torna a «Tutti i clienti».
+
+Mentre un giro è aperto la pagina sotto resta viva: si può cliccare, scrivere e scegliere senza chiuderlo. Si va avanti
+e indietro anche con le frecce, e Esc lo chiude. Chi ha un accesso da cliente, in sola lettura, vede un giro e una
+guida più corti, senza ciò che riguarda la gestione.
 
 ## Gestire i PC dalla console
 
@@ -317,7 +335,8 @@ nome inglese, che su un Windows in un'altra lingua non esiste: ora lo ricava dal
 Quella prova è stata fatta con il pacchetto di prima, che portava con sé Python: con il programma compilato
 l'installazione da amministratore va rifatta.
 
-Le parti di «Gestire i PC dalla console» sono provate in automatico, sullo stesso computer: le regole arrivano al
+Il giro guidato e la guida sono provati in automatico in un browser, in italiano e in inglese (il punto illuminato è
+quello giusto, la pagina sotto resta viva, «A che punto è la tua console» corrisponde ai dati). Le parti di «Gestire i PC dalla console» sono provate in automatico, sullo stesso computer: le regole arrivano al
 programma vero, che le applica solo se ha scelto di accettarle; gli avvisi arrivano a un indirizzo web e a un server di
 posta finti; il registro scopre una riga cambiata o tolta. **L'ingresso con l'account Microsoft è provato solo contro un
 servizio di accesso finto**: con un'organizzazione vera su Entra ID non è ancora stato provato, e nemmeno gli avvisi

@@ -14,6 +14,9 @@ English: [README.md](README.md).
 - **Regole per i PC**: quali servizi AI proteggere o bloccare, i file, gli aggiornamenti, il divieto di spegnere la
   protezione, fissati per cliente e mandati ai PC che hanno scelto di accettarli; un singolo PC può avere regole sue,
   sopra quelle del cliente. La console può cambiare le regole, non a chi i PC mandano i dati.
+- **Giro guidato e guida nella pagina**: al primo ingresso un giro di un minuto illumina una alla volta le parti della
+  pagina; poi il pulsante «Guida» dice a che punto è la console e, argomento per argomento, «Fammi vedere» porta nel
+  punto giusto.
 - **Avvisi**: un PC che spegne la protezione, uno che non si fa più sentire, uno strumento AI nuovo. Nella pagina, a un
   indirizzo web (Teams, Slack) o per posta.
 - **Registro di conformità**: chi è entrato e che cosa ha cambiato, con il CSV da dare a chi fa un controllo e una
@@ -45,7 +48,8 @@ pannello di ogni PC mostra il riepilogo esatto prima che parta).
    ```
 
 3. Su quello stesso computer apri `https://127.0.0.1:8800/`: la pagina ti fa creare il tuo accesso e poi ti
-   accompagna nei primi passi (creare un cliente, dare il file ai PC, aspettare il primo riepilogo).
+   accompagna: un giro guidato di un minuto, e i primi passi (creare un cliente, dare il file ai PC, aspettare il
+   primo riepilogo).
 
 Di serie la console è per la rete locale: fa HTTPS con un certificato che si crea da sé, e i PC la riconoscono
 dall'impronta di quel certificato. Niente nome pubblico, niente porte 80 e 443, nient'altro da installare. La guida

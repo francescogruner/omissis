@@ -14,6 +14,9 @@ Italiano: [README.it.md](README.it.md).
 - **Rules for the PCs**: which AI services to protect or block, files, updates, the ban on turning protection off, set
   per customer and sent to the PCs that chose to accept them; a single PC can have rules of its own, on top of the
   customer's. The console can change the rules, not where the PCs send their data.
+- **Guided tour and guide inside the page**: at the first sign-in a one-minute tour lights up the parts of the page one
+  at a time; then the "Guide" button says how far the console is and, topic by topic, "Show me" takes you to the right
+  spot.
 - **Alerts**: a PC that turns protection off, one that goes quiet, a new AI tool. On the page, to a web address
   (Teams, Slack) or by e-mail.
 - **Compliance log**: who signed in and what they changed, with a CSV to hand to an auditor and a chain of
@@ -46,7 +49,8 @@ of each PC shows the exact summary before it leaves).
    ```
 
 3. On that same computer open `https://127.0.0.1:8800/`: the page asks you to create your login, then walks you
-   through the first steps (create a customer, give the file to the PCs, wait for the first summary).
+   through: a one-minute guided tour, and the first steps (create a customer, give the file to the PCs, wait for the
+   first summary).
 
 By default the console is for the local network: it speaks HTTPS with a certificate it makes itself, and the PCs
 recognise it by the fingerprint of that certificate. No public name, no ports 80 and 443, nothing else to install.
