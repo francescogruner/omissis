@@ -1,6 +1,6 @@
 # Omissis central console
 
-For organisations and MSPs that run Omissis on several PCs: one page that shows, customer by customer, how many
+For organisations and MSPs that run Omissis on several PCs: one page that shows, organisation by organisation, how many
 PCs have Omissis, which ones need attention (protection off, PCs gone quiet, old versions) and how much data was
 kept away from AI services, in total, per day, per type of data and per service. It receives counts and program
 names only: never the texts people write, never the replaced values.
@@ -12,8 +12,8 @@ Italiano: [README.it.md](README.it.md).
 ## What you do from there
 
 - **Rules for the PCs**: which AI services to protect or block, files, updates, the ban on turning protection off, set
-  per customer and sent to the PCs that chose to accept them; a single PC can have rules of its own, on top of the
-  customer's. The console can change the rules, not where the PCs send their data.
+  per organisation and sent to the PCs that chose to accept them; a single PC can have rules of its own, on top of the
+  organisation's. The console can change the rules, not where the PCs send their data.
 - **Guided tour and guide inside the page**: at the first sign-in a one-minute tour lights up the parts of the page one
   at a time; then the "Guide" button says how far the console is and, topic by topic, "Show me" takes you to the right
   spot.
@@ -25,8 +25,8 @@ Italiano: [README.it.md](README.it.md).
 
 ## Free up to 5 PCs
 
-The console is **free up to 5 PCs of a single customer**, with no time limit and nothing to register. To follow
-more PCs or more customers you ask for a licence from the console itself ("Licence" card → "Request a licence"):
+The console is **free up to 5 PCs of a single organisation**, with no time limit and nothing to register. To follow
+more PCs or more organisations you ask for a licence from the console itself ("Licence" card → "Request a licence"):
 it prepares a file with the identifier of your installation, you send it, you get back a licence file to load in
 the same card.
 
@@ -49,7 +49,7 @@ of each PC shows the exact summary before it leaves).
    ```
 
 3. On that same computer open `https://127.0.0.1:8800/`: the page asks you to create your login, then walks you
-   through: a one-minute guided tour, and the first steps (create a customer, give the file to the PCs, wait for the
+   through: a one-minute guided tour, and the first steps (create an organisation, give the file to the PCs, wait for the
    first summary).
 
 By default the console is for the local network: it speaks HTTPS with a certificate it makes itself, and the PCs

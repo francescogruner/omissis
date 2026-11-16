@@ -104,6 +104,15 @@ and downloaded with `model/download_model.py`; they are not stored in this repos
 
 ## Quick start (Windows)
 
+**With an AI agent.** If you have an agent on the PC that can use the terminal (Claude Code, Codex, Gemini CLI,
+Cursor, Copilot, Kimi), it can do the installation: give it this sentence, and it asks you to confirm each step.
+
+> Install Omissis on this PC by following, step by step, the instructions at https://omissis.eu/install.txt. Ask me
+> to confirm before every step that changes something on the computer, do not use administrator rights, and at the
+> end tell me what you did and what is left for me to do.
+
+The instructions the agent follows are in [INSTALL-FOR-AGENTS.md](INSTALL-FOR-AGENTS.md).
+
 **Requirements:** 64-bit Windows 10 (version 2004 or later) or Windows 11 on an Intel or AMD
 processor, 4 cores, 8 GB of memory with `omissis-small` (16 GB for `omissis-base`), 1 to 2 GB of
 disk. No graphics card needed: the installed copy runs on the CPU. On an ordinary office PC choose
@@ -145,7 +154,7 @@ pre-configured, lock the settings the administrator chooses, report its state an
 Intune or a logon script. Start from the [guide for organisations](deploy/GUIDE-ORGANISATIONS.md): what is free
 and what is not, which layout to choose, the inference server step by step.
 
-**All the PCs on one page**: the [central console](console/README.md) shows, customer by customer, which PCs are
+**All the PCs on one page**: the [central console](console/README.md) shows, organisation by organisation, which PCs are
 protected and how much data was kept away from AI services. It is a separate program, compiled and not open
 source, **free up to 5 PCs**: download it from the [releases page](https://github.com/francescogruner/omissis/releases/latest).
 

@@ -88,6 +88,15 @@ I pesi si scaricano da Hugging Face con `model/download_model.py`; non stanno in
 
 ## Installazione (Windows)
 
+**Con un agente AI.** Se sul PC hai un agente che sa usare il terminale (Claude Code, Codex, Gemini CLI, Cursor,
+Copilot, Kimi), l'installazione la può fare lui: dagli questa frase, e a ogni passo ti chiede conferma.
+
+> Installa Omissis su questo PC seguendo passo per passo le istruzioni in https://omissis.eu/install.txt. Chiedimi
+> conferma prima di ogni passo che cambia qualcosa sul computer, non usare diritti di amministratore, e alla fine
+> dimmi che cosa hai fatto e che cosa resta da fare a me.
+
+Le istruzioni che l'agente segue sono in [INSTALL-FOR-AGENTS.md](INSTALL-FOR-AGENTS.md), in inglese.
+
 **Requisiti:** Windows 10 (versione 2004 o successiva) o Windows 11 a 64 bit su processore Intel o
 AMD, 4 core, 8 GB di memoria con `omissis-small` (16 GB per `omissis-base`), da 1 a 2 GB di disco.
 Non serve una scheda video: la copia installata usa il processore. Su un normale PC da ufficio
@@ -131,7 +140,7 @@ già configurato, bloccano le impostazioni scelte dall'amministratore, ne riferi
 un RMM, da Intune o da uno script di accesso. Si parte dalla [guida per le aziende](deploy/GUIDA-AZIENDE.it.md):
 che cosa è gratuito e che cosa no, quale schema scegliere, il server di inferenza passo per passo.
 
-**Tutti i PC in una pagina**: la [console centrale](console/README.it.md) mostra, cliente per cliente, quali PC sono
+**Tutti i PC in una pagina**: la [console centrale](console/README.it.md) mostra, azienda per azienda, quali PC sono
 protetti e quanti dati sono stati tenuti fuori dai servizi AI. È un programma a parte, compilato e non aperto,
 **gratuito fino a 5 PC**: si scarica dalla [pagina delle versioni](https://github.com/francescogruner/omissis/releases/latest).
 

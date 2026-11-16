@@ -1,9 +1,9 @@
 # Mettere in servizio la console centrale di Omissis
 
-Per chi installa la console su un server proprio. Alla fine c'è una pagina dove compaiono i PC dei clienti, che
+Per chi installa la console su un server proprio. Alla fine c'è una pagina dove compaiono i PC delle aziende, che
 parte da sola con il server e ha una copia di sicurezza ogni notte.
 
-La console è gratuita fino a 5 PC di un solo cliente; oltre serve una licenza (vedi «La licenza», più sotto). È
+La console è gratuita fino a 5 PC di una sola azienda; oltre serve una licenza (vedi «La licenza», più sotto). È
 software proprietario, distribuito compilato: le condizioni d'uso sono in `LICENZA.it.md`.
 
 English: `GUIDE.md`.
@@ -12,14 +12,14 @@ English: `GUIDE.md`.
 
 | | In rete locale (di serie) | Raggiungibile da Internet |
 |---|---|---|
-| Per chi | Console e PC nella stessa rete, o collegati da una VPN | Un MSP che segue da un posto solo clienti in sedi diverse |
+| Per chi | Console e PC nella stessa rete, o collegati da una VPN | Un MSP che segue da un posto solo aziende in sedi diverse |
 | Indirizzo | `https://192.168.1.10:8800`, o il nome del server | `https://console.tuodominio.it` |
 | Certificato | La console se lo fa da sé al primo avvio | Uno vero, chiesto e rinnovato da Caddy |
 | Che cosa serve | Niente: né nome pubblico, né porte 80 e 443, né altri programmi | Un nome che punta al server, porte 80 e 443 aperte (o un tunnel), Caddy |
 | Come i PC la riconoscono | Dall'**impronta** del certificato, data insieme alla chiave | Come un browser riconosce un sito |
 
 In tutti e due i casi il collegamento è cifrato: i PC accettano **solo** `https://`, perché il riepilogo porta la
-chiave di collegamento del cliente.
+chiave di collegamento dell'azienda.
 
 Serve un server sempre acceso: Windows Server 2019 o successivo (o Windows 10/11). La console è
 leggera: 1 processore e 1 GB di memoria bastano per centinaia di PC.
@@ -50,7 +50,7 @@ leggera: 1 processore e 1 GB di memoria bastano per centinaia di PC.
    «Procedi»). La pagina, vedendo che non esiste ancora nessun accesso, ti chiede nome e password (almeno 12
    caratteri) ed entri. **Funziona solo dal computer della console**: dalla rete nessuno può crearselo prima di te.
    Subito dopo parte da solo un **giro guidato** di un minuto, che illumina una alla volta le parti della pagina, e
-   compaiono i «Primi passi»: creare un cliente, dare il file ai PC, aspettare il primo riepilogo.
+   compaiono i «Primi passi»: creare un'azienda, dare il file ai PC, aspettare il primo riepilogo.
 
    Chi preferisce il terminale, o lavora senza schermo (in una finestra da amministratore):
 
@@ -63,7 +63,7 @@ leggera: 1 processore e 1 GB di memoria bastano per centinaia di PC.
    l'impronta SHA-256 che il browser mostra nei dettagli del certificato con quella scritta dallo script.
 
 L'impronta si rilegge quando serve con `omissis-console.exe --data C:\OmissisConsole\data --show-pin`, e la pagina la
-mostra nella scheda dei clienti. Il certificato resta lo stesso per dieci anni: non va rinnovato. **Non
+mostra nella scheda delle aziende. Il certificato resta lo stesso per dieci anni: non va rinnovato. **Non
 cancellare la cartella `data\tls`**: un certificato nuovo avrebbe un'impronta nuova, e tutti i PC andrebbero
 ricollegati.
 
@@ -88,9 +88,9 @@ con un certificato vero.
    Tunnel o simili) che inoltra il nome a `http://127.0.0.1:8800`.
 3. Apri `https://console.tuodominio.it/`: nessun avviso, e ai PC non serve l'impronta.
 
-## Collegare il primo cliente
+## Collegare la prima azienda
 
-1. Nella console, **Nuovo cliente**: scrivi il nome. Compaiono l'indirizzo, la **chiave di collegamento** (una
+1. Nella console, **Nuova azienda**: scrivi il nome. Compaiono l'indirizzo, la **chiave di collegamento** (una
    volta sola: la console ne conserva soltanto l'impronta) e, in rete locale, l'impronta del certificato.
 2. Premi **«Scarica il file per i PC»**: è `omissis-console.json`, con quelle tre cose già scritte. Se vuoi
    bloccare anche altre scelte, aggiungile lì (i nomi sono in `policy.example.json` del kit di distribuzione):
@@ -105,7 +105,7 @@ con un certificato vero.
    }
    ```
 
-3. Dal tuo RMM, su ogni PC del cliente:
+3. Dal tuo RMM, su ogni PC dell'azienda:
    - `Set-OmissisPolicy.ps1 -Settings omissis-console.json` eseguito **come SYSTEM**: blocca le impostazioni e
      collega il PC;
    - `Install-Omissis.ps1 ...` eseguito **come utente connesso**: installa il programma.
@@ -114,10 +114,10 @@ con un certificato vero.
 Per provare con un PC solo, senza RMM: nel pannello di quel PC, Impostazioni, Console centrale (in modalità
 avanzata), si scrivono a mano indirizzo, chiave e impronta.
 
-Se il cliente vuole vedere i suoi numeri, creagli un accesso in sola lettura:
-`console --data ... --add-user nome --role customer --tenant "Nome del cliente"`.
+Se l'azienda vuole vedere i suoi numeri, creale un accesso in sola lettura:
+`console --data ... --add-user nome --role customer --tenant "Nome dell'azienda"`.
 
-**Prima di collegare un cliente** senti chi si occupa di privacy da lui: con i nomi dei computer e degli utenti
+**Prima di collegare un'azienda** senti chi lì si occupa di privacy: con i nomi dei computer e degli utenti
 la console mostra quanto ogni persona usa i servizi AI, e può essere un controllo a distanza dei lavoratori.
 Con `"console_names": false` nel file arrivano solo i totali.
 
@@ -127,37 +127,37 @@ In alto a destra c'è il pulsante **«Guida»**. Dentro:
 
 - **«Fai il giro della console»**: lo stesso giro del primo ingresso, quando si vuole. A chi entra per la prima volta
   da un browser la pagina lo propone da sé, e «Non ora» lo toglie.
-- **«A che punto è la tua console»**: sei cose da fare, segnate come fatte guardando i dati veri (un cliente creato, un
+- **«A che punto è la tua console»**: sei cose da fare, segnate come fatte guardando i dati veri (un'azienda creata, un
   PC collegato, PC che accettano le regole, regole imposte, una destinazione per gli avvisi, un secondo accesso).
 - **Gli argomenti**, con la ricerca: collegare i PC, bloccare un servizio AI, impedire di spegnere la protezione, regole
   per un solo PC, avvisi, accessi, ingresso con Microsoft, registro, licenza, copie e password. In ognuno
   **«Fammi vedere»** porta nel punto giusto della pagina e lo illumina, un passo alla volta; dove serve sceglie da sé
-  un cliente, o torna a «Tutti i clienti».
+  un'azienda, o torna a «Tutte le aziende».
 
 Mentre un giro è aperto la pagina sotto resta viva: si può cliccare, scrivere e scegliere senza chiuderlo. Si va avanti
-e indietro anche con le frecce, e Esc lo chiude. Chi ha un accesso da cliente, in sola lettura, vede un giro e una
+e indietro anche con le frecce, e Esc lo chiude. Chi entra con l'accesso di un'azienda, in sola lettura, vede un giro e una
 guida più corti, senza ciò che riguarda la gestione.
 
 ## Gestire i PC dalla console
 
 Quattro cose in più, tutte nella pagina, per chi segue molti PC. Le vede e le usa solo chi ha il ruolo che gestisce la
-console; il cliente con accesso in sola lettura vede i suoi avvisi e nient'altro.
+console; l'azienda con accesso in sola lettura vede i suoi avvisi e nient'altro.
 
-### Regole per i PC di un cliente
+### Regole per i PC di un'azienda
 
-Scegli un cliente in alto: compare la scheda «Regole per i PC di questo cliente». Lì si fissano le regole per servizio
+Scegli un'azienda in alto: compare la scheda «Regole per i PC di questa azienda». Lì si fissano le regole per servizio
 (proteggi, registra, blocca, ignora), il caricamento di file, gli allegati, la sostituzione nella casella di scrittura,
 gli aggiornamenti, l'analisi degli strumenti AI, il **profilo dei dati** (che cosa sostituire: «Essenziale», «Riservato»,
 «Dati particolari» o «Massimo»; fissato da qui, chi usa il PC non lo cambia né può ridurre la protezione), e si può
 vietare lo spegnimento della protezione. «Salva e manda ai PC»: ogni PC le riceve in risposta al suo prossimo riepilogo, quindi entro un'ora, e
-subito con «Invia ora» dal suo pannello. Con «Tutti i clienti» la scheda non c'è: le regole sono di un cliente.
+subito con «Invia ora» dal suo pannello. Con «Tutte le aziende» la scheda non c'è: le regole sono di un'azienda.
 
 **Un PC che deve fare diversamente dagli altri.** Nella tabella dei PC ogni riga ha il pulsante «Regole»: apre le
-regole di quel solo PC, che partono da quelle del suo cliente. Ogni voce può restare «Come il cliente», avere un valore
-suo, che vince su quello del cliente, oppure essere «Libera su questo PC»: il PC è esentato da quella regola del
-cliente, e lì torna a decidere chi lo usa. Serve, per esempio, al PC del tecnico che deve poter fermare la protezione,
+regole di quel solo PC, che partono da quelle della sua azienda. Ogni voce può restare «Come l'azienda», avere un valore
+suo, che vince su quello dell'azienda, oppure essere «Libera su questo PC»: il PC è esentato da quella regola
+dell'azienda, e lì torna a decidere chi lo usa. Serve, per esempio, al PC del tecnico che deve poter fermare la protezione,
 o a chi lavora proprio con un servizio che agli altri è bloccato. La riga del PC porta il segno «regole proprie»;
-«Torna alle regole del cliente» le toglie. Ogni cambio finisce nel registro di conformità, con il nome del PC.
+«Torna alle regole dell'azienda» le toglie. Ogni cambio finisce nel registro di conformità, con il nome del PC.
 
 **«Spegnere la protezione: Vietato».** Sul PC il pulsante «Ferma» del pannello resta fermo, dall'icona vicino
 all'orologio non si ferma la protezione e non si chiude il programma, e se la protezione è ferma il programma la
@@ -190,15 +190,15 @@ Con «Dove mandarli» gli avvisi nuovi partono anche fuori dalla pagina, entro u
 - per **posta**, con un server SMTP (STARTTLS o SSL). La password resta tra i dati della console, in chiaro perché
   serve per inviare: è un motivo in più per tenere chiusa la cartella dei dati. Conviene una casella dedicata.
 
-Nel messaggio ci sono il cliente, il nome del computer e che cosa è successo: mai il nome dell'utente, mai conteggi o
+Nel messaggio ci sono l'azienda, il nome del computer e che cosa è successo: mai il nome dell'utente, mai conteggi o
 testi. «Manda un avviso di prova» dice subito se la destinazione risponde. Se un invio fallisce la pagina lo scrive e
 la console riprova da sola.
 
 ### Registro di conformità
 
-In fondo alla pagina: chi è entrato (o ha provato), chi ha creato o tolto accessi e clienti, chi ha cambiato le regole
+In fondo alla pagina: chi è entrato (o ha provato), chi ha creato o tolto accessi e aziende, chi ha cambiato le regole
 dei PC (con quelle di prima e quelle nuove), le licenze caricate, le destinazioni degli avvisi, ogni esportazione. Per
-ogni riga: quando, chi, da quale indirizzo. Si scarica in CSV, anche per un solo cliente.
+ogni riga: quando, chi, da quale indirizzo. Si scarica in CSV, anche per una sola azienda.
 
 Le righe non si modificano e non si cancellano dalla console, e ognuna porta un'impronta che dipende da quella prima:
 se qualcuno ritocca o toglie una riga nell'archivio, la pagina (e `console --data <dati> --verify-audit`) dice da quale
@@ -230,12 +230,12 @@ che Microsoft accetti: con la console in rete locale e il certificato fatto da s
 
 ## La licenza
 
-Senza licenza la console funziona, e segue fino a **5 PC di un cliente solo**. Per seguirne di più serve un file di
-licenza: dice a chi è intestata, quanti PC e quanti clienti copre e fino a quando. È firmato: cambiando un numero
+Senza licenza la console funziona, e segue fino a **5 PC di un'azienda sola**. Per seguirne di più serve un file di
+licenza: dice a chi è intestata, quanti PC e quante aziende copre e fino a quando. È firmato: cambiando un numero
 smette di valere.
 
 - **Chiederla**: nella scheda «Licenza» premi «Richiedi una licenza», scrivi a chi va intestata e quanti PC e
-  clienti deve coprire, e scarica il file `richiesta-licenza-omissis.json`. Mandalo a chi ti ha fornito la
+  aziende deve coprire, e scarica il file `richiesta-licenza-omissis.json`. Mandalo a chi ti ha fornito la
   console. Dalla pagina non parte nulla: il file lo mandi tu.
 - Il file porta l'**identificativo dell'installazione** (`OMC-XXXX-XXXX-XXXX-XXXX`, si legge nella stessa scheda e
   con `--licence-info`): la licenza che ricevi vale solo su questa installazione.
@@ -247,13 +247,13 @@ smette di valere.
 - **PC oltre il numero coperto**: la console tiene i primi arrivati e non accoglie i riepiloghi degli altri; la
   pagina lo scrive in cima. Nulla viene cancellato: con una licenza più ampia riprendono da dove erano.
 - **Scadenza**: da trenta giorni prima la pagina lo ricorda. Dopo la scadenza la licenza vale ancora per 14
-  giorni; poi la console torna a 5 PC e un cliente, finché non se ne carica una nuova.
+  giorni; poi la console torna a 5 PC e un'azienda, finché non se ne carica una nuova.
 
 ## Tutti i giorni
 
 | Che cosa | Come |
 |---|---|
-| Vedere clienti e accessi | `console --data <dati> --list` |
+| Vedere aziende e accessi | `console --data <dati> --list` |
 | Cambiare una password | `console --data <dati> --set-password nome` (chiude le sessioni aperte di quell'accesso) |
 | Togliere un accesso | `console --data <dati> --remove-user nome` (o dalla scheda «Accessi») |
 | Creare un accesso che entra con l'account Microsoft | `console --data <dati> --add-user nome@azienda.it --microsoft` |
@@ -295,7 +295,7 @@ eventuali `console.sqlite-wal` e `console.sqlite-shm`, riavvia.
 | Nel pannello del PC: «Console non raggiungibile» | Indirizzo o porta sbagliati, firewall, server spento |
 | «Troppi tentativi» all'ingresso | Dopo cinque password sbagliate ci si ferma per un quarto d'ora |
 | Password dimenticata | Vedi qui sotto, «Password dimenticata» |
-| Tutti i PC di un cliente spariscono | È stata creata una chiave nuova: quella vecchia non vale più, i PC vanno ricollegati |
+| Tutti i PC di un'azienda spariscono | È stata creata una chiave nuova: quella vecchia non vale più, i PC vanno ricollegati |
 
 ### Password dimenticata
 
@@ -314,9 +314,9 @@ d'ora, oppure si riavvia la console.
 
 Se nessuno riesce più a entrare (l'unico accesso entrava con l'account Microsoft e Microsoft non è raggiungibile, o
 l'accesso è stato tolto per errore), dallo stesso terminale se ne crea uno nuovo:
-`... --add-user nuovo.nome --role msp`. I dati, i clienti e la licenza non vengono toccati.
+`... --add-user nuovo.nome --role msp`. I dati, le aziende e la licenza non vengono toccati.
 
-Chi ha un accesso da cliente, in sola lettura, chiede la password nuova a chi gestisce la console.
+Chi entra con l'accesso di un'azienda, in sola lettura, chiede la password nuova a chi gestisce la console.
 
 ## Che cosa è stato provato
 

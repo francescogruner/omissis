@@ -17,13 +17,13 @@ Tutto ciò che gira sui PC è gratuito e aperto (licenza Apache 2.0), anche per 
 | Impostazioni bloccate dall'amministratore | sì | |
 | Server di inferenza in rete (un PC presta il modello agli altri) | sì | |
 | Stato di ogni PC letto dal tuo RMM (`Get-OmissisStatus.ps1`) | sì | |
-| **Console centrale**: tutti i PC in una pagina sola, fino a 5 PC di un cliente | sì, ma non aperta | |
-| Console centrale oltre i 5 PC, o per più clienti (MSP) | | sì, con una licenza |
+| **Console centrale**: tutti i PC in una pagina sola, fino a 5 PC di un'azienda | sì, ma non aperta | |
+| Console centrale oltre i 5 PC, o per più aziende (MSP) | | sì, con una licenza |
 
 **Che cosa aggiunge la console.** Quanti PC hanno Omissis e quali vanno controllati (protezione spenta, PC che non
 si fanno sentire, versioni vecchie), quanti dati sono stati tenuti fuori dai servizi AI in totale, per giorno, per
-tipo di dato e per servizio, e gli strumenti AI trovati sui PC. Per un MSP: più clienti separati, con un accesso
-in sola lettura per ciascun cliente. Riceve solo conteggi e nomi di programmi, mai i testi.
+tipo di dato e per servizio, e gli strumenti AI trovati sui PC. Per un MSP: più aziende separate, con un accesso
+in sola lettura per ciascuna azienda. Riceve solo conteggi e nomi di programmi, mai i testi.
 
 **Come si prova e come si passa alla licenza.** Non si installa un'altra versione di Omissis e nei PC non va messo
 nessun codice di licenza: il programma dei PC resta quello gratuito. La console è un programma a parte, compilato
@@ -32,14 +32,14 @@ nessun codice di licenza: il programma dei PC resta quello gratuito. La console 
 1. Si scarica `omissis-console-<versione>.zip` dalla
    [pagina delle versioni](https://github.com/francescogruner/omissis/releases/latest) e si installa su un proprio
    computer, anche in rete locale. Alla prima apertura la pagina fa creare l'accesso e accompagna nei primi passi.
-2. Per ogni cliente la console dà una **chiave di collegamento** e un file con tre impostazioni: `console_url`,
+2. Per ogni azienda la console dà una **chiave di collegamento** e un file con tre impostazioni: `console_url`,
    `console_key` e, in rete locale, `console_pin`. Vanno nei PC con `Set-OmissisPolicy.ps1`, tutti insieme, oppure
    a mano dal pannello di ciascuno (Impostazioni → Console centrale, nella vista avanzata).
 3. Entro un'ora i PC compaiono nella console. Togliendo le tre impostazioni tutto torna com'era.
    Dalla console si possono anche **mandare le regole ai PC** (quali servizi proteggere o bloccare, file,
-   aggiornamenti, divieto di spegnere la protezione; per cliente e, dove serve, per singolo PC), ricevere **avvisi** e tenere un **registro di conformità**. Le regole valgono solo sui PC che
+   aggiornamenti, divieto di spegnere la protezione; per azienda e, dove serve, per singolo PC), ricevere **avvisi** e tenere un **registro di conformità**. Le regole valgono solo sui PC che
    le accettano: `"console_rules": true` nello stesso file. La console non può cambiare a chi i PC mandano i dati.
-4. **Oltre i 5 PC, o con più di un cliente**: nella console, scheda «Licenza» → «Richiedi una licenza». Prepara un
+4. **Oltre i 5 PC, o con più di un'azienda**: nella console, scheda «Licenza» → «Richiedi una licenza». Prepara un
    file con l'identificativo dell'installazione; lo si manda da <https://francescogruner.it/contatti/> e si riceve
    un file di licenza da caricare nella stessa scheda.
 

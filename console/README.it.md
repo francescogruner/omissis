@@ -1,6 +1,6 @@
 # Console centrale di Omissis
 
-Per le organizzazioni e gli MSP che usano Omissis su più PC: una pagina sola che mostra, cliente per cliente, quanti
+Per le organizzazioni e gli MSP che usano Omissis su più PC: una pagina sola che mostra, azienda per azienda, quanti
 PC hanno Omissis, quali vanno controllati (protezione spenta, PC che non si fanno sentire, versioni vecchie) e quanti
 dati sono stati tenuti fuori dai servizi AI, in totale, per giorno, per tipo di dato e per servizio. Riceve solo
 conteggi e nomi di programmi: mai i testi scritti dalle persone, mai i valori sostituiti.
@@ -12,8 +12,8 @@ English: [README.md](README.md).
 ## Che cosa si fa da lì
 
 - **Regole per i PC**: quali servizi AI proteggere o bloccare, i file, gli aggiornamenti, il divieto di spegnere la
-  protezione, fissati per cliente e mandati ai PC che hanno scelto di accettarli; un singolo PC può avere regole sue,
-  sopra quelle del cliente. La console può cambiare le regole, non a chi i PC mandano i dati.
+  protezione, fissati per azienda e mandati ai PC che hanno scelto di accettarli; un singolo PC può avere regole sue,
+  sopra quelle dell'azienda. La console può cambiare le regole, non a chi i PC mandano i dati.
 - **Giro guidato e guida nella pagina**: al primo ingresso un giro di un minuto illumina una alla volta le parti della
   pagina; poi il pulsante «Guida» dice a che punto è la console e, argomento per argomento, «Fammi vedere» porta nel
   punto giusto.
@@ -25,8 +25,8 @@ English: [README.md](README.md).
 
 ## Gratis fino a 5 PC
 
-La console è **gratuita fino a 5 PC di un solo cliente**, senza scadenza e senza registrarsi. Per seguire più PC o
-più clienti si chiede una licenza dalla console stessa (scheda «Licenza» → «Richiedi una licenza»): prepara un file
+La console è **gratuita fino a 5 PC di una sola azienda**, senza scadenza e senza registrarsi. Per seguire più PC o
+più aziende si chiede una licenza dalla console stessa (scheda «Licenza» → «Richiedi una licenza»): prepara un file
 con l'identificativo della tua installazione, lo mandi, e ricevi un file di licenza da caricare nella stessa scheda.
 
 ## Non è software aperto
@@ -48,7 +48,7 @@ pannello di ogni PC mostra il riepilogo esatto prima che parta).
    ```
 
 3. Su quello stesso computer apri `https://127.0.0.1:8800/`: la pagina ti fa creare il tuo accesso e poi ti
-   accompagna: un giro guidato di un minuto, e i primi passi (creare un cliente, dare il file ai PC, aspettare il
+   accompagna: un giro guidato di un minuto, e i primi passi (creare un'azienda, dare il file ai PC, aspettare il
    primo riepilogo).
 
 Di serie la console è per la rete locale: fa HTTPS con un certificato che si crea da sé, e i PC la riconoscono
