@@ -39,6 +39,7 @@ import documents
 import folders
 import gateway
 import inventory
+import kimi_plugin
 import mcp_server
 import settings
 import i18n
@@ -357,13 +358,16 @@ def app_desktop():
             CONNECTORS.pop(key, None)
             c = None
         service = catalog.PER_ID.get(a.get("service", ""))
-        out.append({"id": key, "name": a["name"], "installed": connector.find_command(a) is not None,
+        # nelle prove l'app che si protegge con un plugin risulta installata comunque: la pagina non deve dipendere da questo PC
+        out.append({"id": key, "name": a["name"], "installed": connector.find_command(a) is not None or bool(SUP.test and a.get("plugin")),
                     "connected": c is not None, "outcome": c.outcome if c else None, "counts": dict(c.counts) if c else None,
                     "errors": (c.notices + c.errors)[-3:] if c else [],
                     # aperta ma non da qui: dentro non c'e' nessuna protezione
                     # (nelle prove no: pagina e schermate non devono dipendere da cio' che e' aperto su questo PC)
                     "open_unprotected": c is None and not SUP.test and connector.open_unprotected(key),
                     "own_profile": bool(a.get("own_profile")), "refuses": bool(a.get("refuses")),
+                    # l'app si protegge con un suo plugin: se la cartella e' pronta, dove sta, e se in Kimi risulta installato
+                    "plugin": kimi_plugin.state() if a.get("plugin") else None,
                     # la politica del servizio decide se i messaggi vengono mascherati: con «registra» l'app si collega e basta
                     "service": service["name"] if service else "", "policy": settings.policy(service) if service else "protect"})
     return out
@@ -833,6 +837,12 @@ class Handler(BaseHTTPRequestHandler):
                 if key not in connector.APP:
                     raise Refusal(i18n.t("program.app_unknown"))
                 action = data.get("action")
+                if action == "plugin":   # prepara la cartella del plugin; installarlo nell'app resta un gesto di chi usa il PC
+                    if not connector.APP[key].get("plugin"):
+                        raise Refusal(i18n.t("program.app_unknown"))
+                    kimi_plugin.write()
+                    self._respond(200, app_desktop())
+                    return
                 if action in ("launch", "relaunch") and SUP.phase != "active":
                     raise Refusal(i18n.t("program.app_needs_protection"))
                 with APP_LOCK:

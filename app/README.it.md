@@ -524,7 +524,7 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 |---|---|---|
 | ChatGPT / Codex | stessa app, riavviata con la porta | sì, un messaggio con dati inventati (12/11/2026) |
 | Claude | stessa app, riavviata con la porta | no |
-| Kimi | **non si può**: avviata con la porta di collegamento si chiude da sola in un secondo (codice 1), anche con la porta 0 | provato il 14/11/2026 sulla 3.2.24; il pannello lo dice e non offre il pulsante |
+| Kimi | con la porta **non si può**: avviata così si chiude da sola in un secondo (codice 1), anche con la porta 0. Si protegge con il **suo sistema di plugin** (vedi sotto) | la porta: provata il 14/11/2026 sulla 3.2.24. Il plugin: solo in automatico (`e2e_kimi.py`), non ancora installato e provato dentro Kimi vera |
 | Microsoft Copilot | con un **profilo separato**, tenuto in `data\app_profiles\copilot` | solo l'aggancio: 5 finestre seguite, nessun errore, nessun messaggio inviato (14/11/2026) |
 | Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere | — |
 | Visual Studio (GitHub Copilot) | non coperta: è un programma nativo, le richieste partono da un suo processo e non da una finestra web. Il servizio si può solo registrare o bloccare | — |
@@ -534,6 +534,34 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 Se un'app rifiuta la porta quando la si riavvia (lo fa Kimi), il connettore se ne accorge in pochi
 secondi, non aspetta i 40 del tempo massimo e dice che l'app ora è chiusa e va riaperta normalmente.
 Per le app di cui lo si sa già (`"refuses": True` in `connector.APP`) non la chiude nemmeno.
+
+**Kimi: il plugin al posto della porta** (`kimi_plugin.py`, `kimi_hook.py`; 16/11/2026). Non si forza nulla: si usa
+ciò che Kimi mette a disposizione. Il motore di «Kimi Work» è Kimi Code, che è aperto
+([MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code)) e ha un sistema di plugin documentato; un plugin
+può dichiarare degli *hook*, programmi che Kimi chiama a certi eventi. `UserPromptSubmit` scatta prima che un
+messaggio parta e può fermarlo (uscita 2, con la spiegazione sull'errore standard). Nessun file di Kimi viene
+modificato: Omissis legge soltanto l'elenco dei plugin installati, per dire nel pannello se il suo c'è.
+
+- Dal pannello, App desktop → Kimi → «Prepara il plugin»: Omissis scrive la cartella `data\kimi-plugin\omissis`
+  (manifest `kimi.plugin.json`, l'hook, dove sono i dati di Omissis; **nessun codice segreto**: quello per parlare
+  col motore l'hook lo legge ogni volta dai dati di Omissis). Il controllo dei plugin di Kimi stessa
+  (`validate_plugin.py`) la accetta con 0 errori.
+- **Installarlo è un gesto di chi usa il PC**, dentro Kimi: si chiede a Kimi di installare il plugin da quella
+  cartella (il pannello dà la frase pronta), Kimi mostra che c'è un hook e chiede conferma, poi lo si accende dalla
+  pagina dei plugin. Vale dalle conversazioni nuove.
+- L'hook passa il messaggio al motore (`POST /bridge/prompt`), che decide con la regola del servizio Kimi:
+  **Proteggi** → se c'è qualcosa da sostituire il messaggio viene fermato e la versione protetta va negli appunti, da
+  incollare (incollata, parte); **Blocca** → fermato sempre; **Registra** e **Ignora** → parte.
+- **Kimi di serie è su «Registra»**, come ogni servizio non ancora provato dal vivo: per fermare i dati personali va
+  messa su «Proteggi» in Servizi (il pannello lo ricorda nella riga dell'app).
+- Se Omissis non risponde: dove l'ultima regola nota era «Proteggi» o «Blocca» il messaggio viene fermato, altrove
+  parte. Se Omissis viene disinstallato l'hook non parte più, e Kimi in quel caso lascia passare (lo dice la sua
+  documentazione: un hook che non si avvia non ferma nulla).
+
+I limiti, che il pannello dice: un hook di Kimi **non può riscrivere** il messaggio, quindi serve un incolla in più;
+vale per **ciò che la persona scrive**, non per i file che Kimi legge da solo sul PC mentre lavora; nelle risposte
+restano i segnaposto (al modello viene detto di lasciarli come sono). E vale dove gira il motore di Kimi Code: le
+conversazioni di lavoro. **Se la chat semplice dell'app passi dallo stesso controllo va verificato dal vivo.**
 
 **App già aperta.** Un'app aperta dal menu Start non ha la porta, e avviarla di nuovo porterebbe solo
 in primo piano la finestra che c'è già, senza protezione. Il pannello se ne accorge (legge l'elenco
@@ -970,7 +998,7 @@ impronta sbagliate vengano rifiutate, che a server spento non parta nulla, e la 
 scorciatoie registrate, cambiate e dichiarate occupate; il testo selezionato sostituito sul posto
 in una finestrella che apre lui (i tasti partono solo se quella finestra è in primo piano,
 altrimenti il controllo viene saltato e detto); la finestra di Windows per scegliere la cartella.
-`e2e_panel.py` (68 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
+`e2e_panel.py` (70 controlli, serve la protezione attiva e una copia di prova: `OMISSIS_DATA`, e
 `OMISSIS_LISTS` per provare anche gli elenchi, `OMISSIS_MANAGED_FILE` per le impostazioni imposte) apre ogni sezione del pannello in italiano e in
 inglese: nessun errore, nessuna frase senza traduzione, nomi di pulsanti e campi, uso dalla
 tastiera, il giro completo di un testo e di un documento con dati inventati, le correzioni a mano,
@@ -980,6 +1008,10 @@ tra loro e con il codice.
 `e2e_install.py` (22 controlli, nulla acceso) prova lo scaricamento del modello e gli
 aggiornamenti contro un servizio finto: ripresa, file manomessi, firma di un'altra chiave, foglio
 ritoccato, versione più vecchia, installer sostituito sul disco.
+`e2e_kimi.py` (15 controlli, serve la copia di prova accesa e `OMISSIS_MANAGED_FILE`) prova il plugin per Kimi: la
+cartella preparata (accettata dal controllo dei plugin di Kimi, senza codici segreti dentro) e l'hook lanciato come lo
+lancia Kimi, con ogni regola del servizio, con Omissis spento e con Omissis tolto. Kimi vera non viene toccata, e
+nemmeno gli appunti veri.
 `e2e_connector.py` prova il connettore per le app desktop sullo stesso browser di prova, avviato
 con la porta di debug e senza estensione. `e2e_gateway.py` prova il gateway con un suo servizio
 finto e ha bisogno solo del motore acceso. `e2e_mcp.py` (27 controlli) fa da app al server MCP:

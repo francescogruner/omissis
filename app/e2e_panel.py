@@ -269,6 +269,28 @@ def main():
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: app desktop avviata protetta e staccata dal pannello", False, str(ex)[:160])
 
+                # --- Kimi: non si avvia con il collegamento, si protegge con un plugin che Omissis prepara e chi usa il PC installa
+                try:
+                    listed = paths.DATA / "kimi-home" / "plugins" / "installed.json"
+                    listed.unlink(missing_ok=True)
+                    pag.reload()
+                    pag.wait_for_selector("[data-app-line=kimi] button[data-action=plugin]", timeout=15000)
+                    before = pag.evaluate("document.querySelectorAll('[data-app-line=kimi] button[data-action=launch], [data-app-line=kimi] button[data-action=relaunch]').length")
+                    pag.click("[data-app-line=kimi] button[data-action=plugin]")
+                    steps = wait(pag, "() => !!document.querySelector('[data-app-note=plugin-steps] #pluginSentence')", timeout=15)
+                    sentence = pag.inner_text("#pluginSentence") if steps else ""
+                    notes = pag.inner_text("[data-app-note=plugin]") + (pag.inner_text("[data-app-note=plugin-steps]") if steps else "")
+                    made = (paths.DATA / "kimi-plugin" / "omissis" / "kimi.plugin.json").exists()
+                    listed.parent.mkdir(parents=True, exist_ok=True)
+                    listed.write_text(json.dumps({"version": 1, "plugins": [{"id": "omissis", "enabled": True}]}), encoding="utf-8")
+                    there = wait(pag, "() => !!document.querySelector('[data-app-line=kimi] .label.ok') && !document.querySelector('[data-app-note=plugin-steps]')", timeout=20)
+                    listed.unlink()
+                    mark(f"{language}: Kimi: niente «Avvia protetta», ma il plugin; il pannello prepara la cartella, dice come installarlo e riconosce quando in Kimi c'è",
+                         before == 0 and steps and made and str(paths.DATA / "kimi-plugin" / "omissis") in sentence and there and "app.plugin" not in notes and len(notes) > 200,
+                         f"altri pulsanti {before} · passi {steps} · cartella {made} · riconosciuto {there} · {sentence[:60]}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: Kimi protetta con il plugin", False, str(ex)[:160])
+
                 # --- server MCP: si registra e si toglie dalla configurazione di Claude Desktop (nelle prove, un file tra i dati di prova)
                 try:
                     cfg = paths.DATA / "claude_desktop_config.json"

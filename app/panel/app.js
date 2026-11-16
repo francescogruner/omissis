@@ -764,20 +764,27 @@ function drawApp(listing, even_if_same = true) {
   el.dataset.drawn = now;
   el.innerHTML = listing.map(a => {
     const c = a.counts;
+    const pl = a.plugin;
     const status = !a.installed ? label(t("app.status.not_installed"))
+      : pl ? (pl.installed ? label(t("app.plugin.status.yes"), "ok") : label(t("app.plugin.status.no")))
       : !a.connected ? (a.open_unprotected ? label(t("app.status.open_unprotected"), "error") : label(t("app.status.not_connected")))
       : a.outcome === "yes" ? label(t("app.status.yes"), "ok") : a.outcome === "waiting" ? label(t("app.status.waiting"), "warning") : label(t("app.status.no"), "error");
     const numbers = c ? `<span class="help">${esc(t("app.numbers", {pages: c.pages, messages: c.messages, checked_count: c.checked_count, replacements: c.replacements, blocked: c.blocked}))}</span>` : "";
-    const button = !a.installed || a.refuses ? "" : a.connected ? `<button class="button" data-app="${esc(a.id)}" data-action="detach">${esc(t("app.detach"))}</button>`
+    const button = !a.installed ? "" : pl ? `<button class="button${pl.ready ? "" : " primary"}" data-app="${esc(a.id)}" data-action="plugin">${esc(t(pl.ready ? "app.plugin.update" : "app.plugin.prepare"))}</button>`
+      : a.refuses ? "" : a.connected ? `<button class="button" data-app="${esc(a.id)}" data-action="detach">${esc(t("app.detach"))}</button>`
       : a.open_unprotected ? `<button class="button primary" data-app="${esc(a.id)}" data-name="${esc(a.name)}" data-action="relaunch">${esc(t("app.relaunch"))}</button>`
       : `<button class="button primary" data-app="${esc(a.id)}" data-action="launch">${esc(t("app.launch"))}</button>`;
     const errors = (a.errors || []).map(e => `<div class="note error">${esc(e)}</div>`).join("");
     // cio' che conviene sapere prima di fidarsi: un servizio non impostato su «Proteggi», un profilo separato
-    const notes = !a.installed ? "" : a.refuses ? `<div class="note warning" data-app-note="refuses">${esc(t("app.note.refuses", {name: a.name}))}</div>`
+    const notes = !a.installed ? "" : pl ? `<div class="note" data-app-note="plugin">${esc(t("app.plugin.note", {name: a.name}))}</div>`
+        + (a.policy !== "protect" ? `<div class="note warning" data-app-note="policy">${esc(t("app.plugin.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}))}</div>` : "")
+        + (pl.ready && !pl.installed ? `<div class="note" data-app-note="plugin-steps"><b>${esc(t("app.plugin.steps"))}</b><ol class="listing"><li>${esc(t("app.plugin.step.1", {name: a.name}))}<br><code id="pluginSentence">${esc(pl.sentence)}</code> <button class="button" id="pluginCopy">${esc(t("app.plugin.copy"))}</button></li><li>${esc(t("app.plugin.step.2"))}</li><li>${esc(t("app.plugin.step.3"))}</li></ol><span class="help">${esc(t("app.plugin.folder", {folder: pl.folder}))}</span></div>` : "")
+      : a.refuses ? `<div class="note warning" data-app-note="refuses">${esc(t("app.note.refuses", {name: a.name}))}</div>`
       : (a.policy !== "protect" ? `<div class="note warning" data-app-note="policy">${esc(t("app.note.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}))}</div>` : "")
       + (a.own_profile ? `<div class="note" data-app-note="profile">${esc(t("app.note.own_profile", {name: a.name}))}</div>` : "");
     return `<div class="setting" data-app-line="${esc(a.id)}" data-outcome="${esc(a.connected ? a.outcome || "no" : "")}" data-open="${a.open_unprotected ? "unprotected" : ""}"><span class="name">${esc(a.name)} ${status}</span>${numbers}<span class="command">${button}</span></div>${notes}${errors}`;
   }).join("");
+  if ($("#pluginCopy", el)) $("#pluginCopy", el).onclick = async () => { try { await navigator.clipboard.writeText($("#pluginSentence", el).textContent); notify(t("app.plugin.copied")); } catch (e) { /* la frase resta leggibile nella pagina */ } };
   $$("button[data-app]", el).forEach(b => b.onclick = test(async () => {
     if (b.dataset.action === "relaunch" && !await confirm(t("app.relaunch.title", {name: b.dataset.name}), t("app.relaunch.text", {name: b.dataset.name}), t("app.relaunch"))) return;
     b.disabled = true;

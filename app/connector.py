@@ -55,7 +55,8 @@ _STORE = r"%LOCALAPPDATA%\Microsoft\WindowsApps" "\\"
 #   process      nome del programma e, per non confonderlo con altri dallo stesso nome (il Claude da terminale si chiama
 #                anche lui claude.exe), un'espressione che il suo percorso completo deve soddisfare
 #   service      il servizio del catalogo a cui l'app parla: la sua politica decide se i messaggi vengono mascherati
-#   refuses      l'app si chiude da sola se avviata con la porta di debug: qui non si puo' proteggere, e il pannello lo dice
+#   refuses      l'app si chiude da sola se avviata con la porta di debug: da qui non la si avvia, e il pannello lo dice
+#   plugin       l'app ha un sistema di plugin suo, con cui Omissis controlla i messaggi prima dell'invio (kimi_plugin.py)
 #   own_profile  l'app e' un browser Chromium vero e proprio (Copilot e' un Edge): dalla versione 136 Chromium ignora la porta
 #                di debug sul profilo predefinito, quindi l'app protetta gira con un profilo suo, tenuto nei dati di Omissis.
 #                Vuol dire rifare l'accesso la prima volta; la copia normale dell'app puo' restare aperta, e NON e' protetta.
@@ -67,7 +68,8 @@ APP = {
     "kimi": {"name": "Kimi", "commands": [r"%LOCALAPPDATA%\Programs\Kimi\Kimi.exe"],
              "process": ("kimi.exe", r"\\kimi\\kimi\.exe$"), "port": 9553, "site": "kimi.com", "service": "kimi",
              # provato il 14/11/2026 sulla 3.2.24: avviata con la porta di debug (anche 0) esce da sola in un secondo, codice 1
-             "refuses": True},
+             # la protezione passa dal sistema di plugin dell'app (hook UserPromptSubmit): vedi kimi_plugin.py
+             "refuses": True, "plugin": True},
     "copilot": {"name": "Microsoft Copilot", "commands": [r"%ProgramFiles(x86)%\Microsoft\Copilot\Application\mscopilot.exe",
                                                            r"%ProgramFiles%\Microsoft\Copilot\Application\mscopilot.exe"],
                 "process": ("mscopilot.exe", r"\\copilot\\application\\mscopilot\.exe$"), "port": 9554, "site": "copilot.microsoft.com",

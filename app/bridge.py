@@ -8,6 +8,8 @@ in cui si decide dove sta il testo e come si riscrive una risposta. Gira dentro 
   POST /bridge/status      politiche dei servizi (cosa proteggere, registrare, bloccare) e impostazioni che servono nella pagina
   POST /bridge/request     {url, method, kind, body}         -> {action: passthrough | replace | block, body}
   POST /bridge/text        {host, text}                      il testo nella casella di scrittura, prima dell'invio
+  POST /bridge/prompt      {service, text}                   -> {action: allow | block, message, text}: il messaggio visto dall'hook
+                                                             di un'app (Kimi), che puo' solo lasciarlo partire o fermarlo
   POST /bridge/attachment  {host, name, byte, data (base64)} -> la copia anonimizzata del file
   POST /bridge/open_up     {url, kind}                       -> {id} se la risposta va riscritta mentre arriva
   POST /bridge/chunk       {id, data (base64), end}          -> {data (base64)}
@@ -33,6 +35,7 @@ import urllib.request
 from pathlib import Path
 
 import catalog
+import i18n
 import managed
 import settings
 import paths
@@ -106,7 +109,7 @@ class Bridge:
         return None, None, host, path
 
     def handle(self, action, data):
-        f = {"status": self.status, "request": self.request, "text": self.text, "open_up": self.open_up, "chunk": self.chunk, "whole": self.whole,
+        f = {"status": self.status, "request": self.request, "text": self.text, "prompt": self.prompt, "open_up": self.open_up, "chunk": self.chunk, "whole": self.whole,
              "values": self.values, "visit": self.visit, "websocket": self.websocket, "attachment": self.attachment}.get(action)
         if f is None:
             return None
@@ -232,6 +235,36 @@ class Bridge:
         if outcome["texts"][0] == t:
             return {"action": "passthrough"}
         return {"action": "replace", "text": outcome["texts"][0], "replacements": sum(outcome["counts"].values())}
+
+    def prompt(self, data):
+        """Un messaggio che un'app sta per mandare, visto da un suo hook (Kimi: evento UserPromptSubmit del suo sistema di
+        plugin). Un hook non puo' riscrivere il messaggio, solo lasciarlo partire o fermarlo: dove il servizio e' su
+        «Proteggi» e c'e' qualcosa da sostituire il messaggio viene fermato, e torna la versione protetta, che l'hook mette
+        negli appunti perche' chi scrive la incolli. Incollata, non ha piu' nulla da sostituire e parte."""
+        s, t = catalog.PER_ID.get(str(data.get("service", ""))), data.get("text")
+        if s is None or not isinstance(t, str) or not t.strip():
+            return {"action": "allow"}
+        pol, host = settings.policy(s), s["domains"][0]
+        # la regola torna sempre: l'hook se la ricorda, per sapere che cosa fare il giorno che Omissis non risponde
+        if pol == "block":
+            self.reg.contact(s["id"], host, "blocked")
+            return {"action": "block", "policy": pol, "message": i18n.t("hook.service_blocked", name=s["name"])}
+        if pol == "record":
+            self.reg.contact(s["id"], host, "not_protected")
+        if pol != "protect":
+            return {"action": "allow", "policy": pol}
+        entry = {"service": s["id"], "via": "app desktop", "method": "hook", "path": "(messaggio)", "byte": len(t.encode("utf-8"))}
+        try:
+            outcome = self.m.mask([t])
+        except Exception as ex:   # noqa: BLE001  (mai lasciar partire in chiaro)
+            self.reg.write(**entry, event="blocked_model_silent", error=type(ex).__name__)
+            return {"action": "block", "policy": pol, "message": i18n.t("hook.engine")}
+        self.reg.write(**entry, event="masked", fields=1, characters=len(outcome["texts"][0]), replacements=outcome["counts"], ms=outcome["ms"])
+        if outcome["texts"][0] == t:
+            return {"action": "allow", "policy": pol}
+        n = sum(outcome["counts"].values())
+        return {"action": "block", "policy": pol, "text": outcome["texts"][0], "replacements": n,
+                "message": i18n.t("hook.held", n=n), "message_copied": i18n.t("hook.held.copied", n=n)}
 
     # ---------------------------------------------------------------- allegati
     def _already_anonymized(self, service, weight):
