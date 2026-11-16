@@ -291,6 +291,24 @@ def main():
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: Kimi protetta con il plugin", False, str(ex)[:160])
 
+                # --- il comando per i plugin delle app AI: si installa e si toglie dal pannello (nelle prove il PATH vero non viene toccato)
+                try:
+                    import hook_command
+                    hook_command.remove()
+                    pag.reload()
+                    pag.wait_for_selector("[data-hook=off] #hookToggle", timeout=15000)
+                    how = pag.inner_text("[data-hook-note=how]")
+                    pag.click("#hookToggle")
+                    on = wait(pag, "() => !!document.querySelector('[data-hook=on] .label.ok')", timeout=15)
+                    there = hook_command.state()
+                    pag.click("#hookToggle")
+                    off = wait(pag, "() => !!document.querySelector('[data-hook=off]')", timeout=15)
+                    mark(f"{language}: comando per i plugin delle app AI: il pannello lo installa e lo toglie, e dice come installare il plugin in Kimi, Claude Code, Codex e Gemini CLI",
+                         on and there["ready"] and there["on_path"] and off and not hook_command.state()["ready"] and all(x in how for x in ("Kimi", "Claude Code", "Codex", "Gemini CLI"))
+                         and how.count("omissis-plugin") >= 4 and "hooks." not in how + pag.inner_text("#hookCommand"), f"installato {on} · tolto {off} · {how[:70]}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: comando per i plugin delle app AI", False, str(ex)[:160])
+
                 # --- server MCP: si registra e si toglie dalla configurazione di Claude Desktop (nelle prove, un file tra i dati di prova)
                 try:
                     cfg = paths.DATA / "claude_desktop_config.json"
@@ -563,8 +581,12 @@ def main():
                 # --- archivio: si cerca per valore vero senza mostrarlo, si elimina una voce scelta
                 pag.goto(f"{PANEL}/#/vault")
                 pag.wait_for_selector("#archSearch")
+                # prima l'archivio intero, poi la ricerca: le righe si leggono solo quando la tabella si e' ristretta
+                wait(pag, "() => document.querySelectorAll('#tabVault tr').length > 0", timeout=15)
+                everything = pag.evaluate("document.querySelectorAll('#tabVault tr').length")
                 pag.fill("#archSearch", "ferraresi")
-                wait(pag, "() => [...document.querySelectorAll('#tabVault .placeholder')].some(e => e.textContent.startsWith('[PERSONA_'))", timeout=15)
+                wait(pag, f"() => {{ const r = document.querySelectorAll('#tabVault tr'); return r.length > 0 && r.length < {everything} && "
+                          "[...document.querySelectorAll('#tabVault .placeholder')].some(e => e.textContent.startsWith('[PERSONA_')); }", timeout=15)
                 lines = pag.evaluate("[...document.querySelectorAll('#tabVault tr')].map(r => r.innerText)")
                 mark(f"{language}: archivio -> ricerca per valore vero, che resta nascosto", 1 <= len(lines) <= 30 and all("•" in r and "erraresi" not in r for r in lines), f"{len(lines)} voci")
                 pag.wait_for_timeout(300)

@@ -799,10 +799,23 @@ const appListingQuiet = async () => {
   if (!el || $("button:disabled", el) || document.querySelector("dialog[open]")) return;   // non durante un avvio o una conferma
   try { drawApp(await api("/api/app"), false); } catch (e) { /* al prossimo giro */ }
 };
+/** Il comando che i plugin di Omissis per le app AI (Kimi, Claude Code, Codex, Gemini CLI) chiamano prima di mandare un messaggio. */
+const drawHook = h => {
+  const el = $("#hookCommand");
+  if (!el) return;
+  const on = h.ready && h.on_path;
+  el.innerHTML = `<div class="setting" data-hook="${on ? "on" : "off"}"><span class="name">${esc(t("hooks.command"))} ${label(t(on ? "hooks.status.yes" : "hooks.status.no"), on ? "ok" : "")}</span>
+      <span class="help">${esc(t(on ? "hooks.on" : "hooks.off"))}</span><span class="command"><button class="button${on ? "" : " primary"}" id="hookToggle">${esc(t(on ? "hooks.remove" : "hooks.install"))}</button></span></div>
+    <div class="note" data-hook-note="how"><b>${esc(t("hooks.how"))}</b><ul class="listing">${h.platforms.map(p => `<li>${esc(p.name)}: ${p.commands.map(c => `<code>${esc(c)}</code>`).join(` ${esc(t("hooks.then"))} `)}</li>`).join("")}</ul>
+      <span class="help">${esc(t("hooks.limits"))}</span></div>`;
+  $("#hookToggle").onclick = test(async () => drawHook(await api("/api/hook", {action: on ? "remove" : "install"})));
+};
 const connectApp = el => {
   el.innerHTML = `<section class="card" aria-label="${esc(t("connections.card.app"))}" id="appListing"><div class="empty">…</div></section>`
+    + card(`<h2>${esc(t("hooks.title"))}</h2><p class="faded">${esc(t("hooks.below"))}</p><div id="hookCommand"></div>`)
     + card(`<h2>${esc(t("app.know"))}</h2><ul class="listing faded">${[1, 2, 3, 4, 5].map(i => `<li>${t(`app.know.${i}`)}</li>`).join("")}</ul>`);
   appListing();
+  test(async () => drawHook(await api("/api/hook")))();
 };
 
 const gatewayStatus = test(async () => {

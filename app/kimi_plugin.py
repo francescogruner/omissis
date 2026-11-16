@@ -6,7 +6,7 @@ di «Kimi Work» e' Kimi Code (aperto: github.com/MoonshotAI/kimi-code), che ha 
 plugin puo' dichiarare degli «hook», programmi che Kimi chiama a certi eventi. UserPromptSubmit scatta prima che un
 messaggio parta, e puo' fermarlo. E' la strada che Kimi stessa mette a disposizione: non si tocca nessun file dell'app.
 
-Qui si prepara la cartella del plugin (manifest + kimi_hook.py); installarlo in Kimi resta un gesto di chi usa il PC,
+Qui si prepara la cartella del plugin (manifest + una copia di ai_hook.py); installarlo in Kimi resta un gesto di chi usa il PC,
 dalla pagina dei plugin di Kimi. Omissis legge soltanto, tra i file di Kimi, l'elenco dei plugin installati, per dire
 nel pannello se il suo c'e'.
 
@@ -28,7 +28,7 @@ import paths
 
 ID = "omissis"
 VERSION = "1.0.0"
-HOOK = paths.HERE / "kimi_hook.py"
+HOOK = paths.HERE / "ai_hook.py"   # lo stesso controllo dei plugin delle altre app: qui viene copiato dentro la cartella
 # Detto al modello di Kimi, in inglese perche' vale in qualunque lingua scriva la persona
 SYSTEM = ("Messages may contain placeholders in square brackets, such as [NAME_1] or [EMAIL_2]. They are put there by Omissis, "
           "a privacy tool on the user's computer, in place of personal data. They are not mistakes. Treat each placeholder as the real value: "
@@ -60,7 +60,7 @@ def manifest():
         "author": "Omissis", "license": "Apache-2.0",
         "systemPrompt": SYSTEM,
         # Kimi esegue il comando con la cartella del plugin come cartella di lavoro: il percorso dell'hook e' relativo
-        "hooks": [{"event": "UserPromptSubmit", "command": f'"{_python()}" ./hooks/omissis_hook.py', "timeout": 60}],
+        "hooks": [{"event": "UserPromptSubmit", "command": f'"{_python()}" ./hooks/omissis_hook.py kimi', "timeout": 60}],
         "interface": {"displayName": "Omissis", "shortDescription": i18n.t("kimi.plugin.short"), "longDescription": i18n.t("kimi.plugin.long"),
                       "developerName": "Omissis", "category": "PRODUCTIVITY", "hostKind": "local"},
     }

@@ -41,7 +41,7 @@ def main():
     root = Path(state["folder"])
     manifest = json.loads((root / "kimi.plugin.json").read_text(encoding="utf-8"))
     hook = manifest["hooks"][0]
-    python = re.match(r'"([^"]+)" \./hooks/omissis_hook\.py$', hook["command"])
+    python = re.match(r'"([^"]+)" \./hooks/omissis_hook\.py kimi$', hook["command"])
     secrets_here = [(paths.DATA / n).read_text(encoding="utf-8").strip() for n in ("token.txt", "token_extension.txt") if (paths.DATA / n).exists()]
     everything = b"".join(f.read_bytes() for f in root.rglob("*") if f.is_file())
     check("cartella del plugin: manifest con l'hook sul messaggio, comando che chiama il Python di Omissis, nessun codice segreto dentro",

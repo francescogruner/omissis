@@ -39,6 +39,7 @@ import documents
 import folders
 import gateway
 import inventory
+import hook_command
 import kimi_plugin
 import mcp_server
 import settings
@@ -350,6 +351,20 @@ def mcp_state():
             "folders": [str(x) for x in mcp_server._known_folders()], "extra": list(settings.read().get("mcp_folders") or [])}
 
 
+# Il repository pubblico con i plugin di Omissis per le app AI: i comandi mostrati nel pannello installano da li'
+PLUGIN_REPO = "francescogruner/omissis-plugin"
+
+
+def hook_state():
+    """Il comando «omissis-hook» (c'e'? e' nel PATH?) e, per ogni app, come si installa il plugin che lo chiama."""
+    link = f"https://github.com/{PLUGIN_REPO}"
+    return {**hook_command.state(), "repository": link, "platforms": [
+        {"id": "kimi", "name": "Kimi", "commands": [f"/plugins install {link}"]},
+        {"id": "claude", "name": "Claude Code", "commands": [f"claude plugin marketplace add {PLUGIN_REPO}", "claude plugin install omissis@omissis"]},
+        {"id": "codex", "name": "Codex", "commands": [f"codex plugin marketplace add {PLUGIN_REPO}"]},
+        {"id": "gemini", "name": "Gemini CLI", "commands": [f"gemini extensions install {link}"]}]}
+
+
 def app_desktop():
     out = []
     for key, a in connector.APP.items():
@@ -651,6 +666,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, read_lists())
             elif u.path == "/api/app":
                 self._respond(200, app_desktop())
+            elif u.path == "/api/hook":
+                self._respond(200, hook_state())
             elif u.path == "/api/view":
                 self._respond(200, {"view": settings.read().get("view", "simple")})
             elif u.path == "/api/mcp":
@@ -832,6 +849,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._respond(200, {"preview": central.summary(SUP.phase)})
                     return
                 self._respond(200, central.state())
+            elif p == "/api/hook":   # il comando che i plugin delle app AI chiamano: lo mette, o lo toglie, chi usa il PC
+                hook_command.remove() if data.get("action") == "remove" else hook_command.install()
+                self._respond(200, hook_state())
             elif p == "/api/app":
                 key = str(data.get("id", ""))
                 if key not in connector.APP:
