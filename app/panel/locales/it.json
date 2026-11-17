@@ -429,6 +429,7 @@
  "compatibility.method.network": "richieste della pagina",
  "compatibility.method.api": "indirizzo del servizio",
  "compatibility.method.proxy": "proxy",
+ "compatibility.method.hook": "controllo prima dell'invio",
  "compatibility.level.live": "dal vivo",
  "compatibility.level.fake_service": "servizio simulato",
  "via.proxy": "proxy",
@@ -523,6 +524,7 @@
  "via.extension": "estensione",
  "via.app desktop": "app desktop",
  "via.gateway": "terminale",
+ "via.plugin": "plugin",
 
  "vault.title": "Archivio",
  "vault.below": "La corrispondenza tra segnaposto e valori veri. Resta su questo PC, cifrata con la protezione di Windows legata al tuo utente, e serve a ripristinare le risposte. Puoi cercare un valore senza mostrarli tutti: la ricerca guarda anche i valori nascosti.",

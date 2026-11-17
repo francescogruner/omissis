@@ -572,7 +572,7 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 | Claude | stessa app, riavviata con la porta | no |
 | Kimi | con la porta **non si può**: avviata così si chiude da sola in un secondo (codice 1), anche con la porta 0. Si protegge con il **suo sistema di plugin** (vedi sotto) | la porta: provata il 14/11/2026 sulla 3.2.24. Il plugin: solo in automatico (`e2e_kimi.py`), non ancora installato e provato dentro Kimi vera |
 | Microsoft Copilot | con un **profilo separato**, tenuto in `data\app_profiles\copilot` | solo l'aggancio: 5 finestre seguite, nessun errore, nessun messaggio inviato (14/11/2026) |
-| Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere | — |
+| Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere. Nel browser Copilot per Microsoft 365 si protegge dalla casella di scrittura (vedi l'estensione) | — |
 | Visual Studio (GitHub Copilot) | non coperta: è un programma nativo, le richieste partono da un suo processo e non da una finestra web. Il servizio si può solo registrare o bloccare | — |
 | Editor derivati da VS Code (Antigravity, Cursor, Windsurf) | non coperti dal connettore: la chat parla con il servizio da un processo dell'editor, e la casella è un editor di codice che non si riscrive come una casella web | non installati sul PC di prova |
 | Perplexity | da provare: non era installata sul PC di prova | — |

@@ -1,6 +1,6 @@
 {
  "_what": "Cio' che l'autore ha verificato di persona, con quale programma e quale versione. livello: dal_vivo (servizio vero, dati inventati) | servizio_finto (prove automatiche contro un servizio simulato).",
- "updated": "2026-11-13",
+ "updated": "2026-11-17",
  "entries": [
   {
    "service": "chatgpt",
@@ -9,16 +9,151 @@
    "version": "26.1106",
    "method": "box",
    "level": "live",
-   "data": "2026-11-12"
+   "data": "2026-11-17"
   },
   {
    "service": "anthropic-api",
    "via": "gateway",
    "client": "Claude Code",
-   "version": "",
+   "version": "2.1",
    "method": "api",
    "level": "live",
-   "data": "2026-11-12"
+   "data": "2026-11-14"
+  },
+  {
+   "service": "openai-api",
+   "via": "gateway",
+   "client": "Codex CLI",
+   "version": "0.164",
+   "method": "api",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "anthropic-api",
+   "via": "plugin",
+   "client": "Claude Code",
+   "version": "2.1",
+   "method": "hook",
+   "level": "live",
+   "data": "2026-11-16"
+  },
+  {
+   "service": "claude",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "box",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "chatgpt",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "perplexity",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "gemini",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "zai",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "mistral",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "grok",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "qwen",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "poe",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "manus",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "genspark",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "kimi",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "copilot-365",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "box",
+   "level": "live",
+   "data": "2026-11-17"
   },
   {
    "service": "",
@@ -27,7 +162,7 @@
    "version": "157",
    "method": "network",
    "level": "fake_service",
-   "data": "2026-11-13"
+   "data": "2026-11-17"
   },
   {
    "service": "",
@@ -36,7 +171,7 @@
    "version": "157",
    "method": "network",
    "level": "fake_service",
-   "data": "2026-11-13"
+   "data": "2026-11-17"
   },
   {
    "service": "",
@@ -45,7 +180,7 @@
    "version": "",
    "method": "network",
    "level": "fake_service",
-   "data": "2026-11-13"
+   "data": "2026-11-17"
   }
  ]
 }

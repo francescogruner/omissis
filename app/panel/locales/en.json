@@ -429,6 +429,7 @@
  "compatibility.method.network": "page requests",
  "compatibility.method.api": "service address",
  "compatibility.method.proxy": "proxy",
+ "compatibility.method.hook": "check before sending",
  "compatibility.level.live": "live",
  "compatibility.level.fake_service": "mock service",
  "via.proxy": "proxy",
@@ -523,6 +524,7 @@
  "via.extension": "extension",
  "via.app desktop": "desktop app",
  "via.gateway": "terminal",
+ "via.plugin": "plugin",
 
  "vault.title": "Vault",
  "vault.below": "The match between placeholders and real values. It stays on this PC, encrypted with the Windows protection tied to your user, and is what restores the answers. You can look for a value without showing them all: the search also looks at hidden values.",
