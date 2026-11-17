@@ -816,6 +816,16 @@ const drawHook = h => {
       <span class="help">${esc(t(on ? "hooks.on" : "hooks.off"))}</span><span class="command"><button class="button${on ? "" : " primary"}" id="hookToggle">${esc(t(on ? "hooks.remove" : "hooks.install"))}</button></span></div>
     <div class="note" data-hook-note="how"><b>${esc(t("hooks.how"))}</b><ul class="listing">${h.platforms.map(p => `<li>${esc(p.name)}: ${p.commands.map(c => `<code>${esc(c)}</code>`).join(` ${esc(t("hooks.then"))} `)}</li>`).join("")}</ul>
       <span class="help">${esc(t("hooks.limits"))}</span></div>`;
+  const ag = h.antigravity || {};
+  if (ag.present || ag.linked) {
+    const linked = !!ag.linked;
+    el.insertAdjacentHTML("beforeend", `<div class="setting" data-hook-antigravity="${linked ? "on" : "off"}"><span class="name">${esc(t("hooks.antigravity"))} ${label(t(linked ? "hooks.antigravity.yes" : "hooks.antigravity.no"), linked ? "ok" : "")}</span>
+      <span class="help">${esc(t(linked ? "hooks.antigravity.on" : on ? "hooks.antigravity.off" : "hooks.antigravity.needs"))}</span>
+      <span class="command"><button class="button${linked ? "" : " primary"}" id="antigravityToggle"${!linked && !on ? " disabled" : ""}>${esc(t(linked ? "hooks.antigravity.unlink" : "hooks.antigravity.link"))}</button></span></div>`
+      + (linked && h.antigravity_policy !== "protect" ? `<div class="note warning" data-hook-note="antigravity-policy">${esc(t("hooks.antigravity.policy", {policy: t(`services.policy.${h.antigravity_policy}`)}))}</div>` : "")
+      + (ag.unreadable ? `<div class="note warning" data-hook-note="antigravity-unreadable">${esc(t("hooks.antigravity.unreadable", {file: ag.file}))}</div>` : ""));
+    $("#antigravityToggle").onclick = test(async () => drawHook(await api("/api/hook", {action: linked ? "antigravity_unlink" : "antigravity_link"})));
+  }
   $("#hookToggle").onclick = test(async () => drawHook(await api("/api/hook", {action: on ? "remove" : "install"})));
 };
 const connectApp = el => {

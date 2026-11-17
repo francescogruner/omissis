@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
 """Il controllo di Omissis sui messaggi, per le app e gli strumenti AI che hanno un sistema di «hook» loro.
 
-Kimi, Claude Code, Codex e Gemini CLI chiamano un programma subito prima di mandare un messaggio, passandogli il testo
-in JSON sullo standard input, e gli lasciano decidere se il messaggio parte. Questo e' quel programma, uno per tutti:
+Kimi, Claude Code, Codex, Gemini CLI e Antigravity (app e CLI) chiamano un programma subito prima di mandare un
+messaggio, passandogli il testo in JSON sullo standard input, e gli lasciano decidere se il messaggio parte. Questo e'
+quel programma, uno per tutti:
 
-  omissis-hook kimi | claude | codex | gemini
+  omissis-hook kimi | claude | codex | gemini | antigravity
+
+Antigravity lo chiama all'evento PreInvocation, prima di ogni chiamata al modello: conta solo la prima di ogni turno
+(invocationNum 0), quando parte il messaggio scritto dalla persona. Antigravity non guarda l'uscita del programma ma
+quello che scrive sullo standard output: per fermare il messaggio un JSON con «terminationBehavior: terminate» e un
+«errorMessage», che Antigravity mostra a chi scrive senza mandarlo al modello.
 
 Un hook puo' solo lasciar partire il messaggio o fermarlo: non puo' riscriverlo. Quindi:
 
@@ -44,8 +50,9 @@ PLATFORMS = {
     "claude": {"service": "anthropic-api", "client": "Claude Code (plugin)", "gateway": ("ANTHROPIC_BASE_URL",)},
     "codex": {"service": "chatgpt", "client": "Codex (plugin)", "gateway": ("OPENAI_BASE_URL",)},
     "gemini": {"service": "gemini-api", "client": "Gemini CLI (plugin)", "gateway": ("GOOGLE_GEMINI_BASE_URL",)},
+    "antigravity": {"service": "antigravity", "client": "Antigravity (hook)", "gateway": (), "json": True},
 }
-EVENTS = ("UserPromptSubmit", "BeforeAgent")   # come ogni app chiama il momento «il messaggio sta per partire»
+EVENTS = ("UserPromptSubmit", "BeforeAgent", "PreInvocation")   # come ogni app chiama il momento «il messaggio sta per partire»
 OFF = {"it": "Omissis non risponde: il messaggio non è partito, per non mandarlo senza protezione. Avvia Omissis e riprova. "
              "Per lavorare senza Omissis, disattiva il plugin «Omissis» in questa app.",
        "en": "Omissis is not answering: the message was not sent, so that it does not leave unprotected. Start Omissis and try again. "
@@ -142,11 +149,24 @@ def remembered(data, service, policy=None):
     return known.get(service) if policy is None else policy
 
 
-def stop(message):
-    """Uscita 2: per tutte queste app vuol dire «ferma il messaggio»; cio' che sta nell'errore standard lo mostrano a chi scrive."""
+def stop(message, platform=None):
+    """Uscita 2: per quasi tutte queste app vuol dire «ferma il messaggio»; cio' che sta nell'errore standard lo mostrano
+    a chi scrive. Antigravity invece legge un JSON dallo standard output: un messaggio d'errore e l'ordine di fermarsi."""
+    if platform and platform.get("json"):
+        sys.stdout.buffer.write(json.dumps({"injectSteps": [{"errorMessage": {"userMessage": message}}], "terminationBehavior": "terminate"}).encode("utf-8"))
+        sys.stdout.buffer.flush()
+        return 0
     sys.stderr.buffer.write(message.encode("utf-8"))
     sys.stderr.buffer.flush()
     return 2
+
+
+def go(platform):
+    """Il messaggio parte. Ad Antigravity serve comunque un JSON, anche vuoto."""
+    if platform and platform.get("json"):
+        sys.stdout.write("{}")
+        sys.stdout.flush()
+    return 0
 
 
 def main(argv=None):
@@ -158,15 +178,19 @@ def main(argv=None):
     args, _ = ap.parse_known_args(argv)
     platform = PLATFORMS.get(str(args.platform).lower())
     event = read_event()
-    if platform is None or not isinstance(event, dict) or event.get("hook_event_name", EVENTS[0]) not in EVENTS:
-        return 0
-    text = text_of(event.get("prompt"))
+    if platform is None or not isinstance(event, dict):
+        return go(platform)
+    if event.get("hook_event_name", event.get("hookEventName", EVENTS[0])) not in EVENTS:
+        return go(platform)
+    if event.get("invocationNum", 0) != 0:   # Antigravity: una chiamata successiva dello stesso turno, il messaggio e' gia' passato di qui
+        return go(platform)
+    text = text_of(event.get("prompt", event.get("lastUserInput")))
     if not text.strip() or through_gateway(platform["gateway"]):
-        return 0
+        return go(platform)
     cfg = config(args)
     data = Path(cfg["data"]) if cfg["data"] else None
     if data is None or not data.is_dir():   # Omissis non c'e' piu' su questo PC: il plugin e' rimasto solo, non decide nulla
-        return 0
+        return go(platform)
     service = platform["service"]
     try:
         token = (data / "token_extension.txt").read_text(encoding="utf-8").strip()
@@ -177,16 +201,16 @@ def main(argv=None):
             outcome = json.loads(answer.read().decode("utf-8"))
     except (OSError, ValueError, urllib.error.URLError):
         # Omissis non risponde: dove il servizio era da proteggere o da bloccare il messaggio non parte; altrove non c'era nulla da fermare
-        return stop(OFF[cfg["language"]]) if remembered(data, service) in ("protect", "block") else 0
+        return stop(OFF[cfg["language"]], platform) if remembered(data, service) in ("protect", "block") else go(platform)
     if not isinstance(outcome, dict):
-        return 0
+        return go(platform)
     if isinstance(outcome.get("policy"), str):
         remembered(data, service, outcome["policy"])
     if outcome.get("action") != "block":
-        return 0
+        return go(platform)
     copied = isinstance(outcome.get("text"), str) and to_clipboard(outcome["text"])
     message = outcome.get("message_copied" if copied else "message") or outcome.get("message") or OFF[cfg["language"]]
-    return stop(str(message))
+    return stop(str(message), platform)
 
 
 if __name__ == "__main__":

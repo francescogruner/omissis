@@ -298,9 +298,18 @@ def main():
                     pag.reload()
                     pag.wait_for_selector("[data-hook=off] #hookToggle", timeout=15000)
                     how = pag.inner_text("[data-hook-note=how]")
+                    waiting = pag.is_disabled("#antigravityToggle")   # senza il comando, Antigravity non si collega
                     pag.click("#hookToggle")
                     on = wait(pag, "() => !!document.querySelector('[data-hook=on] .label.ok')", timeout=15)
                     there = hook_command.state()
+                    pag.click("#antigravityToggle")
+                    linked = wait(pag, "() => !!document.querySelector('[data-hook-antigravity=on] .label.ok')", timeout=15)
+                    in_file = hook_command.antigravity_state()["linked"]
+                    shown = pag.inner_text("#hookCommand")
+                    pag.click("#antigravityToggle")
+                    unlinked = wait(pag, "() => !!document.querySelector('[data-hook-antigravity=off]')", timeout=15) and not hook_command.antigravity_state()["linked"]
+                    mark(f"{language}: Antigravity: «Collega» si può solo col comando installato, scrive la voce di Omissis nel file degli hook di Antigravity, «Scollega» la toglie",
+                         waiting and linked and in_file and unlinked and "Antigravity" in shown and "hooks." not in shown, f"in attesa {waiting} · collegato {linked}/{in_file} · scollegato {unlinked}")
                     pag.click("#hookToggle")
                     off = wait(pag, "() => !!document.querySelector('[data-hook=off]')", timeout=15)
                     mark(f"{language}: comando per i plugin delle app AI: il pannello lo installa e lo toglie, e dice come installare il plugin in Kimi, Claude Code, Codex e Gemini CLI",

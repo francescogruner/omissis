@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Prova il comando «omissis-hook» e i plugin di Omissis per le app AI che hanno un sistema di hook (Kimi, Claude Code,
-Codex, Gemini CLI).
+Codex, Gemini CLI, Antigravity).
 
   python e2e_plugins.py
 
@@ -54,7 +54,7 @@ def main():
     files = {f.name: f.read_bytes() for f in folder.iterdir() if f.name.startswith("omissis-hook")}
     secrets_here = [(paths.DATA / n).read_text(encoding="utf-8").strip() for n in ("token.txt", "token_extension.txt") if (paths.DATA / n).exists()]
     check("«Installa il comando»: due file (per cmd/PowerShell e per bash) che chiamano il controllo con il Python di Omissis; nessun codice segreto dentro",
-          before == {"ready": False, "on_path": False, "folder": str(folder)} and state["ready"] and state["on_path"] and set(files) == {"omissis-hook", "omissis-hook.cmd"}
+          {k: before[k] for k in ("ready", "on_path", "folder")} == {"ready": False, "on_path": False, "folder": str(folder)} and state["ready"] and state["on_path"] and set(files) == {"omissis-hook", "omissis-hook.cmd"}
           and all(b"ai_hook.py" in c and b"--data" in c for c in files.values()) and files["omissis-hook.cmd"].startswith(b"@echo off\r\n")
           and files["omissis-hook"].startswith(b"#!/bin/sh\n") and b"\r" not in files["omissis-hook"]
           and secrets_here and not any(s.encode() in c for s in secrets_here for c in files.values()), str(sorted(files)))
@@ -84,7 +84,7 @@ def main():
 
     prompt = lambda text, event="UserPromptSubmit": {"hook_event_name": event, "session_id": "prova", "cwd": str(work), "prompt": text}
     try:
-        rule({"kimi": "protect", "gemini-api": "protect", "anthropic-api": "protect", "chatgpt": "protect"})
+        rule({"kimi": "protect", "gemini-api": "protect", "anthropic-api": "protect", "chatgpt": "protect", "antigravity": "protect"})
         # --- ogni shell trova il comando e gli passa il messaggio
         seen = {}
         for shell in shells:
@@ -102,10 +102,30 @@ def main():
             each[app] = (code, len(why) > 40 and not any(v in why for v in VALUES), pasted)
         check("Kimi, Claude Code, Codex e Gemini CLI: fermato il messaggio con dati personali (uscita 2, con la spiegazione), e la versione protetta, incollata, parte",
               all(v == (2, True, 0) for v in each.values()), str(each))
+        # --- Antigravity: evento PreInvocation, e la risposta non e' l'uscita ma un JSON sullo standard output
+        def ag(text, number=0, **changes):
+            clip.unlink(missing_ok=True)
+            event = {"hookEventName": "PreInvocation", "conversationId": "prova", "invocationNum": number, "initialNumSteps": 1, "lastUserInput": text, "workspacePaths": [str(work)]}
+            r = subprocess.run(**shells["cmd"]("antigravity"), input=json.dumps(event).encode("utf-8"), capture_output=True, cwd=str(work), env={**env, **changes}, timeout=120)
+            try:
+                said = json.loads(r.stdout.decode("utf-8") or "null")
+            except ValueError:
+                said = r.stdout.decode("utf-8", errors="replace")
+            return r.returncode, said, clip.read_text(encoding="utf-8") if clip.exists() else None
+        code, said, held = ag(PERSONAL)
+        stopped = isinstance(said, dict) and said.get("terminationBehavior") == "terminate" and said.get("injectSteps", [{}])[0].get("errorMessage", {}).get("userMessage", "")
+        pasted = ag(held)[:2] if held else None
+        check("Antigravity: messaggio con dati personali fermato prima del modello (terminate, con la spiegazione per chi scrive), versione protetta negli appunti; incollata, parte",
+              code == 0 and len(stopped or "") > 40 and not any(v in json.dumps(said, ensure_ascii=False) for v in VALUES)
+              and bool(held) and not any(v in held for v in VALUES) and pasted == (0, {}), f"{code} {str(said)[:120]} · incollata {pasted}")
+        later = [ag(PERSONAL, 1)[:2], ag(PLAIN)[:2], ag(PERSONAL, OMISSIS_PORT="9")[1].get("terminationBehavior") if isinstance(ag(PERSONAL, OMISSIS_PORT="9")[1], dict) else None]
+        check("Antigravity: le chiamate successive dello stesso turno e i messaggi puliti passano ({}); a Omissis spento il messaggio da proteggere resta fermo",
+              later == [(0, {}), (0, {}), "terminate"], str(later))
+
         log = [json.loads(x) for x in (paths.DATA / "activity.jsonl").read_text(encoding="utf-8").splitlines()[-80:] if x.strip()]
         mine = {(x.get("service"), x.get("client")) for x in log if x.get("method") == "hook"}
         check("nel registro ogni app compare col suo servizio e il suo nome; mai il testo né i valori",
-              {("kimi", "Kimi (plugin)"), ("anthropic-api", "Claude Code (plugin)"), ("chatgpt", "Codex (plugin)"), ("gemini-api", "Gemini CLI (plugin)")} <= mine
+              {("kimi", "Kimi (plugin)"), ("anthropic-api", "Claude Code (plugin)"), ("chatgpt", "Codex (plugin)"), ("gemini-api", "Gemini CLI (plugin)"), ("antigravity", "Antigravity (hook)")} <= mine
               and not any(v in json.dumps(log, ensure_ascii=False) for v in VALUES), str(sorted(mine))[:200])
 
         # --- dove lo strumento passa gia' dal gateway di Omissis, il plugin non interviene: li' i dati vengono sostituiti davvero
@@ -126,6 +146,32 @@ def main():
               ruled == [2, 0, 0, 2] and off == [2, 0, 0, 2], f"acceso {ruled} · spento {off}")
     finally:
         rule(None)
+
+    # --- Antigravity: la voce di Omissis nel suo file degli hook, accanto a quelle che ci sono gia'
+    hook_command.install()
+    f = hook_command.antigravity_file()
+    other = {"altro": {"PreToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command": "controllo-altrui"}]}]}}
+    f.write_text(json.dumps(other), encoding="utf-8")
+    linked = hook_command.antigravity_link()["antigravity"]
+    inside = json.loads(f.read_text(encoding="utf-8"))
+    unlinked = hook_command.antigravity_unlink()["antigravity"]
+    left = json.loads(f.read_text(encoding="utf-8"))
+    f.write_text("{ non è JSON", encoding="utf-8")
+    try:
+        hook_command.antigravity_link()
+        refused = False
+    except ValueError:
+        refused = True
+    untouched = f.read_text(encoding="utf-8") == "{ non è JSON" and hook_command.antigravity_state()["unreadable"]
+    f.write_text(json.dumps(other), encoding="utf-8")
+    hook_command.antigravity_link()
+    hook_command.remove()
+    after_remove = json.loads(f.read_text(encoding="utf-8"))
+    f.unlink(missing_ok=True)
+    hook_command.install()   # la prova finale, qui sotto, toglie il comando
+    check("Antigravity: «Collega» aggiunge la voce di Omissis (PreInvocation, «omissis-hook antigravity», senza percorsi) e lascia le altre; «Scollega» e «Togli il comando» la tolgono; un file illeggibile non viene riscritto",
+          linked["linked"] and inside.get("altro") == other["altro"] and inside["omissis"] == {"PreInvocation": [{"type": "command", "command": "omissis-hook antigravity", "timeout": 60}]}
+          and not unlinked["linked"] and left == other and refused and untouched and after_remove == other, f"{linked} · {sorted(inside)} · rifiuto {refused}")
 
     # --- il repository pubblico dei plugin: ogni app chiama il comando per nome, e dentro non c'e' nulla di questo PC
     if not (REPO / "kimi.plugin.json").exists():
@@ -157,7 +203,7 @@ def main():
     # --- togliere il comando
     gone = hook_command.remove()
     check("«Togli il comando»: spariscono i file e la cartella esce dal PATH; i plugin, da lì, non trovano più nulla",
-          gone == {"ready": False, "on_path": False, "folder": str(folder)} and not any(f.name.startswith("omissis-hook") for f in folder.iterdir())
+          {k: gone[k] for k in ("ready", "on_path", "folder")} == {"ready": False, "on_path": False, "folder": str(folder)} and not any(f.name.startswith("omissis-hook") for f in folder.iterdir())
           and subprocess.run("omissis-hook claude", shell=True, input=b"{}", capture_output=True, env=env).returncode not in (0, 2))
     print("\nTUTTO BENE" if ok else "\nQUALCOSA NON VA")
     sys.exit(0 if ok else 1)

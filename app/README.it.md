@@ -574,7 +574,8 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 | Microsoft Copilot | con un **profilo separato**, tenuto in `data\app_profiles\copilot` | solo l'aggancio: 5 finestre seguite, nessun errore, nessun messaggio inviato (14/11/2026) |
 | Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere. Nel browser Copilot per Microsoft 365 si protegge dalla casella di scrittura (vedi l'estensione) | — |
 | Visual Studio (GitHub Copilot) | non coperta: è un programma nativo, le richieste partono da un suo processo e non da una finestra web. Il servizio si può solo registrare o bloccare | — |
-| Editor derivati da VS Code (Antigravity, Cursor, Windsurf) | non coperti dal connettore: la chat parla con il servizio da un processo dell'editor, e la casella è un editor di codice che non si riscrive come una casella web | non installati sul PC di prova |
+| Editor derivati da VS Code (Cursor, Windsurf) | non coperti dal connettore: la chat parla con il servizio da un processo dell'editor, e la casella è un editor di codice che non si riscrive come una casella web | non installati sul PC di prova |
+| Antigravity (app desktop) | non dal connettore: il modello lo chiama `language_server.exe`, non la finestra. Si protegge con i **suoi hook** (vedi «Lo stesso per le altre app che hanno gli hook») | sì, 17/11/2026, versione 2.32.2 |
 | Perplexity | app dello Store senza un comando da lanciare: il connettore la apre chiedendolo a Windows, come il menu Start, con la porta di debug (le sue finestre interne sono `perplexity.localhost`) | provata dal vivo il 17/11/2026 (versione 2026.11), con l'accesso e dati inventati: il messaggio è partito con i segnaposto e il modello ha risposto «PERSONA-1» |
 
 Se un'app rifiuta la porta quando la si riavvia (lo fa Kimi), il connettore se ne accorge in pochi
@@ -620,6 +621,7 @@ cambia soltanto come ogni app gli passa il messaggio e quale servizio del catalo
 | Claude Code | `UserPromptSubmit` | `anthropic-api` (di serie «Proteggi») | `claude plugin marketplace add <repository>` e `claude plugin install omissis@omissis` |
 | Codex | `UserPromptSubmit` | `chatgpt` (di serie «Proteggi») | `codex plugin marketplace add <repository>`, poi lo si accende tra i plugin |
 | Gemini CLI | `BeforeAgent` | `gemini-api` (di serie «Registra») | `gemini extensions install <indirizzo del repository>` |
+| Antigravity (app, CLI e IDE) | `PreInvocation` | `antigravity` (di serie «Registra») | niente plugin: dal pannello, «Collega Antigravity» (vedi sotto) |
 
 - **Il repository dei plugin** è una cartella a sé, pubblica (`pubblico\omissis-plugin`, scritta da
   `prepara_plugin.py`): vale insieme da plugin per Kimi, da estensione per Gemini CLI e da mercato per Claude Code e
@@ -633,11 +635,21 @@ cambia soltanto come ogni app gli passa il messaggio e quale servizio del catalo
 - **Dove lo strumento passa già dal gateway di Omissis** (`ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL` o
   `GOOGLE_GEMINI_BASE_URL` che puntano a questo PC) il plugin non interviene: lì i dati vengono sostituiti davvero, ed
   è meglio. Per Codex mandato al gateway dal suo `config.toml` l'hook non può saperlo: lì non vanno usati insieme.
+- **Antigravity** (17/11/2026) non ha un plugin che valga anche per l'app: app, CLI e IDE leggono gli hook dallo stesso
+  file, `~/.gemini/config/hooks.json`. Dal pannello, sotto il comando, «Collega Antigravity» ci aggiunge una voce
+  `omissis` (evento `PreInvocation`, comando `omissis-hook antigravity`) e lascia com'è il resto; «Scollega» e «Togli
+  il comando» la tolgono, e un file che non si legge come JSON non viene riscritto. Antigravity chiama l'hook prima di
+  ogni chiamata al modello: conta solo la prima del turno (`invocationNum` 0), quella col messaggio scritto. Per
+  fermarlo non basta l'uscita: Antigravity legge dallo standard output un JSON con `terminationBehavior: terminate` e
+  un `errorMessage`, che mostra a chi scrive senza mandarlo al modello. Due cose viste dal vivo: l'app storpia le
+  virgolette del comando (per questo è scritto senza percorso), e **se il comando non parte lascia passare il
+  messaggio**. Quindi dopo «Installa il comando» Antigravity va chiuso e riaperto, perché trovi `omissis-hook` nel PATH.
+  Le conversazioni con `--remote-agent` girano nel cloud di Google, non su questo PC: lì l'hook non c'è.
 - Cursor ha un hook che può fermare il messaggio (`beforeSubmitPrompt`), ma nel catalogo il suo servizio non si può
   mettere su «Proteggi» e il formato dei suoi plugin non è documentato: non è ancora coperto. Copilot CLI e Windsurf
   hanno hook che osservano soltanto: per questa via non si proteggono.
 
-Provato: `e2e_plugins.py` (11 controlli) e **Claude Code dal vivo** (16/11/2026, plugin caricato con `--plugin-dir`,
+Provato: `e2e_plugins.py` (14 controlli) e **Claude Code dal vivo** (16/11/2026, plugin caricato con `--plugin-dir`,
 copia di prova di Omissis, dati inventati): il messaggio con dati personali è stato fermato con la spiegazione di
 Omissis, e la versione con i segnaposto, mandata subito dopo, è partita e ha avuto risposta. I controlli ufficiali dei
 plugin di Kimi (`validate_plugin.py`) e di Claude Code (`claude plugin validate`) accettano il repository. **Non
@@ -646,6 +658,10 @@ un passo in più: esegue i controlli dei plugin solo dopo che l'utente li ha app
 controllo passato a `codex exec` con `-c` non è scattato, e il messaggio inventato è partito com'era: finché
 l'approvazione non è fatta, il plugin in Codex non protegge. Gemini CLI, provato lo stesso giorno, non accetta più
 l'accesso con un account Google personale (rimanda ad Antigravity): resta per chi lo usa con una chiave API o Vertex AI.
+**Antigravity dal vivo** (17/11/2026, abbonamento Google AI Pro, copia di prova, dati inventati): nella CLI 1.5.10 e
+nell'app 2.32.2 il messaggio con nome, mail, cellulare e IBAN è stato fermato prima del modello, con la spiegazione
+di Omissis; nella CLI la versione con i segnaposto, mandata dopo, è partita e il modello ha risposto che il nome era
+sostituito da `[PERSONA_1]`. L'IDE legge lo stesso file, ma non è stato provato.
 
 **App già aperta.** Un'app aperta dal menu Start non ha la porta, e avviarla di nuovo porterebbe solo
 in primo piano la finestra che c'è già, senza protezione. Il pannello se ne accorge (legge l'elenco

@@ -21,6 +21,15 @@
    "data": "2026-11-17"
   },
   {
+   "service": "antigravity",
+   "via": "app desktop",
+   "client": "Antigravity",
+   "version": "2.32.2",
+   "method": "hook",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
    "service": "anthropic-api",
    "via": "gateway",
    "client": "Claude Code",
@@ -46,6 +55,15 @@
    "method": "hook",
    "level": "live",
    "data": "2026-11-16"
+  },
+  {
+   "service": "antigravity",
+   "via": "plugin",
+   "client": "Antigravity CLI",
+   "version": "1.5.10",
+   "method": "hook",
+   "level": "live",
+   "data": "2026-11-17"
   },
   {
    "service": "chatgpt",

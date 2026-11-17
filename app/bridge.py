@@ -151,7 +151,7 @@ class Bridge:
         pol = settings.policy(s)
         if pol != "ignore":
             self.reg.contact(s["id"], host, "blocked" if pol == "block" else
-                              "guarded" if pol == "protect" and catalog.protectable(s) else "not_protected")
+                              "guarded" if pol == "protect" and catalog.protectable(s, browser=True) else "not_protected")
         return {"service": s["id"], "policy": pol}
 
     def websocket(self, data):

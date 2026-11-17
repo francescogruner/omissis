@@ -358,7 +358,8 @@ PLUGIN_REPO = "francescogruner/omissis-plugin"
 def hook_state():
     """Il comando «omissis-hook» (c'e'? e' nel PATH?) e, per ogni app, come si installa il plugin che lo chiama."""
     link = f"https://github.com/{PLUGIN_REPO}"
-    return {**hook_command.state(), "repository": link, "platforms": [
+    antigravity = catalog.PER_ID["antigravity"]
+    return {**hook_command.state(), "repository": link, "antigravity_policy": settings.policy(antigravity), "platforms": [
         {"id": "kimi", "name": "Kimi", "commands": [f"/plugins install {link}"]},
         {"id": "claude", "name": "Claude Code", "commands": [f"claude plugin marketplace add {PLUGIN_REPO}", "claude plugin install omissis@omissis"]},
         {"id": "codex", "name": "Codex", "commands": [f"codex plugin marketplace add {PLUGIN_REPO}"]},
@@ -458,7 +459,7 @@ def contacts(days=30):
 def services():
     cfg, cont, fixed = settings.read(), contacts(), settings.locked()["policies"]
     return [{"id": s["id"], "name": s["name"], "vendor": s["vendor"], "kind": s["kind"], "domains": s["domains"], "locked": s["id"] in fixed,
-             "reading": "radar" if s["radar"] else "box" if s["box"] and not s["adapter"] else READING_STATUS[s["adapter"]],
+             "reading": "radar" if s["radar"] else "box" if s["box"] and not s["adapter"] else "hook" if s.get("hook") and not s["adapter"] else READING_STATUS[s["adapter"]],
              "radar": s["radar"], "readable": bool(s["adapter"]), "protectable": catalog.protectable(s),
              "policy": settings.policy(s, cfg),
              "default": catalog.default_policy(s), "contacts": cont.get(s["id"], {}).get("n", 0),
@@ -855,7 +856,20 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self._respond(200, central.state())
             elif p == "/api/hook":   # il comando che i plugin delle app AI chiamano: lo mette, o lo toglie, chi usa il PC
-                hook_command.remove() if data.get("action") == "remove" else hook_command.install()
+                action = data.get("action")
+                if action == "antigravity_link":   # la voce di Omissis nel file degli hook di Antigravity
+                    if not hook_command.state()["ready"]:
+                        raise Refusal(i18n.t("hooks.antigravity.needs"))
+                    try:
+                        hook_command.antigravity_link()
+                    except ValueError:
+                        raise Refusal(i18n.t("hooks.antigravity.unreadable", file=str(hook_command.antigravity_file())))
+                elif action == "antigravity_unlink":
+                    hook_command.antigravity_unlink()
+                elif action == "remove":
+                    hook_command.remove()
+                else:
+                    hook_command.install()
                 self._respond(200, hook_state())
             elif p == "/api/app":
                 key = str(data.get("id", ""))

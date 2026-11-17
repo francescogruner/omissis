@@ -12,6 +12,9 @@ adattatore  come il proxy sa leggere il servizio:
 casella     (box=True) le richieste non si leggono, ma nel browser l'estensione protegge la casella di scrittura: il testo
             viene mascherato nella casella prima dell'invio, gli allegati prima che la pagina li riceva. Solo per i
             servizi provati dal vivo; nel proxy e nel gateway questi servizi restano non leggibili.
+hook        (hook=True) le richieste non si leggono, ma l'app del servizio chiama Omissis prima di ogni messaggio (il
+            comando «omissis-hook», vedi ai_hook.py) e su «Proteggi» il messaggio con dati da sostituire viene fermato.
+            Nel browser e nel proxy questi servizi restano non leggibili.
 Politiche:  proteggi (apre e maschera) | registra (conta i contatti) | blocca | ignora
 
 Oltre ai servizi scritti qui sotto c'e' il RADAR: servizi che il programma non sa leggere e che servono solo a
@@ -32,8 +35,8 @@ KINDS = {"chat": "Assistente in chat", "api": "API per sviluppatori", "code": "A
         "research": "Ricerca", "office": "AI dentro le suite da ufficio", "agents": "Agenti e automazione"}
 
 
-def _s(id, name, vendor, kind, domains, adapter=None, app=None, box=False):
-    return dict(id=id, name=name, vendor=vendor, kind=kind, domains=domains.split(), adapter=adapter, app=app, radar=False, box=box)
+def _s(id, name, vendor, kind, domains, adapter=None, app=None, box=False, hook=False):
+    return dict(id=id, name=name, vendor=vendor, kind=kind, domains=domains.split(), adapter=adapter, app=app, radar=False, box=box, hook=hook)
 
 
 SERVICES = [
@@ -78,7 +81,7 @@ SERVICES = [
     _s("github-copilot", "GitHub Copilot", "GitHub", "code", "githubcopilot.com copilot-proxy.githubusercontent.com", None, r"github ?copilot"),
     _s("cursor", "Cursor", "Anysphere", "code", "cursor.sh cursor.com", None, r"\bcursor\b"),
     _s("windsurf", "Windsurf / Codeium", "Codeium", "code", "codeium.com windsurf.com", None, r"windsurf|codeium"),
-    _s("antigravity", "Antigravity", "Google", "code", "antigravity.google", None, r"antigravity"),
+    _s("antigravity", "Antigravity", "Google", "code", "antigravity.google", None, r"antigravity", hook=True),
     _s("tabnine", "Tabnine", "Tabnine", "code", "tabnine.com", None, r"tabnine"),
     _s("replit", "Replit", "Replit", "code", "replit.com"),
     _s("lovable", "Lovable", "Lovable", "code", "lovable.dev"),
@@ -170,9 +173,10 @@ def find(host):
     return None
 
 
-def protectable(service):
-    """Si puo' scegliere «proteggi»: le richieste si leggono, o nel browser si protegge la casella di scrittura."""
-    return bool(service["adapter"] or service.get("box"))
+def protectable(service, browser=False):
+    """Si puo' scegliere «proteggi»: le richieste si leggono, nel browser si protegge la casella di scrittura, o l'app
+    del servizio chiama Omissis prima di ogni messaggio. Con browser=True conta solo cio' che vale dentro il browser."""
+    return bool(service["adapter"] or service.get("box") or (service.get("hook") and not browser))
 
 
 def default_policy(service):
