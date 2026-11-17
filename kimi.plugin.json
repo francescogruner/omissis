@@ -1,0 +1,32 @@
+{
+  "name": "omissis",
+  "version": "1.0.0",
+  "description": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer.",
+  "keywords": [
+    "privacy",
+    "gdpr",
+    "pii",
+    "omissis"
+  ],
+  "author": "Omissis",
+  "homepage": "https://omissis.eu",
+  "license": "Apache-2.0",
+  "systemPrompt": "Messages may contain placeholders in square brackets, such as [NAME_1] or [EMAIL_2]. They are put there by Omissis, a privacy tool on the user's computer, in place of personal data. They are not mistakes. Treat each placeholder as the real value: repeat it exactly as written in answers, files and commands, keep the same placeholder for the same thing, and never try to guess or ask what it stands for.",
+  "hooks": [
+    {
+      "event": "UserPromptSubmit",
+      "command": "omissis-hook kimi",
+      "timeout": 60
+    }
+  ],
+  "interface": {
+    "displayName": "Omissis",
+    "shortDescription": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer.",
+    "longDescription": "Omissis is a program that runs on your computer and keeps personal data out of AI services. This plugin has it check every message before it leaves: if the message holds personal data it is stopped, and the version with placeholders goes to the clipboard, ready to paste. Everything happens on your computer. Without Omissis installed the plugin does nothing.",
+    "developerName": "Omissis",
+    "websiteURL": "https://omissis.eu",
+    "category": "PRODUCTIVITY",
+    "hostKind": "local",
+    "defaultLocale": "en-US"
+  }
+}

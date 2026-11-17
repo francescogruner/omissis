@@ -1,0 +1,31 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "omissis",
+  "version": "1.0.0",
+  "description": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer.",
+  "author": {
+    "name": "Omissis",
+    "url": "https://omissis.eu"
+  },
+  "homepage": "https://omissis.eu",
+  "repository": "https://github.com/francescogruner/omissis",
+  "license": "Apache-2.0",
+  "keywords": [
+    "privacy",
+    "gdpr",
+    "pii"
+  ],
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/hooks.json",
+      "interface": {
+        "displayName": "Omissis",
+        "shortDescription": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer.",
+        "longDescription": "Omissis is a program that runs on your computer and keeps personal data out of AI services. This plugin has it check every message before it leaves: if the message holds personal data it is stopped, and the version with placeholders goes to the clipboard, ready to paste. Everything happens on your computer. Without Omissis installed the plugin does nothing.",
+        "developerName": "Omissis",
+        "category": "Productivity",
+        "websiteURL": "https://omissis.eu"
+      }
+    }
+  }
+}

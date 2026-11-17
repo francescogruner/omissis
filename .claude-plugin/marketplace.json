@@ -1,0 +1,15 @@
+{
+  "name": "omissis",
+  "description": "Omissis plugins: personal data stays out of AI services",
+  "owner": {
+    "name": "Omissis",
+    "url": "https://omissis.eu"
+  },
+  "plugins": [
+    {
+      "name": "omissis",
+      "source": "./plugins/claude-code",
+      "description": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer."
+    }
+  ]
+}

@@ -622,8 +622,9 @@ cambia soltanto come ogni app gli passa il messaggio e quale servizio del catalo
 | Gemini CLI | `BeforeAgent` | `gemini-api` (di serie «Registra») | `gemini extensions install <indirizzo del repository>` |
 | Antigravity (app, CLI e IDE) | `PreInvocation` | `antigravity` (di serie «Registra») | niente plugin: dal pannello, «Collega Antigravity» (vedi sotto) |
 
-- **Il repository dei plugin** è una cartella a sé, pubblica (`pubblico\omissis-plugin`, scritta da
-  `prepara_plugin.py`): vale insieme da plugin per Kimi, da estensione per Gemini CLI e da mercato per Claude Code e
+- **I plugin stanno nel repository pubblico di Omissis**, lo stesso del programma (scritti da `prepara_plugin.py`,
+  che `prepara_repository.py` chiama): nella radice ci sono solo i file di descrizione che ogni app cerca lì, i plugin
+  veri sono in `plugins\`. Vale insieme da plugin per Kimi, da estensione per Gemini CLI e da mercato per Claude Code e
   Codex. Dentro non c'è codice di Omissis: ogni plugin dichiara solo «prima di mandare un messaggio esegui
   `omissis-hook <app>`».
 - **Il comando `omissis-hook`** lo mette sul PC Omissis, perché un plugin uguale per tutti non può sapere dove sta il

@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "BeforeAgent": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "omissis-hook gemini",
+            "name": "omissis",
+            "timeout": 60000,
+            "description": "Omissis checks the message before it is sent and stops it if it holds personal data"
+          }
+        ]
+      }
+    ]
+  }
+}

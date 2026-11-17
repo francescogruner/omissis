@@ -1,0 +1,17 @@
+{
+  "description": "Omissis checks every prompt before it is sent and stops those that hold personal data",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "omissis-hook codex",
+            "timeout": 60,
+            "statusMessage": "Omissis is checking the message"
+          }
+        ]
+      }
+    ]
+  }
+}

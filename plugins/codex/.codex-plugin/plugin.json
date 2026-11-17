@@ -1,0 +1,14 @@
+{
+  "name": "omissis",
+  "version": "1.0.0",
+  "description": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer.",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Omissis",
+    "shortDescription": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer.",
+    "longDescription": "Omissis is a program that runs on your computer and keeps personal data out of AI services. This plugin has it check every message before it leaves: if the message holds personal data it is stopped, and the version with placeholders goes to the clipboard, ready to paste. Everything happens on your computer. Without Omissis installed the plugin does nothing.",
+    "developerName": "Omissis",
+    "category": "Productivity",
+    "websiteURL": "https://omissis.eu"
+  }
+}

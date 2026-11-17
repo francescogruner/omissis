@@ -352,7 +352,7 @@ def mcp_state():
 
 
 # Il repository pubblico con i plugin di Omissis per le app AI: i comandi mostrati nel pannello installano da li'
-PLUGIN_REPO = "francescogruner/omissis-plugin"
+PLUGIN_REPO = "francescogruner/omissis"   # i plugin stanno nello stesso repository del programma
 
 
 def hook_state():

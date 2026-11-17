@@ -314,7 +314,7 @@ def main():
                     off = wait(pag, "() => !!document.querySelector('[data-hook=off]')", timeout=15)
                     mark(f"{language}: comando per i plugin delle app AI: il pannello lo installa e lo toglie, e dice come installare il plugin in Kimi, Claude Code, Codex e Gemini CLI",
                          on and there["ready"] and there["on_path"] and off and not hook_command.state()["ready"] and all(x in how for x in ("Kimi", "Claude Code", "Codex", "Gemini CLI"))
-                         and how.count("omissis-plugin") >= 4 and "hooks." not in how + pag.inner_text("#hookCommand"), f"installato {on} · tolto {off} · {how[:70]}")
+                         and how.count("francescogruner/omissis") >= 4 and "hooks." not in how + pag.inner_text("#hookCommand"), f"installato {on} · tolto {off} · {how[:70]}")
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: comando per i plugin delle app AI", False, str(ex)[:160])
 

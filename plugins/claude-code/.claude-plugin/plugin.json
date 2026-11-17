@@ -1,0 +1,17 @@
+{
+  "name": "omissis",
+  "version": "1.0.0",
+  "description": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer.",
+  "author": {
+    "name": "Omissis",
+    "url": "https://omissis.eu"
+  },
+  "homepage": "https://omissis.eu",
+  "repository": "https://github.com/francescogruner/omissis",
+  "license": "Apache-2.0",
+  "keywords": [
+    "privacy",
+    "gdpr",
+    "pii"
+  ]
+}

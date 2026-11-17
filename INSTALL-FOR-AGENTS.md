@@ -97,10 +97,10 @@ press **Install the command** in the panel (Connections, Desktop apps, "Plugins 
 
 | Tool | Command |
 |---|---|
-| Claude Code | `claude plugin marketplace add francescogruner/omissis-plugin` then `claude plugin install omissis@omissis` |
-| Codex | `codex plugin marketplace add francescogruner/omissis-plugin`, enable Omissis among the plugins, then have the person approve its hook with `/hooks` |
-| Gemini CLI | `gemini extensions install https://github.com/francescogruner/omissis-plugin` |
-| Kimi | `/plugins install https://github.com/francescogruner/omissis-plugin` |
+| Claude Code | `claude plugin marketplace add francescogruner/omissis` then `claude plugin install omissis@omissis` |
+| Codex | `codex plugin marketplace add francescogruner/omissis`, enable Omissis among the plugins, then have the person approve its hook with `/hooks` |
+| Gemini CLI | `gemini extensions install https://github.com/francescogruner/omissis` |
+| Kimi | `/plugins install https://github.com/francescogruner/omissis` |
 
 A plugin checks every message before it is sent and stops those that hold personal data: the protected version
 goes to the clipboard, to paste. Claude Code and Codex can instead be sent through the Omissis gateway, which

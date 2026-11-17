@@ -1,0 +1,6 @@
+{
+  "name": "omissis",
+  "version": "1.0.0",
+  "description": "Checks every message before it is sent and stops those that hold personal data. Needs Omissis on this computer.",
+  "contextFileName": "GEMINI.md"
+}

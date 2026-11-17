@@ -30,7 +30,7 @@ NAME, CODE, IBAN, MAIL = "Ottavio Marchesini", "MRCTTV75D12L219K", "IT60X0542811
 PERSONAL = f"Prepara un sollecito per {NAME}, codice fiscale {CODE}, IBAN {IBAN}, mail {MAIL}: la fattura scade venerdi."
 PLAIN = "Elenca tre buone pratiche per scrivere i test di un programma."
 VALUES = (NAME, "Marchesini", CODE, IBAN, MAIL)
-REPO = paths.ROOT / "pubblico" / "omissis-plugin"
+REPO = paths.ROOT / "pubblico" / "omissis"   # i plugin stanno nel repository del programma
 
 
 def check(what, outcome, note=""):
@@ -179,12 +179,12 @@ def main():
     else:
         read = lambda name: json.loads((REPO / name).read_text(encoding="utf-8"))
         commands = {"kimi": read("kimi.plugin.json")["hooks"][0]["command"], "gemini": read("hooks/hooks.json")["hooks"]["BeforeAgent"][0]["hooks"][0]["command"],
-                    "claude": read("claude-code/hooks/hooks.json")["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"],
-                    "codex": read("codex/hooks/hooks.json")["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]}
-        everything = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in REPO.rglob("*") if f.is_file() and ".git" not in f.parts and f.suffix != ".svg")
+                    "claude": read("plugins/claude-code/hooks/hooks.json")["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"],
+                    "codex": read("plugins/codex/hooks/hooks.json")["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]}
+        everything = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in [REPO / n for n in ("kimi.plugin.json", "gemini-extension.json", "GEMINI.md")] + list((REPO / "hooks").rglob("*")) + list((REPO / ".claude-plugin").rglob("*")) + list((REPO / ".agents").rglob("*")) + list((REPO / "plugins").rglob("*")) if f.is_file() and f.suffix != ".svg")
         check("repository dei plugin: ogni app chiama «omissis-hook» col suo nome; i due mercati puntano alle loro cartelle; dentro nessun percorso di questo PC né codici",
-              commands == {a: f"omissis-hook {a}" for a in commands} and read(".claude-plugin/marketplace.json")["plugins"][0]["source"] == "./claude-code"
-              and read(".agents/plugins/marketplace.json")["plugins"][0]["source"]["path"] == "./codex" and read("gemini-extension.json")["name"] == "omissis"
+              commands == {a: f"omissis-hook {a}" for a in commands} and read(".claude-plugin/marketplace.json")["plugins"][0]["source"] == "./plugins/claude-code"
+              and read(".agents/plugins/marketplace.json")["plugins"][0]["source"]["path"] == "./plugins/codex" and read("gemini-extension.json")["name"] == "omissis"
               and not re.search(r"(?i)[A-Z]:\\\\|Users[\\/]|Privacy AI", everything) and not any(s in everything for s in secrets_here), str(commands))
         validator = Path(os.environ.get("APPDATA", "")) / "kimi-desktop" / "daimon-bundle" / "app" / "daimon" / "assets" / "builtin-skills" / "plugin-builder" / "scripts" / "validate_plugin.py"
         if validator.exists():
@@ -194,7 +194,7 @@ def main():
             print("SALTATO il controllo di Kimi: Kimi per Windows non è installata su questo PC")
         claude = shutil.which("claude")
         if claude:
-            done = [subprocess.run([claude, "plugin", "validate", str(p)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120) for p in (REPO / "claude-code", REPO)]
+            done = [subprocess.run([claude, "plugin", "validate", str(p)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120) for p in (REPO / "plugins" / "claude-code", REPO)]
             check("«claude plugin validate» accetta il plugin di Claude Code e il mercato", all(r.returncode == 0 and "Validation passed" in r.stdout for r in done),
                   " · ".join((r.stdout.strip().splitlines() or [r.stderr.strip()[:60]])[-1][:40] for r in done))
         else:
