@@ -35,7 +35,7 @@ async function show() {
   el('fault').textContent = fault;
   el('connection').hidden = d.connected && d.health.reason !== 'invalid_code';
   el('service').textContent = d.service ? d.service.name : d.host ? T('site_outside_catalog') : '—';
-  const pol = d.service ? (d.service.policy === 'protect' && !d.service.readable ? 'record' : d.service.policy) : null;
+  const pol = d.service ? (d.service.policy === 'protect' && !d.service.readable && !d.service.box ? 'record' : d.service.policy) : null;
   el('policy').textContent = !pol ? '—' : pol === 'protect' && paused ? T('policy_suspended', T('policy_protect')) : T('policy_' + pol);
   el('managed').hidden = !fixed;
   const c = d.counts || {messages: 0, replacements: 0, blocked: 0};

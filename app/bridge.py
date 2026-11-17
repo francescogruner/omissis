@@ -108,6 +108,15 @@ class Bridge:
             return ad, (ad.name if ad else None), host, path
         return None, None, host, path
 
+    def _box(self, host):
+        """Id del servizio di cui proteggere la casella e gli allegati, altrimenti None. Vale anche per i servizi
+        le cui richieste non si leggono ma la casella si' (box nel catalogo)."""
+        ad, service, _, _ = self._service(f"https://{host}/generic/box")
+        if ad is not None:
+            return service
+        s = catalog.find(host)
+        return s["id"] if s is not None and s["box"] and settings.policy(s) == "protect" else None
+
     def handle(self, action, data):
         f = {"status": self.status, "request": self.request, "text": self.text, "prompt": self.prompt, "open_up": self.open_up, "chunk": self.chunk, "whole": self.whole,
              "values": self.values, "visit": self.visit, "websocket": self.websocket, "attachment": self.attachment}.get(action)
@@ -125,7 +134,7 @@ class Bridge:
         # Dove e' stabilito che la protezione non si spenga (always_on) non vale su nessun servizio
         fixed, always = set(settings.locked()["policies"]), cfg["always_on"]
         services = [{"id": s["id"], "name": s["name"], "domains": s["domains"], "policy": settings.policy(s, cfg),
-                    "readable": bool(s["adapter"]), **({"radar": True} if s["radar"] else {}), **({"locked": True} if always or s["id"] in fixed else {})}
+                    "readable": bool(s["adapter"]), **({"box": True} if s["box"] else {}), **({"radar": True} if s["radar"] else {}), **({"locked": True} if always or s["id"] in fixed else {})}
                    for s in catalog.SERVICES if not s["radar"] or settings.policy(s, cfg) == "block"]
         if self.test:   # il servizio finto non e' nel catalogo: nelle prove lo si impone nominandolo tra le regole imposte
             raw = managed.read().get("policies")
@@ -142,7 +151,7 @@ class Bridge:
         pol = settings.policy(s)
         if pol != "ignore":
             self.reg.contact(s["id"], host, "blocked" if pol == "block" else
-                              "guarded" if pol == "protect" and s["adapter"] else "not_protected")
+                              "guarded" if pol == "protect" and catalog.protectable(s) else "not_protected")
         return {"service": s["id"], "policy": pol}
 
     def websocket(self, data):
@@ -222,8 +231,8 @@ class Bridge:
     def text(self, data):
         """Il testo della casella di scrittura, sostituito prima che l'app lo legga (dove le richieste non si vedono)."""
         host, t = str(data.get("host", "")).lower(), data.get("text")
-        ad, service, _, _ = self._service(f"https://{host}/generic/box")
-        if ad is None or not isinstance(t, str) or not t.strip():
+        service = self._box(host)
+        if service is None or not isinstance(t, str) or not t.strip():
             return {"action": "passthrough"}
         entry = {"service": service, "via": self._via(data), "method": "box", "path": "(casella di scrittura)", "byte": len(t.encode("utf-8"))}
         try:
@@ -310,8 +319,8 @@ class Bridge:
         """Un file che l'utente sta per allegare a un messaggio (scelto, trascinato o incollato): la pagina ricevera' la copia
         anonimizzata. Cio' che non si riesce ad anonimizzare segue la scelta «blocca i file»; un'immagine o un PDF senza
         testo non ha nulla da sostituire e passa; se la protezione non risponde non parte nulla."""
-        ad, service, _, _ = self._service(f"https://{str(data.get('host', '')).lower()}/generic/box")
-        if ad is None:
+        service = self._box(str(data.get("host", "")).lower())
+        if service is None:
             return {"action": "passthrough"}
         cfg = settings.read()
         name = Path(str(data.get("name") or "file")).name[:200]

@@ -9,6 +9,9 @@ adattatore  come il proxy sa leggere il servizio:
               gemini                                   formato particolare, scritto a memoria: SPERIMENTALE
               generico                                 riconosce i campi di testo dal nome: da verificare caso per caso
               None                                     il proxy non lo sa leggere: si puo' solo registrare o bloccare
+casella     (box=True) le richieste non si leggono, ma nel browser l'estensione protegge la casella di scrittura: il testo
+            viene mascherato nella casella prima dell'invio, gli allegati prima che la pagina li riceva. Solo per i
+            servizi provati dal vivo; nel proxy e nel gateway questi servizi restano non leggibili.
 Politiche:  proteggi (apre e maschera) | registra (conta i contatti) | blocca | ignora
 
 Oltre ai servizi scritti qui sotto c'e' il RADAR: servizi che il programma non sa leggere e che servono solo a
@@ -29,8 +32,8 @@ KINDS = {"chat": "Assistente in chat", "api": "API per sviluppatori", "code": "A
         "research": "Ricerca", "office": "AI dentro le suite da ufficio", "agents": "Agenti e automazione"}
 
 
-def _s(id, name, vendor, kind, domains, adapter=None, app=None):
-    return dict(id=id, name=name, vendor=vendor, kind=kind, domains=domains.split(), adapter=adapter, app=app, radar=False)
+def _s(id, name, vendor, kind, domains, adapter=None, app=None, box=False):
+    return dict(id=id, name=name, vendor=vendor, kind=kind, domains=domains.split(), adapter=adapter, app=app, radar=False, box=box)
 
 
 SERVICES = [
@@ -41,7 +44,7 @@ SERVICES = [
     _s("gemini", "Gemini", "Google", "chat", "gemini.google.com", "gemini", r"\bgemini\b"),
     _s("gemini-api", "API Gemini", "Google", "api", "generativelanguage.googleapis.com", "generic"),
     _s("copilot", "Microsoft Copilot", "Microsoft", "chat", "copilot.microsoft.com copilot.com", "generic", r"microsoft\.?copilot|\bcopilot\b|^mscopilot$|^m365copilot$"),
-    _s("copilot-365", "Copilot per Microsoft 365", "Microsoft", "office", "m365.cloud.microsoft copilot.cloud.microsoft"),
+    _s("copilot-365", "Copilot per Microsoft 365", "Microsoft", "office", "m365.cloud.microsoft copilot.cloud.microsoft", box=True),
     _s("perplexity", "Perplexity", "Perplexity", "chat", "perplexity.ai", "generic", r"perplexity"),
     _s("deepseek", "DeepSeek", "DeepSeek", "chat", "chat.deepseek.com", "generic", r"deepseek"),
     _s("deepseek-api", "API DeepSeek", "DeepSeek", "api", "api.deepseek.com", "openai"),
@@ -165,6 +168,11 @@ def find(host):
         if s:
             return s
     return None
+
+
+def protectable(service):
+    """Si puo' scegliere «proteggi»: le richieste si leggono, o nel browser si protegge la casella di scrittura."""
+    return bool(service["adapter"] or service.get("box"))
 
 
 def default_policy(service):

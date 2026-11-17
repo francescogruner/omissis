@@ -354,7 +354,7 @@ class Connector:
             return {"services": r["services"], "restore": bool(r["restore"]), "block_files": bool(r["block_files"])}
         except Exception:   # noqa: BLE001
             services = [{"id": s["id"], "name": s["name"], "domains": s["domains"], "policy": catalog.default_policy(s),
-                        "readable": bool(s["adapter"])} for s in catalog.SERVICES if not s["radar"]]
+                        "readable": bool(s["adapter"]), **({"box": True} if s["box"] else {})} for s in catalog.SERVICES if not s["radar"]]
             if self.test:
                 services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True})
             return {"services": services, "restore": True, "block_files": False}

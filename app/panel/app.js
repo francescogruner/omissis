@@ -943,12 +943,12 @@ const serviceRules = test(async el => {
   const draw = () => {
     const f = $("#filt").value.toLowerCase(), which_ones = $("#which_ones").value;
     const visible = servicesListing.filter(s => which_ones === "everyone" || (which_ones === "radar") === !!s.radar).filter(s => `${s.name} ${s.vendor} ${tSe("services.kind." + s.kind, s.kind)} ${s.domains.join(" ")}`.toLowerCase().includes(f));
-    $("#count").textContent = t("services.count", {visible: visible.length, everyone: servicesListing.length, guarded: servicesListing.filter(s => s.policy === "protect" && s.readable).length, blocked_items: servicesListing.filter(s => s.policy === "block").length});
+    $("#count").textContent = t("services.count", {visible: visible.length, everyone: servicesListing.length, guarded: servicesListing.filter(s => s.policy === "protect" && s.protectable).length, blocked_items: servicesListing.filter(s => s.policy === "block").length});
     $("#tabServices").innerHTML = visible.map(s => {
-      const options = ["protect", "record", "block", "ignore"].filter(p => p !== "protect" || s.readable)
+      const options = ["protect", "record", "block", "ignore"].filter(p => p !== "protect" || s.protectable)
         .map(p => `<option value="${p}"${p === s.policy ? " selected" : ""}>${esc(t(`services.policy.${p}`))}</option>`).join("");
       return `<tr><td><b>${esc(s.name)}</b><div class="below">${esc(s.vendor)} · ${esc(s.domains.join(", "))}</div></td><td>${esc(tSe("services.kind." + s.kind, s.kind))}</td>
-        <td>${label(t(`services.reading.${s.reading}`), s.reading === "tested" ? "ok" : s.readable ? "warning" : "")}</td>
+        <td>${label(t(`services.reading.${s.reading}`), s.reading === "tested" ? "ok" : s.protectable ? "warning" : "")}</td>
         <td><select data-id="${esc(s.id)}" aria-label="${esc(t("services.what_make_for", {name: s.name}))}"${s.locked ? ` disabled title="${esc(t("managed.locked"))}"` : ""}>${options}</select></td>
         <td>${s.contacts || ""}<div class="below">${esc((s.last || "").slice(0, 16))}</div></td></tr>`;
     }).join("");

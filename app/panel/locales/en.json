@@ -452,6 +452,7 @@
  "services.reading.experimental": "experimental",
  "services.reading.generic": "generic, to be verified",
  "services.reading.no": "not readable",
+ "services.reading.box": "composer only, in the browser",
  "services.kind.agents": "Agents and automation",
  "services.reading.radar": "radar: detect and block only",
  "services.which_ones": "Which services to show",

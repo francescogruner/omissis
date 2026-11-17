@@ -458,7 +458,8 @@ def contacts(days=30):
 def services():
     cfg, cont, fixed = settings.read(), contacts(), settings.locked()["policies"]
     return [{"id": s["id"], "name": s["name"], "vendor": s["vendor"], "kind": s["kind"], "domains": s["domains"], "locked": s["id"] in fixed,
-             "reading": "radar" if s["radar"] else READING_STATUS[s["adapter"]], "radar": s["radar"], "readable": bool(s["adapter"]),
+             "reading": "radar" if s["radar"] else "box" if s["box"] and not s["adapter"] else READING_STATUS[s["adapter"]],
+             "radar": s["radar"], "readable": bool(s["adapter"]), "protectable": catalog.protectable(s),
              "policy": settings.policy(s, cfg),
              "default": catalog.default_policy(s), "contacts": cont.get(s["id"], {}).get("n", 0),
              "last": cont.get(s["id"], {}).get("last", "")} for s in catalog.SERVICES]

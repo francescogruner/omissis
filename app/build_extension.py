@@ -81,7 +81,7 @@ def stamp(folder=None):
 
 def defaults(test, build=None):
     services = [{"id": s["id"], "name": s["name"], "domains": s["domains"], "policy": catalog.default_policy(s),
-                "readable": bool(s["adapter"])} for s in catalog.SERVICES if not s["radar"]]
+                "readable": bool(s["adapter"]), **({"box": True} if s["box"] else {})} for s in catalog.SERVICES if not s["radar"]]
     if test:
         services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True})
     return ("// generato da build_extension.py: politiche di partenza, finche' il programma non manda le sue\n"

@@ -351,6 +351,14 @@ rispondere; mentre la protezione è sospesa dalla finestrella tornano liberi.
 Le schede già aperte quando l'estensione si accende (appena installata, o riaccesa) ricevono la
 protezione subito, senza doverle ricaricare.
 
+**Servizi protetti dalla sola casella.** Di alcuni servizi Omissis non legge le richieste, ma nel
+browser ne protegge la casella di scrittura: il testo viene mascherato nella casella prima dell'invio,
+gli allegati prima che la pagina li riceva, e i valori veri tornano a schermo. Oggi è così per
+**Copilot per Microsoft 365** (`copilot.cloud.microsoft`, `m365.cloud.microsoft`: è dove porta Copilot
+con un account aziendale). Nel pannello compare come «solo la casella di scrittura, nel browser» e parte
+su «Registra»: per proteggerlo va messo su «Proteggi». Nel proxy, nel gateway e nelle app desktop
+(Copilot dentro Teams e Outlook) resta non leggibile.
+
 ## Cosa può rompersi con gli aggiornamenti dei servizi
 
 | Pezzo | Cosa lo rompe | Quanto spesso |
@@ -389,7 +397,7 @@ store, i file cambiano solo insieme all'estensione e non succede nulla.
 
 Limiti dell'estensione:
 
-- provata dal vivo, con l'accesso, su dodici servizi (vedi «Che cosa è stato verificato»); gli altri
+- provata dal vivo, con l'accesso, su tredici servizi (vedi «Che cosa è stato verificato»); gli altri
   seguono la documentazione e le prove con il servizio finto;
 - i valori rimessi nella pagina (nella risposta e nel proprio messaggio già inviato) sono visibili
   agli script del sito: vale per qualunque strumento che ripristina dentro la pagina, proxy compreso.
@@ -832,11 +840,12 @@ collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serv
 | API compatibili con OpenAI (DeepSeek, Mistral, Groq, OpenRouter…) | stesso formato dell'API OpenAI |
 | Gemini | **sperimentale**: formato scritto a memoria, provato solo su un'imitazione |
 | Copilot, Perplexity, Kimi, Grok, Le Chat e gli altri "generici" | riconoscimento dei campi dal nome: **da verificare uno per uno** |
+| Copilot per Microsoft 365 | le richieste non si leggono; nel browser l'estensione protegge la casella di scrittura (provato dal vivo con un account aziendale il 17/11/2026) |
 | Tutti gli altri del catalogo | il proxy non li legge: si possono solo registrare o bloccare |
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; gateway proprio solo qui), **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) e **Codex 0.164 in abbonamento dal vivo** (17/11/2026: alla domanda «scrivi il cognome» ha risposto «non indicato»; il fornitore passato con `-c`, senza toccare `config.toml`) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**, due volte (12/11 e 17/11/2026): un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura); la seconda volta il messaggio è stato scritto e inviato dalla porta di collegamento, e alla domanda «scrivi il cognome» il servizio ha risposto «non indicato» |
-| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 41 controlli), e **servizi veri senza account** il 17/11/2026, con dati inventati e controllando ogni richiesta uscita dal browser: ChatGPT, Perplexity, Gemini e Z.ai hanno ricevuto solo segnaposto, nessun valore vero è uscito; DeepSeek e NotebookLM (anche al nuovo indirizzo `notebook.google.com`) mostrano la pagina di blocco. Grok, Qwen, Genspark e Kimi mascherano la casella ma rispondono solo dopo l'accesso. Claude, Copilot, Le Chat, Meta AI, Poe e Manus chiedono l'accesso: non provati. La prova ha trovato un difetto, corretto: negli editor di tipo Lexical (Perplexity) il testo protetto si aggiungeva a quello originale invece di sostituirlo; non partiva nulla in chiaro, ma il messaggio risultava doppio. Poi, **con l'accesso**, sempre il 17/11/2026, ogni servizio da una chat nuova: Claude, ChatGPT, Perplexity, Gemini, Z.ai, Le Chat, Grok, Qwen, Poe, Manus, Genspark e Kimi (su `kimi.ai`, con l'Invio e con il clic sull'icona) hanno ricevuto solo segnaposto, e nessun valore vero è uscito dal browser, nemmeno verso altri siti. Questa seconda prova ha trovato tre fughe, tutte corrette e riprovate: la bozza di Poe salvata a ogni tasto con un nome di campo sconosciuto; le statistiche di Genspark (Google, da un indirizzo del sito) e di Manus (Amplitude), che leggevano la pagina; il pulsante di invio di Kimi, senza nome, che faceva partire il messaggio senza passare dalla casella. E un difetto: una scheda aperta prima che l'estensione si accendesse non era protetta. Copilot con un account aziendale porta a Copilot per Microsoft 365, che Omissis non legge: si può solo registrare o bloccare. Meta AI non provato (senza accesso) |
+| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 42 controlli), e **servizi veri senza account** il 17/11/2026, con dati inventati e controllando ogni richiesta uscita dal browser: ChatGPT, Perplexity, Gemini e Z.ai hanno ricevuto solo segnaposto, nessun valore vero è uscito; DeepSeek e NotebookLM (anche al nuovo indirizzo `notebook.google.com`) mostrano la pagina di blocco. Grok, Qwen, Genspark e Kimi mascherano la casella ma rispondono solo dopo l'accesso. Claude, Copilot, Le Chat, Meta AI, Poe e Manus chiedono l'accesso: non provati. La prova ha trovato un difetto, corretto: negli editor di tipo Lexical (Perplexity) il testo protetto si aggiungeva a quello originale invece di sostituirlo; non partiva nulla in chiaro, ma il messaggio risultava doppio. Poi, **con l'accesso**, sempre il 17/11/2026, ogni servizio da una chat nuova: Claude, ChatGPT, Perplexity, Gemini, Z.ai, Le Chat, Grok, Qwen, Poe, Manus, Genspark e Kimi (su `kimi.ai`, con l'Invio e con il clic sull'icona) hanno ricevuto solo segnaposto, e nessun valore vero è uscito dal browser, nemmeno verso altri siti. Questa seconda prova ha trovato tre fughe, tutte corrette e riprovate: la bozza di Poe salvata a ogni tasto con un nome di campo sconosciuto; le statistiche di Genspark (Google, da un indirizzo del sito) e di Manus (Amplitude), che leggevano la pagina; il pulsante di invio di Kimi, senza nome, che faceva partire il messaggio senza passare dalla casella. E un difetto: una scheda aperta prima che l'estensione si accendesse non era protetta. Copilot con un account aziendale porta a Copilot per Microsoft 365, che Omissis non legge: su «Registra» il cognome vero è arrivato al servizio. Ora si protegge dalla casella di scrittura: su «Proteggi», con l'Invio e con il clic sul pulsante, al servizio sono arrivati solo segnaposto (il messaggio viaggia su un WebSocket, controllato anche quello), e nessun valore vero è uscito dal browser. La prova ha trovato un difetto, corretto: Copilot aggiunge in fondo alla casella dei caratteri invisibili, e il messaggio protetto restava nella casella senza partire. Meta AI non provato (senza accesso) |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
 da Servizi AI dopo averli provati con dati inventati.

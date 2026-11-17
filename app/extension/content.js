@@ -16,7 +16,8 @@
 
   function policy(host) {
     for (const s of (status && status.services) || []) {
-      if (s.domains.some(d => host === d || host.endsWith('.' + d))) return s.policy === 'protect' && !s.readable ? 'record' : s.policy;
+      // un servizio che non si legge si protegge solo se la sua casella di scrittura e' stata provata (box)
+      if (s.domains.some(d => host === d || host.endsWith('.' + d))) return s.policy === 'protect' && !s.readable && !s.box ? 'record' : s.policy;
     }
     return null;
   }
@@ -302,7 +303,9 @@
   const classOf = b => (typeof b.className === 'string' ? b.className : b.getAttribute('class')) || '';
   const press = b => { if (typeof b.click === 'function') b.click(); else b.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})); };
   let approved = null, work = false, latestBox = null, leaveClick = null;
-  const flat = t => String(t).replace(/\s+/g, ' ').trim();
+  // i caratteri invisibili non contano: Copilot per Microsoft 365 ne aggiunge in fondo alla casella (visto dal vivo il
+  // 17/11/2026), e senza toglierli il testo approvato non risultava piu' lo stesso e il messaggio non partiva
+  const flat = t => String(t).replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
 
   function boxOf(da) {
     const el = da && da.nodeType === 1 ? da : da && da.parentElement;

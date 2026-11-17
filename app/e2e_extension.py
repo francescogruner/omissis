@@ -346,6 +346,22 @@ def main():
             mark("protezione che non risponde: XMLHttpRequest bloccata", json.dumps(seen()) == before)
         sw.evaluate("t => chrome.storage.local.set({token: t})", good)
 
+        # --- servizio protetto dalla sola casella (le sue richieste non si leggono): Copilot per Microsoft 365
+        box_text = "Scrivi a Giulia Ferraresi (giulia.ferraresi@nevatek.example)"
+        ask_box = f"engine('text', {{host: 'copilot.cloud.microsoft', text: {json.dumps(box_text)}}})"
+        pan.evaluate(CALL_SERVICES, {"id": "copilot-365", "policy": "protect"})
+        sw.evaluate("refresh(true)")
+        known = sw.evaluate("chrome.storage.local.get('status').then(d => d.status.services.find(s => s.id === 'copilot-365'))")
+        protected_box = sw.evaluate(ask_box)
+        pan.evaluate(CALL_SERVICES, {"id": "copilot-365", "policy": "record"})
+        recorded_box = sw.evaluate(ask_box)
+        mark("servizio protetto dalla sola casella: maschera con «proteggi», lascia stare con «registra»",
+             known["box"] is True and known["readable"] is False and protected_box.get("action") == "replace"
+             and "[PERSONA_" in protected_box.get("text", "") and not any(s in protected_box.get("text", "") for s in SENSITIVE)
+             and recorded_box.get("action") == "passthrough",
+             f"{protected_box.get('action')} · {recorded_box.get('action')}")
+        sw.evaluate("refresh(true)")
+
         # --- statistiche di terzi: sulle pagine dei servizi protetti non partono (leggono la casella prima dell'Invio)
         trackers = sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.filter(x => x.condition.initiatorDomains))")
         # con mode no-cors la richiesta riesce comunque se parte; fallisce solo se il browser la ferma (o senza rete)

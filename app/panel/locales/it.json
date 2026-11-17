@@ -452,6 +452,7 @@
  "services.reading.experimental": "sperimentale",
  "services.reading.generic": "generico, da verificare",
  "services.reading.no": "non leggibile",
+ "services.reading.box": "solo la casella di scrittura, nel browser",
  "services.kind.agents": "Agenti e automazione",
  "services.reading.radar": "radar: solo rilevare e bloccare",
  "services.which_ones": "Quali servizi mostrare",

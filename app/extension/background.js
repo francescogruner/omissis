@@ -64,7 +64,7 @@ async function applyRules(status) {
   const new_ones = [];
   let id = 1;
   const {suspended} = await chrome.storage.local.get('suspended');
-  const protectedOnes = status.services.filter(s => s.policy === 'protect' && s.readable && (!suspended || s.locked)).flatMap(s => s.domains);
+  const protectedOnes = status.services.filter(s => s.policy === 'protect' && (s.readable || s.box) && (!suspended || s.locked)).flatMap(s => s.domains);
   if (protectedOnes.length) {
     new_ones.push({id: id++, priority: 1, condition: {requestDomains: TRACKERS, initiatorDomains: protectedOnes,
       resourceTypes: ['xmlhttprequest', 'ping', 'script', 'image', 'websocket', 'sub_frame', 'other']}, action: {type: 'block'}});
@@ -246,7 +246,7 @@ async function handle(m, sender) {
       const s = find(d.status || MSP_DEFAULTS, host);
       const key = 'c' + (card ? card.id : '');
       return {version: VERSION, build: BUILD, connected: !!d.token, health: d.health || {ok: false}, suspended: !!d.suspended, notices: d.notices !== false,
-        restore: !!(d.status && d.status.restore), host, service: s && {name: s.name, policy: s.policy, readable: s.readable, locked: !!s.locked},
+        restore: !!(d.status && d.status.restore), host, service: s && {name: s.name, policy: s.policy, readable: s.readable, box: !!s.box, locked: !!s.locked},
         counts: (await chrome.storage.session.get(key))[key] || null};
     }
     case 'blocked':
@@ -288,6 +288,13 @@ async function cover() {
         if (probe && probe.result) continue;
         await chrome.scripting.executeScript({target, files: ['page.js'], world: 'MAIN', injectImmediately: true});
         await chrome.scripting.executeScript({target, files: ['defaults.js', 'channel.js', 'content.js'], injectImmediately: true});
+      } catch (e) { /* scheda chiusa nel frattempo, o pagina del browser */ }
+    }
+    for (const card of await chrome.tabs.query({url: chrome.runtime.getManifest().content_scripts[2].matches})) {
+      try {
+        const [probe] = await chrome.scripting.executeScript({target: {tabId: card.id}, func: () => !!globalThis.MSP_COPY});
+        if (probe && probe.result) continue;
+        await chrome.scripting.executeScript({target: {tabId: card.id}, files: ['defaults.js', 'content.js'], injectImmediately: true});
       } catch (e) { /* scheda chiusa nel frattempo, o pagina del browser */ }
     }
   } catch (e) { /* senza il permesso: le schede si proteggono alla prossima ricarica */ }
