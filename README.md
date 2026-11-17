@@ -72,11 +72,11 @@ Verified **live** means on the real service, with made-up data, checking what ac
 |---|---|---|
 | 🌐 | **Browser extension** on Edge: Claude, ChatGPT, Perplexity, Gemini, Copilot for Microsoft 365, Le Chat, Grok, Qwen, Poe, Manus, Genspark, Kimi, Z.ai (Chrome and Brave share the same engine) | ✅ live, 17 Nov 2026 |
 | 📎 | Attachments in the browser (a Word file on ChatGPT) | ✅ live |
-| 🖥️ | Desktop apps: **ChatGPT**, **Perplexity** (connector), **Antigravity** (its own hooks) | ✅ live |
+| 🖥️ | Desktop apps: **ChatGPT**, **Perplexity**, **Microsoft Copilot** (connector), **Antigravity** (its own hooks) | ✅ live |
 | ⌨️ | Terminal: **Claude Code** (gateway and plugin), **Codex** (gateway), **Antigravity CLI** (hooks) | ✅ live |
 | 📄 | Documents inside AI apps (MCP server) with Claude Code; keyboard shortcuts on the clipboard | ✅ live |
 | 🧪 | Kimi (plugin), opencode, aider and OpenAI/Anthropic-compatible tools (gateway), Gemini CLI (plugin) | 🧪 automated tests |
-| ⏳ | Claude desktop app, Microsoft Copilot app, Codex plugin (needs approval with `/hooks`), MCP inside Claude Desktop | ⏳ to be tested |
+| ⏳ | Claude desktop app, Codex plugin (needs approval with `/hooks`), MCP inside Claude Desktop | ⏳ to be tested |
 | 🚫 | Copilot inside Teams and Outlook, Cursor and Windsurf chat (documents only, through MCP), Firefox, macOS, Linux | ❌ not covered |
 
 The full, dated list is on [omissis.eu](https://omissis.eu) and, for your own PC, in the panel (*Connections →
@@ -229,9 +229,9 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 ## 🗺️ Roadmap
 
 - [x] Browser extension verified live on 13 services, with attachments
-- [x] Desktop apps: ChatGPT, Perplexity, Antigravity
+- [x] Desktop apps: ChatGPT, Perplexity, Microsoft Copilot, Antigravity
 - [x] Terminal: Claude Code, Codex, Antigravity CLI
-- [ ] Live validation of the Claude and Microsoft Copilot desktop apps
+- [ ] Live validation of the Claude desktop app
 - [ ] Code signing for the installer and Microsoft Store publication; extension in the browser stores
 - [ ] Native messaging instead of the local HTTP bridge for the extension
 - [ ] Firefox

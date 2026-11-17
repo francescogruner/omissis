@@ -72,11 +72,11 @@ propria: di serie è spento, partono solo conteggi, e il pannello mostra esattam
 |---|---|---|
 | 🌐 | **Estensione del browser** su Edge: Claude, ChatGPT, Perplexity, Gemini, Copilot per Microsoft 365, Le Chat, Grok, Qwen, Poe, Manus, Genspark, Kimi, Z.ai (Chrome e Brave hanno lo stesso motore) | ✅ dal vivo, 17/11/2026 |
 | 📎 | Allegati nel browser (un file Word su ChatGPT) | ✅ dal vivo |
-| 🖥️ | App desktop: **ChatGPT**, **Perplexity** (connettore), **Antigravity** (con i suoi hook) | ✅ dal vivo |
+| 🖥️ | App desktop: **ChatGPT**, **Perplexity**, **Microsoft Copilot** (connettore), **Antigravity** (con i suoi hook) | ✅ dal vivo |
 | ⌨️ | Terminale: **Claude Code** (gateway e plugin), **Codex** (gateway), **Antigravity CLI** (hook) | ✅ dal vivo |
 | 📄 | Documenti dentro le app AI (server MCP) con Claude Code; scorciatoie da tastiera sugli appunti | ✅ dal vivo |
 | 🧪 | Kimi (plugin), opencode, aider e gli strumenti compatibili con OpenAI o Anthropic (gateway), Gemini CLI (plugin) | 🧪 prove automatiche |
-| ⏳ | App desktop di Claude e di Microsoft Copilot, plugin di Codex (va approvato con `/hooks`), MCP dentro Claude Desktop | ⏳ da provare |
+| ⏳ | App desktop di Claude, plugin di Codex (va approvato con `/hooks`), MCP dentro Claude Desktop | ⏳ da provare |
 | 🚫 | Copilot dentro Teams e Outlook, chat di Cursor e Windsurf (solo documenti, con MCP), Firefox, macOS, Linux | ❌ non coperti |
 
 L'elenco completo e datato è su [omissis.eu](https://omissis.eu) e, per il tuo PC, nel pannello (*Collegamenti →
@@ -232,9 +232,9 @@ Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 ## 🗺️ In arrivo
 
 - [x] Estensione del browser verificata dal vivo su 13 servizi, con gli allegati
-- [x] App desktop: ChatGPT, Perplexity, Antigravity
+- [x] App desktop: ChatGPT, Perplexity, Microsoft Copilot, Antigravity
 - [x] Terminale: Claude Code, Codex, Antigravity CLI
-- [ ] Verifica dal vivo delle app desktop di Claude e di Microsoft Copilot
+- [ ] Verifica dal vivo dell'app desktop di Claude
 - [ ] Firma del codice dell'installer e Microsoft Store; estensione negli store dei browser
 - [ ] Messaggistica nativa del browser al posto del collegamento HTTP locale per l'estensione
 - [ ] Firefox

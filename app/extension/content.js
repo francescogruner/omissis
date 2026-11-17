@@ -8,6 +8,9 @@
   // dentro un'app desktop le finestre hanno un indirizzo interno: il connettore dice a quale servizio appartengono
   const HOST_SITE = globalThis.MSP_HOST_SITE || location.hostname;
   const channel = globalThis.mspChannel || null;
+  // una copia sola per pagina: due copie si contenderebbero le risposte del programma, e quella che ferma l'invio
+  // potrebbe ricevere la risposta destinata all'altra (visto il 17/11/2026 nell'app di Copilot: partiva l'originale)
+  if (globalThis.MSP_COPY) return;
   globalThis.MSP_COPY = true;   // il servizio in background lo cerca per sapere se questa scheda e' gia' protetta
   let status = null, suspended = false, notices = true;
 
@@ -324,6 +327,16 @@
     }
     const pause = ms => new Promise(ok => setTimeout(ok, ms));
     const same = () => flat(read(el)) === flat(text);
+    // Dentro un'app il connettore puo' digitare davvero (seleziona tutto e scrive): e' l'unico modo che aggiorna anche gli
+    // editor che tengono il testo in un loro modello, e che altrimenti mandano l'originale (Copilot 157, 17/11/2026).
+    if (globalThis.MSP_IN_APP) {
+      try {
+        const r = await send({t: 'type', text});
+        await pause(60);
+        if (r && r.ok && same()) return true;
+      } catch (e) { /* si prova con le strade della pagina */ }
+      el.focus();
+    }
     // Gli editor ricchi tengono una selezione loro e la aggiornano quando il browser dice che e' cambiata: va detto, e va
     // lasciato loro un istante. Senza, il testo nuovo finisce in fondo a quello vecchio invece di prenderne il posto
     // (visto dal vivo su Perplexity il 17/11/2026: nella casella restavano l'originale e la versione protetta).

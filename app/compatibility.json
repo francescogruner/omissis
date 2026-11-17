@@ -12,6 +12,15 @@
    "data": "2026-11-17"
   },
   {
+   "service": "copilot-365",
+   "via": "app desktop",
+   "client": "Microsoft Copilot per Windows",
+   "version": "157.0.4341.60",
+   "method": "box",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
    "service": "perplexity",
    "via": "app desktop",
    "client": "Perplexity per Windows",

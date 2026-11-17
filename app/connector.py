@@ -73,9 +73,12 @@ APP = {
              # provato il 14/11/2026 sulla 3.2.24: avviata con la porta di debug (anche 0) esce da sola in un secondo, codice 1
              # la protezione passa dal sistema di plugin dell'app (hook UserPromptSubmit): vedi kimi_plugin.py
              "refuses": True, "plugin": True},
-    "copilot": {"name": "Microsoft Copilot", "commands": [r"%ProgramFiles(x86)%\Microsoft\Copilot\Application\mscopilot.exe",
+    # dalla 157 (novembre 2026) il programma si chiama copilotapp.exe; prima mscopilot.exe
+    "copilot": {"name": "Microsoft Copilot", "commands": [r"%ProgramFiles(x86)%\Microsoft\Copilot\Application\copilotapp.exe",
+                                                           r"%ProgramFiles%\Microsoft\Copilot\Application\copilotapp.exe",
+                                                           r"%ProgramFiles(x86)%\Microsoft\Copilot\Application\mscopilot.exe",
                                                            r"%ProgramFiles%\Microsoft\Copilot\Application\mscopilot.exe"],
-                "process": ("mscopilot.exe", r"\\copilot\\application\\mscopilot\.exe$"), "port": 9554, "site": "copilot.microsoft.com",
+                "process": ("copilotapp.exe|mscopilot.exe", r"\\copilot\\application\\(copilotapp|mscopilot)\.exe$"), "port": 9554, "site": "copilot.microsoft.com",
                 "service": "copilot", "own_profile": True},
     # provata il 17/11/2026 sulla 26.11 (Electron 45, dallo Store): aperta con la porta di debug la tiene aperta
     "perplexity": {"name": "Perplexity", "package": ("PerplexityAI.PerplexityApp", "ai.perplexity.PerplexityPersonalComputer.Electron"),
@@ -124,10 +127,12 @@ _u32.IsWindowVisible.argtypes = [wintypes.HWND]
 
 
 def processes(process):
-    """I numeri dei processi di un'app: process = (nome del programma, espressione per il percorso completo)."""
+    """I numeri dei processi di un'app: process = (nome del programma, espressione per il percorso completo). Il nome
+    puo' essere piu' d'uno, separati da «|»: un'app che cambia nome al suo programma (Copilot: mscopilot.exe, poi
+    copilotapp.exe) va riconosciuta in tutte e due le versioni."""
     if not process:
         return []
-    name, path = process[0].lower(), re.compile(process[1], re.I)
+    names, path = set(process[0].lower().split("|")), re.compile(process[1], re.I)
     snapshot = _k32.CreateToolhelp32Snapshot(0x2, 0)
     if snapshot in (None, wintypes.HANDLE(-1).value):
         return []
@@ -136,7 +141,7 @@ def processes(process):
     try:
         more = _k32.Process32FirstW(snapshot, ctypes.byref(entry))
         while more:
-            if entry.szExeFile.lower() == name:
+            if entry.szExeFile.lower() in names:
                 h = _k32.OpenProcess(0x1000, False, entry.th32ProcessID)   # solo il diritto di leggerne il percorso
                 if h:
                     try:
@@ -307,15 +312,16 @@ class Cdp:
 
 SHELL = r"""
 const chrome = (() => {
-  const waits = new Map(), ascoltatori = [];
-  let n = 0;
+  // attese e numeri delle richieste sono di tutta la pagina, non di questa copia: se il codice viene portato due volte
+  // nello stesso documento, ogni risposta arriva comunque a chi l'ha chiesta
+  const waits = globalThis.__omissis_waits || (globalThis.__omissis_waits = new Map()), ascoltatori = [];
   const data = {status: __STATUS__, suspended: false, notices: true};
   const call = globalThis.__CALL__;
   globalThis.__omissis_response = (k, r) => { const a = waits.get(k); if (a) { waits.delete(k); a(r); } };
   globalThis.__omissis_status = fresh => { data.status = fresh; for (const f of ascoltatori) f({status: {newValue: fresh}}, 'local'); };
   return {
     runtime: {id: 'omissis-connettore', sendMessage: m => new Promise((ok, no) => {
-      const k = ++n;
+      const k = globalThis.__omissis_n = (globalThis.__omissis_n || 0) + 1;
       waits.set(k, ok);
       try { call(JSON.stringify({k, m})); } catch (e) { waits.delete(k); no(e); }
     })},
@@ -439,6 +445,7 @@ class Connector:
         language = i18n.active() if (EST / "_locales" / i18n.active() / "messages.json").exists() else "en"
         phrases = {k: v["message"] for k, v in json.loads((EST / "_locales" / language / "messages.json").read_text(encoding="utf-8")).items()}
         host_site += f"globalThis.MSP_TEXTS = {json.dumps(phrases, ensure_ascii=False)};\n"
+        host_site += "globalThis.MSP_IN_APP = true;\n"   # dentro un'app, anche nelle pagine web: il connettore sa digitare (vedi _type)
         isolated = ("(() => {\n" + filt + f"if (!__in({json.dumps(everyone)}) || typeof globalThis.{CALL} !== 'function') return;\n"
                    + host_site + shell + f"if (__in({json.dumps(readable)})) {{\n" + read("channel.js") + "\n}\n" + read("content.js") + "\n})();")
         return page, isolated
@@ -575,12 +582,27 @@ class Connector:
         ctx = p.get("executionContextId")
         if sid in self.sessions:
             self.sessions[sid]["contexts"].add(ctx)
-        r = self._handle(m if isinstance(m, dict) else {})
+        m = m if isinstance(m, dict) else {}
+        r = self._type(sid, str(m.get("text", ""))) if m.get("t") == "type" else self._handle(m)
         try:
             self.cdp.send("Runtime.evaluate", {"expression": f"__omissis_response({k}, {json.dumps(r, ensure_ascii=False)})", "contextId": ctx},
                            sid, timeout=0)
         except Exception:   # noqa: BLE001
             pass
+
+    def _type(self, sid, text):
+        """Scrive la versione protetta nella casella come farebbe una persona: seleziona tutto e digita. Alcuni editor
+        tengono il testo in un loro modello e ignorano cio' che la pagina cambia da sola: lo aggiorna solo chi digita
+        davvero (visto dal vivo il 17/11/2026 sull'app di Copilot 157: nella casella c'era la versione protetta, ma partiva
+        l'originale). La casella deve gia' avere il fuoco; se non torna uguale, chi chiama prova le altre strade."""
+        try:
+            self.cdp.send("Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65,
+                                                     "modifiers": 2, "commands": ["selectAll"]}, sid)
+            self.cdp.send("Input.dispatchKeyEvent", {"type": "keyUp", "key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65, "modifiers": 2}, sid)
+            self.cdp.send("Input.insertText", {"text": text}, sid)
+            return {"ok": True}
+        except Exception:   # noqa: BLE001
+            return {"ok": False}
 
     def _handle(self, m):
         """Lo stesso lavoro che nell'estensione fa background.js."""
