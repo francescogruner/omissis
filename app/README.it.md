@@ -215,7 +215,7 @@ dati può spegnerne il gruppo in Impostazioni → Riconoscimento → Cosa sostit
 | Persone, contatti e documenti d'identità | nomi, e-mail, telefoni, indirizzi, CAP, città, data di nascita, codice fiscale, documenti | no |
 | Password, chiavi e altri segreti | password, token, chiavi, stringhe di connessione | no |
 | Conti e pagamenti | IBAN, carte, partita IVA | sì |
-| Aziende e organizzazioni | nomi di aziende, studi, clienti; caselle generiche (info@, amministrazione@…) | sì, e **di serie è spento** |
+| Aziende e organizzazioni | nomi di aziende, studi, clienti (le caselle generiche come info@ restano sempre in chiaro) | sì, e **di serie è spento** |
 | Dati informatici | indirizzi IP e MAC, nomi di PC e server, domini, indirizzi web, account, identificativi cloud e di dispositivo | sì |
 | Pratiche, utenze e veicoli | polizze, protocolli, matricole, dati catastali, codici di fornitura, targhe, telai | sì |
 
@@ -250,9 +250,8 @@ vincono sui gruppi spenti. L'impostazione è `groups_off` in `settings.json`; l'
 
 **Le caselle di posta.** Un indirizzo con il nome di una persona (`mario.rossi@…`) è sempre
 sostituito. Una casella generica di un'organizzazione (`info@`, `amministrazione@`,
-`ufficio.acquisti@`…) è un dato dell'azienda e segue il suo gruppo: sostituita finché «Aziende e
-organizzazioni» è acceso, perché il dominio dice chi è l'azienda; in chiaro quando lo si spegne.
-Fa eccezione la casella generica presso un servizio di posta per privati (`info@gmail.com`): lì
+`ufficio.acquisti@`…) è un dato dell'azienda, non di una persona: resta **sempre in chiaro**, con
+qualsiasi profilo. Fa eccezione la casella generica presso un servizio di posta per privati (`info@gmail.com`): lì
 dietro c'è quasi sempre una persona o una ditta individuale, quindi resta protetta. Il criterio è
 il nome prima della chiocciola: un elenco di parole d'ufficio in italiano e in inglese, in
 `settings.py`.
@@ -571,7 +570,7 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 | ChatGPT / Codex | stessa app, riavviata con la porta | sì, un messaggio con dati inventati (12/11/2026) |
 | Claude | stessa app, riavviata con la porta | no |
 | Kimi | con la porta **non si può**: avviata così si chiude da sola in un secondo (codice 1), anche con la porta 0. Si protegge con il **suo sistema di plugin** (vedi sotto) | la porta: provata il 14/11/2026 sulla 3.2.24. Il plugin: solo in automatico (`e2e_kimi.py`), non ancora installato e provato dentro Kimi vera |
-| Microsoft Copilot | con un **profilo separato**, tenuto in `data\app_profiles\copilot` | solo l'aggancio: 5 finestre seguite, nessun errore, nessun messaggio inviato (14/11/2026) |
+| Microsoft Copilot | con un **profilo separato**, tenuto in `data\app_profiles\copilot`. Dalla 157 il programma si chiama `copilotapp.exe` (prima `mscopilot.exe`) ed è l'app di Microsoft 365 Copilot: la casella sta in una vista web su `m365copilotapp.svc.cloud.microsoft`, protetta come Copilot per Microsoft 365. Il suo editor tiene il testo in un modello suo: la versione protetta la scrive il connettore digitandola davvero (seleziona tutto e scrive) | provata dal vivo il 17/11/2026 (157.0.4341.60, account di lavoro, dati inventati): dalla finestra sono usciti solo i segnaposto, anche su più righe. Due copie di Omissis agganciate alla stessa app si contendono le risposte: ne va usata una |
 | Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere. Nel browser Copilot per Microsoft 365 si protegge dalla casella di scrittura (vedi l'estensione) | — |
 | Visual Studio (GitHub Copilot) | non coperta: è un programma nativo, le richieste partono da un suo processo e non da una finestra web. Il servizio si può solo registrare o bloccare | — |
 | Editor derivati da VS Code (Cursor, Windsurf) | non coperti dal connettore: la chat parla con il servizio da un processo dell'editor, e la casella è un editor di codice che non si riscrive come una casella web | non installati sul PC di prova |

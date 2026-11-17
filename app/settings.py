@@ -194,9 +194,9 @@ PROFILES = {"standard": {"groups_off": ["organizations"], "categories": []},    
 ALWAYS_ON = {"people": ["PERSONA", "EMAIL", "TELEFONO", "INDIRIZZO", "CAP", "CITTA", "DATA_NASCITA", "CF", "DOC_ID"], "secrets": ["SEGRETO"]}
 
 
-# Le caselle generiche di un'azienda (info@, amministrazione@...) sono un dato dell'azienda, non di una persona: seguono il
-# gruppo «organizations». Finche' e' acceso restano sostituite (il dominio dice chi e' l'azienda); spento, restano in chiaro.
-# Le caselle con il nome di una persona sono sempre protette.
+# Le caselle generiche di un'azienda (info@, amministrazione@...) sono un dato dell'azienda, non di una persona: restano
+# sempre in chiaro, con qualsiasi profilo. Le caselle con il nome di una persona sono sempre protette, come quelle generiche
+# presso un servizio di posta per privati (qui sotto).
 ROLE_WORDS = set(
     "info informazioni amministrazione admin segreteria ufficio uffici commerciale commerciali acquisti vendite sales contabilita "
     "fatturazione fatture billing ordini orders supporto support assistenza helpdesk service servizio servizi clienti customer help "

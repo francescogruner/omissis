@@ -229,7 +229,7 @@
  "groups.secrets": "Passwords, keys and other secrets",
  "groups.payments": "Accounts and payments",
  "groups.organizations": "Companies and organisations",
- "groups.organizations.more": "generic mailboxes (info@, sales@…)",
+ "groups.organizations.more": "firms, bodies and clients; generic mailboxes such as info@ always stay in clear",
  "groups.it": "IT data",
  "groups.records": "Case files, utilities and vehicles",
  "groups.always": "always",
