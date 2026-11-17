@@ -575,7 +575,7 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 | Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere. Nel browser Copilot per Microsoft 365 si protegge dalla casella di scrittura (vedi l'estensione) | — |
 | Visual Studio (GitHub Copilot) | non coperta: è un programma nativo, le richieste partono da un suo processo e non da una finestra web. Il servizio si può solo registrare o bloccare | — |
 | Editor derivati da VS Code (Antigravity, Cursor, Windsurf) | non coperti dal connettore: la chat parla con il servizio da un processo dell'editor, e la casella è un editor di codice che non si riscrive come una casella web | non installati sul PC di prova |
-| Perplexity | da provare: non era installata sul PC di prova | — |
+| Perplexity | app dello Store senza un comando da lanciare: il connettore la apre chiedendolo a Windows, come il menu Start, con la porta di debug (le sue finestre interne sono `perplexity.localhost`) | si avvia protetta e il connettore ne segue le finestre (17/11/2026, versione 26.11); il messaggio non ancora: chiede l'accesso |
 
 Se un'app rifiuta la porta quando la si riavvia (lo fa Kimi), il connettore se ne accorge in pochi
 secondi, non aspetta i 40 del tempo massimo e dice che l'app ora è chiusa e va riaperta normalmente.

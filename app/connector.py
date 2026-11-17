@@ -57,6 +57,9 @@ _STORE = r"%LOCALAPPDATA%\Microsoft\WindowsApps" "\\"
 #   service      il servizio del catalogo a cui l'app parla: la sua politica decide se i messaggi vengono mascherati
 #   refuses      l'app si chiude da sola se avviata con la porta di debug: da qui non la si avvia, e il pannello lo dice
 #   plugin       l'app ha un sistema di plugin suo, con cui Omissis controlla i messaggi prima dell'invio (kimi_plugin.py)
+#   package      app dello Store senza un comando da lanciare (Perplexity): (nome del pacchetto, id dell'app). Si avvia
+#                chiedendo a Windows di aprirla con gli argomenti (IApplicationActivationManager), come fa il menu Start
+#   internals    indirizzi http con cui l'app chiama le proprie finestre (Perplexity: perplexity.localhost): sono sue, non siti
 #   own_profile  l'app e' un browser Chromium vero e proprio (Copilot e' un Edge): dalla versione 136 Chromium ignora la porta
 #                di debug sul profilo predefinito, quindi l'app protetta gira con un profilo suo, tenuto nei dati di Omissis.
 #                Vuol dire rifare l'accesso la prima volta; la copia normale dell'app puo' restare aperta, e NON e' protetta.
@@ -74,6 +77,10 @@ APP = {
                                                            r"%ProgramFiles%\Microsoft\Copilot\Application\mscopilot.exe"],
                 "process": ("mscopilot.exe", r"\\copilot\\application\\mscopilot\.exe$"), "port": 9554, "site": "copilot.microsoft.com",
                 "service": "copilot", "own_profile": True},
+    # provata il 17/11/2026 sulla 26.11 (Electron 45, dallo Store): aperta con la porta di debug la tiene aperta
+    "perplexity": {"name": "Perplexity", "package": ("PerplexityAI.PerplexityApp", "ai.perplexity.PerplexityPersonalComputer.Electron"),
+                   "process": ("perplexity.exe", r"\\perplexityai\.perplexityapp_[^\\]+\\app\\perplexity\.exe$"), "port": 9555,
+                   "site": "www.perplexity.ai", "service": "perplexity", "internals": ["http://perplexity.localhost"]},
 }
 
 
@@ -144,7 +151,39 @@ def processes(process):
     return found
 
 
+def _package(name):
+    """Il nome completo di un pacchetto dello Store installato per questo utente (con la versione), o None."""
+    import winreg
+    key = r"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages"
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+            for i in range(winreg.QueryInfoKey(k)[0]):
+                full = winreg.EnumKey(k, i)
+                if full.lower().startswith(name.lower() + "_"):
+                    return full
+    except OSError:
+        pass
+    return None
+
+
+# Apre un'app dello Store con degli argomenti: lo fa Windows, come dal menu Start (non si puo' lanciare il suo .exe)
+_ACTIVATE = r"""
+Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices;
+[ComImport, Guid("2e941141-7f97-4756-ba1d-9decde894a3d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IApplicationActivationManager { int ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string id, [MarshalAs(UnmanagedType.LPWStr)] string args, int options, out uint pid); }
+[ComImport, Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")] public class ApplicationActivationManager {}
+public static class OmissisActivate { public static uint Open(string id, string args) { uint pid; ((IApplicationActivationManager)new ApplicationActivationManager()).ActivateApplication(id, args, 0, out pid); return pid; } }
+'@
+[OmissisActivate]::Open($env:OMISSIS_AUMID, $env:OMISSIS_ARGS) | Out-Null
+"""
+
+
 def find_command(app):
+    if app.get("package"):
+        full = _package(app["package"][0])
+        # l'id con cui Windows apre l'app: famiglia del pacchetto (nome e firma dell'editore, senza versione) e id dell'app
+        return f"package:{full.split('_')[0]}_{full.split('_')[-1]}!{app['package'][1]}" if full else None
     for c in app.get("commands", []):
         c = os.path.expandvars(c)
         if Path(c).exists():
@@ -585,7 +624,7 @@ class Connector:
 def _connect(app, wait=6):
     """Si collega e aspetta un momento che la prima finestra sia agganciata: subito dopo il collegamento il conto delle
     finestre e' ancora a zero, e chi guarda lo stato leggerebbe «non protetta» per un'app che lo sta per diventare."""
-    c = Connector(app["port"], app["name"], site=app.get("site", ""))
+    c = Connector(app["port"], app["name"], site=app.get("site", ""), internals=app.get("internals", ()))
     for _ in range(wait * 10):
         if c.counts["pages"] or c.errors or not c.alive:
             break
@@ -631,7 +670,12 @@ def launch_app(key, timeout=40, close_first=False):
         if not close_app(key):
             raise Error(i18n.t("connector.error.not_closed", name=app["name"]))
         time.sleep(1)   # il tempo che l'app lasci andare i suoi file
-    started = subprocess.Popen([command, *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if command.startswith("package:"):
+        env = {**os.environ, "OMISSIS_AUMID": command[len("package:"):], "OMISSIS_ARGS": subprocess.list2cmdline(arguments)}
+        started = subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _ACTIVATE], env=env,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    else:
+        started = subprocess.Popen([command, *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for i in range(timeout * 2):
         if opened_port(app["port"]):
             for _ in range(20):   # la porta risponde un attimo prima del servizio di debug

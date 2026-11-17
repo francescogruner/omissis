@@ -430,6 +430,7 @@
  "compatibility.method.api": "service address",
  "compatibility.method.proxy": "proxy",
  "compatibility.method.hook": "check before sending",
+ "compatibility.method.shortcut": "keyboard shortcuts",
  "compatibility.level.live": "live",
  "compatibility.level.fake_service": "mock service",
  "via.proxy": "proxy",

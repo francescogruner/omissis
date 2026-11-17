@@ -430,6 +430,7 @@
  "compatibility.method.api": "indirizzo del servizio",
  "compatibility.method.proxy": "proxy",
  "compatibility.method.hook": "controllo prima dell'invio",
+ "compatibility.method.shortcut": "scorciatoie da tastiera",
  "compatibility.level.live": "dal vivo",
  "compatibility.level.fake_service": "servizio simulato",
  "via.proxy": "proxy",

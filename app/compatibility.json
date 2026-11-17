@@ -39,6 +39,24 @@
    "data": "2026-11-16"
   },
   {
+   "service": "chatgpt",
+   "via": "extension",
+   "client": "Microsoft Edge",
+   "version": "157",
+   "method": "attachment",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
+   "service": "",
+   "via": "clipboard",
+   "client": "Windows 11",
+   "version": "",
+   "method": "shortcut",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
    "service": "claude",
    "via": "extension",
    "client": "Microsoft Edge",
