@@ -12,6 +12,15 @@
    "data": "2026-11-17"
   },
   {
+   "service": "perplexity",
+   "via": "app desktop",
+   "client": "Perplexity per Windows",
+   "version": "2026.11.12537",
+   "method": "network",
+   "level": "live",
+   "data": "2026-11-17"
+  },
+  {
    "service": "anthropic-api",
    "via": "gateway",
    "client": "Claude Code",

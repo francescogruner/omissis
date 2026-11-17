@@ -575,7 +575,7 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 | Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere. Nel browser Copilot per Microsoft 365 si protegge dalla casella di scrittura (vedi l'estensione) | — |
 | Visual Studio (GitHub Copilot) | non coperta: è un programma nativo, le richieste partono da un suo processo e non da una finestra web. Il servizio si può solo registrare o bloccare | — |
 | Editor derivati da VS Code (Antigravity, Cursor, Windsurf) | non coperti dal connettore: la chat parla con il servizio da un processo dell'editor, e la casella è un editor di codice che non si riscrive come una casella web | non installati sul PC di prova |
-| Perplexity | app dello Store senza un comando da lanciare: il connettore la apre chiedendolo a Windows, come il menu Start, con la porta di debug (le sue finestre interne sono `perplexity.localhost`) | si avvia protetta e il connettore ne segue le finestre (17/11/2026, versione 26.11); il messaggio non ancora: chiede l'accesso |
+| Perplexity | app dello Store senza un comando da lanciare: il connettore la apre chiedendolo a Windows, come il menu Start, con la porta di debug (le sue finestre interne sono `perplexity.localhost`) | provata dal vivo il 17/11/2026 (versione 2026.11), con l'accesso e dati inventati: il messaggio è partito con i segnaposto e il modello ha risposto «PERSONA-1» |
 
 Se un'app rifiuta la porta quando la si riavvia (lo fa Kimi), il connettore se ne accorge in pochi
 secondi, non aspetta i 40 del tempo massimo e dice che l'app ora è chiusa e va riaperta normalmente.
@@ -644,7 +644,8 @@ plugin di Kimi (`validate_plugin.py`) e di Claude Code (`claude plugin validate`
 provati dentro lo strumento vero: Kimi, Codex e Gemini CLI**, i cui plugin seguono la documentazione. Per Codex c'è
 un passo in più: esegue i controlli dei plugin solo dopo che l'utente li ha approvati con `/hooks`. Il 17/11/2026 un
 controllo passato a `codex exec` con `-c` non è scattato, e il messaggio inventato è partito com'era: finché
-l'approvazione non è fatta, il plugin in Codex non protegge.
+l'approvazione non è fatta, il plugin in Codex non protegge. Gemini CLI, provato lo stesso giorno, non accetta più
+l'accesso con un account Google personale (rimanda ad Antigravity): resta per chi lo usa con una chiave API o Vertex AI.
 
 **App già aperta.** Un'app aperta dal menu Start non ha la porta, e avviarla di nuovo porterebbe solo
 in primo piano la finestra che c'è già, senza protezione. Il pannello se ne accorge (legge l'elenco
