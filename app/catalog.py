@@ -62,7 +62,7 @@ SERVICES = [
     _s("manus", "Manus", "Manus", "chat", "manus.im", "generic", r"\bmanus\b"),
     _s("genspark", "Genspark", "Genspark", "chat", "genspark.ai", "generic"),
     _s("huggingchat", "Hugging Face", "Hugging Face", "chat", "huggingface.co hf.co"),
-    _s("notebooklm", "NotebookLM", "Google", "research", "notebooklm.google.com"),
+    _s("notebooklm", "NotebookLM", "Google", "research", "notebooklm.google.com notebook.google.com"),
     _s("aistudio", "Google AI Studio", "Google", "api", "aistudio.google.com"),
     _s("character", "Character.AI", "Character.AI", "chat", "character.ai"),
     _s("pi", "Pi", "Inflection", "chat", "pi.ai"),

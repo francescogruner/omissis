@@ -306,22 +306,41 @@
   }
   const read = el => el.tagName === 'TEXTAREA' ? el.value : el.innerText;
 
-  function write(el, text) {
+  async function write(el, text) {
     el.focus();
     if (el.tagName === 'TEXTAREA') {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, text);
       el.dispatchEvent(new Event('input', {bubbles: true}));
       return flat(read(el)) === flat(text);
     }
-    const chooseAll = () => { const s = getSelection(), r = document.createRange(); r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r); };
-    chooseAll();   // gli editor ricchi accettano un "incolla": conserva gli a capo
+    const pause = ms => new Promise(ok => setTimeout(ok, ms));
+    const same = () => flat(read(el)) === flat(text);
+    // Gli editor ricchi tengono una selezione loro e la aggiornano quando il browser dice che e' cambiata: va detto, e va
+    // lasciato loro un istante. Senza, il testo nuovo finisce in fondo a quello vecchio invece di prenderne il posto
+    // (visto dal vivo su Perplexity il 17/11/2026: nella casella restavano l'originale e la versione protetta).
+    const chooseAll = async () => {
+      const s = getSelection(), r = document.createRange();
+      r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r);
+      document.dispatchEvent(new Event('selectionchange'));
+      await pause(40);
+    };
+    await chooseAll();   // gli editor ricchi accettano un "incolla": conserva gli a capo
     const dt = new DataTransfer();
     dt.setData('text/plain', text);
     el.dispatchEvent(new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true}));
-    if (flat(read(el)) === flat(text)) return true;
-    chooseAll();
+    await pause(30);
+    if (same()) return true;
+    await chooseAll();
     document.execCommand('insertText', false, text);
-    return flat(read(el)) === flat(text);
+    await pause(30);
+    if (same()) return true;
+    // ultima via: svuotare la casella e scriverci da capo. Se nemmeno cosi' torna, il messaggio non parte (lo dice chi chiama)
+    await chooseAll();
+    document.execCommand('delete');
+    await pause(30);
+    document.execCommand('insertText', false, text);
+    await pause(30);
+    return same();
   }
 
   function sendButton(da) {
@@ -363,7 +382,7 @@
       if (!r || (r.action !== 'passthrough' && r.action !== 'replace')) { notice(REASONS[r && r.reason] || REASONS.extension, true); return; }
       let ready_now = text;
       if (r.action === 'replace') {
-        if (!write(el, r.text)) { notice(PHRASES.box, true); return; }
+        if (!await write(el, r.text)) { notice(PHRASES.box, true); return; }
         ready_now = r.text;
         if (notices) notice(replaced(r.replacements), false);
         await new Promise(ok => setTimeout(ok, 80));   // l'app deve accorgersi del testo nuovo
