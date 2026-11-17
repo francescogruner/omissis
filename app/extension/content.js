@@ -8,6 +8,7 @@
   // dentro un'app desktop le finestre hanno un indirizzo interno: il connettore dice a quale servizio appartengono
   const HOST_SITE = globalThis.MSP_HOST_SITE || location.hostname;
   const channel = globalThis.mspChannel || null;
+  globalThis.MSP_COPY = true;   // il servizio in background lo cerca per sapere se questa scheda e' gia' protetta
   let status = null, suspended = false, notices = true;
 
   const send = m => chrome.runtime.sendMessage(m);
@@ -295,6 +296,11 @@
   // non dipende dal formato delle richieste, che i siti cambiano senza preavviso (si spegne dalle impostazioni).
   const BOX = true;
   const RX_SENDING = /send|invia|submit|inoltra/i;
+  // nelle classi «send» deve essere una parola a se' (send-button, sendBtn), non l'inizio di «sender» o «sending»
+  const RX_SEND_CLASS = /(?:^|[\s_-])(?:send|submit)(?:[\s_-]|btn|button|icon|$)/i;
+  const CANDIDATES = 'button, [role="button"], input[type="submit"], [class*="send" i], [class*="submit" i]';
+  const classOf = b => (typeof b.className === 'string' ? b.className : b.getAttribute('class')) || '';
+  const press = b => { if (typeof b.click === 'function') b.click(); else b.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})); };
   let approved = null, work = false, latestBox = null, leaveClick = null;
   const flat = t => String(t).replace(/\s+/g, ' ').trim();
 
@@ -344,15 +350,20 @@
   }
 
   function sendButton(da) {
-    const b = da && da.closest ? da.closest('button, [role="button"], input[type="submit"]') : null;
+    let b = da && da.closest ? da.closest(CANDIDATES) : null;
+    // un'icona dentro il pulsante: conta il pulsante che la contiene, se c'e'
+    if (b && !(b instanceof HTMLElement)) b = (b.parentElement && b.parentElement.closest(CANDIDATES)) || b;
     if (!b || b.closest('[data-omissis]')) return null;
     const captions = [b.getAttribute('aria-label'), b.getAttribute('data-testid'), b.getAttribute('title'), b.id, b.type === 'submit' ? 'submit' : ''].join(' ');
-    return RX_SENDING.test(captions) ? b : null;
+    if (RX_SENDING.test(captions) || RX_SEND_CLASS.test(classOf(b))) return b;
+    // un vero pulsante senza nome, dentro un contenitore che si chiama «send»
+    const wrap = b.parentElement && b.parentElement.closest('[class*="send" i], [class*="submit" i]');
+    return wrap && RX_SEND_CLASS.test(classOf(wrap)) && wrap.contains(b) && /^(BUTTON|INPUT)$/.test(b.tagName) ? b : null;
   }
 
   function nearbyButton(el) {
     for (let n = el.parentElement, i = 0; n && i < 8; n = n.parentElement, i++) {
-      const b = [...n.querySelectorAll('button, [role="button"], input[type="submit"]')].filter(x => sendButton(x) && !x.disabled);
+      const b = [...new Set([...n.querySelectorAll(CANDIDATES)].map(sendButton))].filter(x => x && !x.disabled);
       if (b.length) return b[b.length - 1];
     }
     return null;
@@ -362,14 +373,14 @@
   const alreadyApproved = (el, text) => !!approved && approved.el === el && approved.text === flat(text);
 
   function dispatch(el, how, button) {
-    if (how === 'button' && button && button.isConnected) { leaveClick = button; button.click(); return; }
+    if (how === 'button' && button && button.isConnected) { leaveClick = button; press(button); return; }
     for (const kind of ['keydown', 'keypress', 'keyup']) {
       el.dispatchEvent(new KeyboardEvent(kind, {key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, composed: true}));
     }
     setTimeout(() => {   // l'app non ha reagito al tasto simulato: si prova con il suo pulsante di invio
       if (!el.isConnected || !flat(read(el)) || !alreadyApproved(el, read(el))) return;
       const b = nearbyButton(el);
-      if (b) { leaveClick = b; b.click(); } else notice(PHRASES.press, false);
+      if (b) { leaveClick = b; press(b); } else notice(PHRASES.press, false);
     }, 450);
   }
 

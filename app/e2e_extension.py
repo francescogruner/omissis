@@ -346,11 +346,20 @@ def main():
             mark("protezione che non risponde: XMLHttpRequest bloccata", json.dumps(seen()) == before)
         sw.evaluate("t => chrome.storage.local.set({token: t})", good)
 
+        # --- statistiche di terzi: sulle pagine dei servizi protetti non partono (leggono la casella prima dell'Invio)
+        trackers = sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.filter(x => x.condition.initiatorDomains))")
+        # con mode no-cors la richiesta riesce comunque se parte; fallisce solo se il browser la ferma (o senza rete)
+        sent = page.evaluate("""() => fetch('https://www.google-analytics.com/g/collect?v=2&ep.user_data.email=giulia.ferraresi%40nevatek.example',
+            {mode: 'no-cors'}).then(() => true, () => false)""")
+        mark("statistiche di terzi fermate sulle pagine dei servizi protetti", len(trackers) == 4 and "localhost" in trackers[0]["condition"]["initiatorDomains"]
+              and "google-analytics.com" in trackers[0]["condition"]["requestDomains"] and not sent,
+              f"{len(trackers)} regola · richiesta partita: {sent}")
+
         # --- blocco di un servizio (politica scelta nel pannello): la pagina non viene nemmeno contattata
         pan.evaluate(CALL_SERVICES, {"id": "pi", "policy": "block"})
         fin.reload()   # aprire la finestrella fa rileggere le politiche
         wait_for(fin, "#title", "active")
-        rules = sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.length)")
+        rules = sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.filter(x => !x.condition.initiatorDomains).length)")
         block = ctx.new_page()
         try:
             block.goto("https://pi.ai/", timeout=15000)
@@ -366,7 +375,7 @@ def main():
         fin.reload()
         wait_for(fin, "#title", "active")
         fin.wait_for_timeout(500)
-        radar = sw.evaluate("chrome.declarativeNetRequest.getDynamicRules()")
+        radar = sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.filter(x => !x.condition.initiatorDomains))")
         accesses = sw.evaluate("chrome.runtime.getManifest().host_permissions")
         stopped = ctx.new_page()
         try:
@@ -381,7 +390,7 @@ def main():
         pan.evaluate(CALL_SERVICES, {"id": "replika", "policy": "record"})
         fin.reload()
         wait_for(fin, "#title", "active")
-        mark("blocco tolto", sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.length)") == 0)
+        mark("blocco tolto", sw.evaluate("chrome.declarativeNetRequest.getDynamicRules().then(r => r.filter(x => !x.condition.initiatorDomains).length)") == 0)
         # --- la pagina di benvenuto, a estensione collegata, lo dice e non chiede altro
         hello = ctx.new_page()
         hello.goto(f"chrome-extension://{ident}/welcome.html")

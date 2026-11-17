@@ -46,7 +46,8 @@ def manifest(test):
         "default_locale": "en",
         "minimum_chrome_version": "111",
         # declarativeNetRequest (e non ...WithHostAccess): serve a bloccare anche i servizi del radar, sui cui siti non si chiede l'accesso
-        "permissions": ["storage", "alarms", "declarativeNetRequest"],
+        # scripting: per proteggere le schede gia' aperte quando l'estensione si accende, senza ricaricarle
+        "permissions": ["storage", "alarms", "declarativeNetRequest", "scripting"],
         "host_permissions": ["http://127.0.0.1/*"] + readable + others,
         "background": {"service_worker": "background.js"},
         "action": {"default_popup": "popup.html", "default_title": "Omissis",

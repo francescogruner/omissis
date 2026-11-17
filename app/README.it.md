@@ -341,6 +341,16 @@ richieste della pagina e sostituisce ciò che la prima non ha visto (cronologia,
 strumenti che non passano dalla casella). Con la prima attiva, nella conversazione salvata dal
 servizio restano i segnaposto: i valori veri si vedono solo dove c'è Omissis.
 
+Le pagine dei servizi caricano spesso strumenti di statistiche e di registrazione della sessione di
+altre aziende, che leggono la pagina mentre si scrive, quando nella casella ci sono ancora i valori
+veri. Sulle pagine dei servizi protetti l'estensione **non fa partire** le loro richieste (Google
+Analytics, anche quando passa da un indirizzo del sito stesso, Amplitude, Clarity, Hotjar, Datadog,
+Sentry, Mixpanel, Segment, i pixel pubblicitari e altri). Nessuno di questi serve al servizio per
+rispondere; mentre la protezione è sospesa dalla finestrella tornano liberi.
+
+Le schede già aperte quando l'estensione si accende (appena installata, o riaccesa) ricevono la
+protezione subito, senza doverle ricaricare.
+
 ## Cosa può rompersi con gli aggiornamenti dei servizi
 
 | Pezzo | Cosa lo rompe | Quanto spesso |
@@ -379,12 +389,19 @@ store, i file cambiano solo insieme all'estensione e non succede nulla.
 
 Limiti dell'estensione:
 
-- **mai provata con gli account veri**: i siti di Claude, ChatGPT e Mistral mostrano al browser
-  automatico di prova una pagina di verifica, quindi lì non si è visto nulla; la prima prova vera è
-  quella nel proprio browser, con dati inventati;
-- i valori rimessi nella risposta sono visibili agli script del sito (vale per qualunque strumento
-  che ripristina dentro la pagina, proxy compreso): chi non lo vuole spegne «Ripristina i valori
-  nelle risposte» e ripristina con `Ctrl+Alt+R` dopo aver copiato;
+- provata dal vivo, con l'accesso, su dodici servizi (vedi «Che cosa è stato verificato»); gli altri
+  seguono la documentazione e le prove con il servizio finto;
+- i valori rimessi nella pagina (nella risposta e nel proprio messaggio già inviato) sono visibili
+  agli script del sito: vale per qualunque strumento che ripristina dentro la pagina, proxy compreso.
+  Il caso visto dal vivo: le statistiche di Google cercano da sole gli indirizzi email nella pagina,
+  e li hanno trovati nel messaggio appena ripristinato; ora quelle richieste non partono, ma un sito
+  che volesse leggere la pagina potrebbe farlo. Chi non lo vuole spegne «Ripristina i valori nelle
+  risposte» e ripristina con `Ctrl+Alt+R` dopo aver copiato;
+- mentre si scrive, prima dell'Invio, la casella contiene i valori veri, e alcuni siti salvano la bozza
+  sul server a ogni tasto (Poe): la lettura delle richieste la protegge come il messaggio, ma solo se
+  ne riconosce il formato;
+- Claude manda ora i messaggi in un formato binario che la lettura delle richieste non legge (il
+  registro lo segna come «corpo non letto»): lì protegge solo la casella di scrittura;
 - le risposte che arrivano via `XMLHttpRequest` (Gemini) o WebSocket (Copilot) non vengono
   riscritte in rete: i valori veri compaiono nel testo della pagina, ma il tasto «copia» del sito
   copia i segnaposto. I messaggi **inviati** via WebSocket non sono coperti: il registro lo segnala;
@@ -819,7 +836,7 @@ collega i PC con i nomi deve prima sentire chi si occupa di privacy e, dove serv
 | Gateway per gli strumenti da terminale | servizio finto (`e2e_gateway.py`, 33 controlli; gateway proprio solo qui), **Claude Code dal vivo** con un messaggio di dati inventati (rifatto il 14/11/2026 dopo la rinomina del codice) e **Codex 0.164 in abbonamento dal vivo** (17/11/2026: alla domanda «scrivi il cognome» ha risposto «non indicato»; il fornitore passato con `-c`, senza toccare `config.toml`) |
 | Server MCP (documenti dentro le app) | `e2e_mcp.py` (27 controlli) e **Claude Code dal vivo** con un verbale inventato; non ancora dentro Claude Desktop e le altre app |
 | Connettore per le app desktop | app di prova (`e2e_connector.py`, 37 controlli) e **app vera di ChatGPT**, due volte (12/11 e 17/11/2026): un messaggio di dati inventati è arrivato al servizio con i soli segnaposto (barriera sulla casella di scrittura); la seconda volta il messaggio è stato scritto e inviato dalla porta di collegamento, e alla domanda «scrivi il cognome» il servizio ha risposto «non indicato» |
-| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 40 controlli), e **servizi veri senza account** il 17/11/2026, con dati inventati e controllando ogni richiesta uscita dal browser: ChatGPT, Perplexity, Gemini e Z.ai hanno ricevuto solo segnaposto, nessun valore vero è uscito; DeepSeek e NotebookLM (anche al nuovo indirizzo `notebook.google.com`) mostrano la pagina di blocco. Grok, Qwen, Genspark e Kimi mascherano la casella ma rispondono solo dopo l'accesso. Claude, Copilot, Le Chat, Meta AI, Poe e Manus chiedono l'accesso: non provati. La prova ha trovato un difetto, corretto: negli editor di tipo Lexical (Perplexity) il testo protetto si aggiungeva a quello originale invece di sostituirlo; non partiva nulla in chiaro, ma il messaggio risultava doppio |
+| Estensione del browser | stessi formati, provati in un browser vero contro il servizio finto (`e2e_extension.py`, 41 controlli), e **servizi veri senza account** il 17/11/2026, con dati inventati e controllando ogni richiesta uscita dal browser: ChatGPT, Perplexity, Gemini e Z.ai hanno ricevuto solo segnaposto, nessun valore vero è uscito; DeepSeek e NotebookLM (anche al nuovo indirizzo `notebook.google.com`) mostrano la pagina di blocco. Grok, Qwen, Genspark e Kimi mascherano la casella ma rispondono solo dopo l'accesso. Claude, Copilot, Le Chat, Meta AI, Poe e Manus chiedono l'accesso: non provati. La prova ha trovato un difetto, corretto: negli editor di tipo Lexical (Perplexity) il testo protetto si aggiungeva a quello originale invece di sostituirlo; non partiva nulla in chiaro, ma il messaggio risultava doppio. Poi, **con l'accesso**, sempre il 17/11/2026, ogni servizio da una chat nuova: Claude, ChatGPT, Perplexity, Gemini, Z.ai, Le Chat, Grok, Qwen, Poe, Manus, Genspark e Kimi (su `kimi.ai`, con l'Invio e con il clic sull'icona) hanno ricevuto solo segnaposto, e nessun valore vero è uscito dal browser, nemmeno verso altri siti. Questa seconda prova ha trovato tre fughe, tutte corrette e riprovate: la bozza di Poe salvata a ogni tasto con un nome di campo sconosciuto; le statistiche di Genspark (Google, da un indirizzo del sito) e di Manus (Amplitude), che leggevano la pagina; il pulsante di invio di Kimi, senza nome, che faceva partire il messaggio senza passare dalla casella. E un difetto: una scheda aperta prima che l'estensione si accendesse non era protetta. Copilot con un account aziendale porta a Copilot per Microsoft 365, che Omissis non legge: si può solo registrare o bloccare. Meta AI non provato (senza accesso) |
 
 Per questo, all'inizio, sono impostati su "proteggi" solo i primi quattro: gli altri si attivano
 da Servizi AI dopo averli provati con dati inventati.

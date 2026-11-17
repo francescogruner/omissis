@@ -243,6 +243,24 @@
     return undefined;
   }});
 
+  // ---- sendBeacon: parte senza aspettare, quindi si risponde subito di si' e si spedisce dopo la protezione
+  const nativeBeacon = navigator.sendBeacon;
+  if (nativeBeacon) {
+    navigator.sendBeacon = new Proxy(nativeBeacon, {apply(f, io, args) {
+      let url;
+      try { url = new URL(String(args[0]), document.baseURI); } catch (e) { return Reflect.apply(f, io, args); }
+      const body = args[1];
+      if (body == null || (S && !guarded(url))) return Reflect.apply(f, io, args);
+      firstStatus.then(() => {
+        if (!guarded(url)) return Reflect.apply(f, io, args);
+        return prepare(url, 'POST', (body && body.type) || '', body).then(outcome => {
+          if (outcome.action !== 'block') Reflect.apply(f, io, [args[0], outcome.action === 'replace' ? outcome.body : body]);
+        });
+      }).catch(() => { /* bloccata: non parte */ });
+      return true;
+    }});
+  }
+
   // ---- WebSocket: non coperto, ma viene segnalato nel registro
   const WS = window.WebSocket;
   if (WS) {

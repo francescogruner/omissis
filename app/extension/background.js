@@ -34,11 +34,45 @@ async function engine(action, data, timeout) {
   } finally { clearTimeout(t); }
 }
 
+// Le pagine dei servizi caricano spesso strumenti di statistiche e di registrazione della sessione di altre aziende, che
+// leggono la pagina mentre si scrive: prima dell'Invio, quando nella casella ci sono ancora i valori veri (visto dal vivo
+// il 17/11/2026: un indirizzo email finito nelle statistiche di Genspark, un nome e un telefono in quelle di Manus).
+// Sulle pagine dei servizi protetti queste richieste non partono. Nessuno di questi strumenti serve al servizio per rispondere.
+const TRACKERS = ['google-analytics.com', 'analytics.google.com', 'stats.g.doubleclick.net', 'amplitude.com',
+  'applicationinsights.azure.com', 'monitor.azure.com', 'clarity.ms', 'hotjar.com', 'hotjar.io', 'fullstory.com',
+  'logrocket.io', 'logrocket.com', 'lr-ingest.io', 'lr-ingest.com', 'mixpanel.com', 'segment.io', 'segment.com',
+  'posthog.com', 'heapanalytics.com', 'browser-intake-datadoghq.com', 'browser-intake-datadoghq.eu', 'sentry.io',
+  'smartlook.com', 'mouseflow.com', 'gator.volces.com', 'alb.reddit.com', 'px.ads.linkedin.com', 'analytics.tiktok.com',
+  'bat.bing.com', 'ct.pinterest.com'];
+// Le statistiche di Google spesso passano da un indirizzo del sito stesso (visto il 17/11/2026: t.genspark.ai), e cercano da
+// sole gli indirizzi email nella pagina, compresi i valori veri che Omissis rimette nei messaggi gia' inviati.
+// Si riconoscono dal percorso, uguale su ogni dominio.
+const TRACKER_PATHS = ['/g/collect?', '/j/collect?', '/mp/collect?'];
+
 // ---------------------------------------------------------------- politiche e blocchi
-async function rules(status) {
+// Gli aggiornamenti delle regole vanno uno alla volta: due insieme leggono lo stesso elenco e aggiungono la stessa regola due
+// volte, il browser rifiuta e l'estensione si crederebbe scollegata dal programma.
+let inLine = Promise.resolve();
+function rules(status) {
+  const turn = inLine.then(() => applyRules(status));
+  inLine = turn.catch(() => {});
+  return turn;
+}
+
+async function applyRules(status) {
   const old_ones = (await chrome.declarativeNetRequest.getDynamicRules()).map(r => r.id);
   const new_ones = [];
   let id = 1;
+  const {suspended} = await chrome.storage.local.get('suspended');
+  const protectedOnes = status.services.filter(s => s.policy === 'protect' && s.readable && (!suspended || s.locked)).flatMap(s => s.domains);
+  if (protectedOnes.length) {
+    new_ones.push({id: id++, priority: 1, condition: {requestDomains: TRACKERS, initiatorDomains: protectedOnes,
+      resourceTypes: ['xmlhttprequest', 'ping', 'script', 'image', 'websocket', 'sub_frame', 'other']}, action: {type: 'block'}});
+    for (const path of TRACKER_PATHS) {
+      new_ones.push({id: id++, priority: 1, condition: {urlFilter: path, initiatorDomains: protectedOnes,
+        resourceTypes: ['xmlhttprequest', 'ping', 'image', 'other']}, action: {type: 'block'}});
+    }
+  }
   for (const s of status.services) {
     if (s.policy !== 'block') continue;
     if (s.radar) {   // servizio del radar: sui suoi siti non abbiamo accesso, quindi niente pagina di avviso, solo il blocco
@@ -198,6 +232,7 @@ async function handle(m, sender) {
       if ('suspended' in m) new_ones.suspended = !!m.suspended;
       if ('notices' in m) new_ones.notices = !!m.notices;
       await chrome.storage.local.set(new_ones);
+      if ('suspended' in m) refresh(true);   // le statistiche dei siti tornano libere solo mentre la protezione e' sospesa
       await signal();
       return {};
     }
@@ -236,6 +271,28 @@ async function greet(details) {
   await chrome.tabs.create({url: chrome.runtime.getURL('welcome.html')});
   return true;
 }
+
+// Le schede aperte prima che l'estensione si accendesse (appena installata, o riaccesa) non hanno la protezione: il
+// browser la mette solo nelle pagine caricate dopo. Visto dal vivo il 17/11/2026: su una scheda cosi' il messaggio e'
+// partito in chiaro. Una volta per ogni accensione, la protezione viene messa nelle schede dei servizi che non l'hanno.
+// Dove c'e' una copia vecchia (estensione aggiornata) non si aggiunge nulla: quella copia blocca e chiede di ricaricare.
+async function cover() {
+  try {
+    if ((await chrome.storage.session.get('covered')).covered) return;
+    await chrome.storage.session.set({covered: true});
+    const matches = chrome.runtime.getManifest().content_scripts[0].matches;
+    for (const card of await chrome.tabs.query({url: matches})) {
+      try {
+        const target = {tabId: card.id, allFrames: true};
+        const [probe] = await chrome.scripting.executeScript({target: {tabId: card.id}, func: () => !!globalThis.MSP_COPY});
+        if (probe && probe.result) continue;
+        await chrome.scripting.executeScript({target, files: ['page.js'], world: 'MAIN', injectImmediately: true});
+        await chrome.scripting.executeScript({target, files: ['defaults.js', 'channel.js', 'content.js'], injectImmediately: true});
+      } catch (e) { /* scheda chiusa nel frattempo, o pagina del browser */ }
+    }
+  } catch (e) { /* senza il permesso: le schede si proteggono alla prossima ricarica */ }
+}
+cover();
 
 chrome.runtime.onInstalled.addListener(details => { chrome.alarms.create('status', {periodInMinutes: 1}); refresh(true); greet(details); });
 chrome.runtime.onStartup.addListener(() => { chrome.alarms.create('status', {periodInMinutes: 1}); refresh(true); });

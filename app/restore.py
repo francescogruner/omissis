@@ -306,6 +306,10 @@ class Generic(Adapter):
               "user_input", "userInput", "msg", "inputs", "user_message", "userMessage", "message_content",
               "extracted_content", "instruction", "user_prompt", "userPrompt", "search_query", "dsl_query"}
     RX_CODE = re.compile(r"[A-Za-z0-9_\-=.+/:]{20,}")   # identificativi e gettoni: non sono testo dell'utente
+    # I nomi cambiano da un servizio all'altro: ogni campo il cui nome parla di testo viene controllato (visto dal vivo su
+    # Poe il 17/11/2026: la bozza parte a ogni tasto nel campo «fullChatInput», prima dell'Invio). Un campo che non contiene
+    # dati personali resta com'e', quindi controllarne qualcuno in piu' non cambia nulla.
+    RX_KEY = re.compile(r"(?i)input|message|prompt|query|question|text|content|msg|instruction")
 
     @classmethod
     def _is_text(cls, v):
@@ -320,7 +324,7 @@ class Generic(Adapter):
             if role in ("system", "developer"):
                 return
             for k, v in node.items():
-                if k in self.KEYS or k == "parts":
+                if k in self.KEYS or k == "parts" or (isinstance(k, str) and self.RX_KEY.search(k)):
                     if self._is_text(v):
                         out.append((node, k))
                     elif isinstance(v, list):
