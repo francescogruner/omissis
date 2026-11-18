@@ -80,9 +80,9 @@ chiama «Anonimizza» perché è la parola più conosciuta, ma il senso tecnico 
 | 🖥️ | App desktop: **ChatGPT**, **Perplexity**, **Microsoft Copilot** (connettore), **Antigravity** (con i suoi hook) | ✅ dal vivo |
 | ⌨️ | Terminale: **Claude Code** (gateway e plugin), **Codex** (gateway), **Antigravity CLI** (hook) | ✅ dal vivo |
 | 📄 | Documenti dentro le app AI (server MCP) con Claude Code; scorciatoie da tastiera sugli appunti | ✅ dal vivo |
-| 🧪 | Kimi (plugin), opencode, aider e gli strumenti compatibili con OpenAI o Anthropic (gateway), Gemini CLI (plugin) | 🧪 prove automatiche |
+| 🧪 | Kimi (plugin), opencode, aider e gli strumenti compatibili con OpenAI o Anthropic (gateway), Gemini CLI (plugin, solo con chiave API o Vertex AI: dal 17/11/2026 Google rifiuta l'accesso con l'account personale), server MCP in Cursor e Windsurf | 🧪 prove automatiche |
 | ⏳ | App desktop di Claude, plugin di Codex (va approvato con `/hooks`), MCP dentro Claude Desktop | ⏳ da provare |
-| 🚫 | Copilot dentro Teams e Outlook, chat di Cursor e Windsurf (solo documenti, con MCP), Firefox, macOS, Linux | ❌ non coperti |
+| 🚫 | Copilot dentro Teams e Outlook, chat di Cursor e Windsurf (i documenti passano dal server MCP, vedi sopra), Firefox, macOS, Linux | ❌ non coperti |
 
 L'elenco completo e datato è su [omissis.eu](https://omissis.eu) e, per il tuo PC, nel pannello (*Collegamenti →
 Compatibilità*), che annota anche con quale versione di ogni programma la sostituzione ha funzionato l'ultima volta.

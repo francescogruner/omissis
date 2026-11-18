@@ -80,9 +80,9 @@ Verified **live** means on the real service, with made-up data, checking what ac
 | 🖥️ | Desktop apps: **ChatGPT**, **Perplexity**, **Microsoft Copilot** (connector), **Antigravity** (its own hooks) | ✅ live |
 | ⌨️ | Terminal: **Claude Code** (gateway and plugin), **Codex** (gateway), **Antigravity CLI** (hooks) | ✅ live |
 | 📄 | Documents inside AI apps (MCP server) with Claude Code; keyboard shortcuts on the clipboard | ✅ live |
-| 🧪 | Kimi (plugin), opencode, aider and OpenAI/Anthropic-compatible tools (gateway), Gemini CLI (plugin) | 🧪 automated tests |
+| 🧪 | Kimi (plugin), opencode, aider and OpenAI/Anthropic-compatible tools (gateway), Gemini CLI (plugin; API key or Vertex AI only: since 17 Nov 2026 Google refuses sign-in with a personal account), MCP server in Cursor and Windsurf | 🧪 automated tests |
 | ⏳ | Claude desktop app, Codex plugin (needs approval with `/hooks`), MCP inside Claude Desktop | ⏳ to be tested |
-| 🚫 | Copilot inside Teams and Outlook, Cursor and Windsurf chat (documents only, through MCP), Firefox, macOS, Linux | ❌ not covered |
+| 🚫 | Copilot inside Teams and Outlook, Cursor and Windsurf chat (documents go through the MCP server, see above), Firefox, macOS, Linux | ❌ not covered |
 
 The full, dated list is on [omissis.eu](https://omissis.eu) and, for your own PC, in the panel (*Connections →
 Compatibility*), which also records which program versions each replacement last worked with.
