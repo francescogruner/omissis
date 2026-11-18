@@ -5,6 +5,11 @@ segnaposto (`[PERSONA_1]`, `[EMAIL_3]`…) prima che partano e li rimette al lor
 chi scrive vede il testo vero, il servizio vede solo segnaposto. In più tiene il conto dei servizi
 AI contattati e fa l'inventario degli strumenti AI presenti sul PC (Shadow AI).
 
+In termini di GDPR è una **pseudonimizzazione** (art. 4, punto 5): la corrispondenza tra segnaposto e
+valori resta separata, cifrata su questo PC, e al servizio arrivano solo i segnaposto. Quando questa
+guida e il pannello dicono «anonimizzare» un documento, il senso tecnico è questo: con l'archivio si
+torna ai valori veri.
+
 ## Avvio
 
 ```
@@ -99,15 +104,15 @@ nessuna animazione per chi le ha disattivate, uso completo dalla tastiera. Lo co
 ## Allegati
 
 Il file che l'utente allega a un messaggio (scelto dal pulsante, trascinato o incollato) viene fermato **prima che
-la pagina lo riceva**, mandato al programma sul PC e sostituito con la copia anonimizzata: la pagina, e quindi il
+la pagina lo riceva**, mandato al programma sul PC e sostituito dalla copia con i segnaposto: la pagina, e quindi il
 servizio, vede solo quella. Come per la casella di scrittura, non dipende da come il sito carica poi il file.
 
 | Cosa si allega | Cosa arriva al servizio |
 |---|---|
 | Word, Excel, PowerPoint | lo stesso formato, con i dati sostituiti (`nome.anon.docx`) |
 | testo, CSV, JSON e simili | lo stesso formato, con i dati sostituiti |
-| PDF | un file di testo con il contenuto anonimizzato (`nome.anon.txt`) |
-| immagine con del testo (scansione, schermata) | un file di testo con ciò che è stato letto, anonimizzato: la lettura può contenere errori |
+| PDF | un file di testo con i dati sostituiti (`nome.anon.txt`) |
+| immagine con del testo (scansione, schermata) | un file di testo con ciò che è stato letto e i dati sostituiti: la lettura può contenere errori |
 | immagine o PDF senza testo leggibile | il file così com'è: non c'è testo da sostituire (un volto resta un volto) |
 | altri formati, o file oltre 20 MB (8 MB nelle app desktop) | secondo «Blocca il caricamento di file»: non allegato, oppure allegato com'è con una riga in Attività |
 
@@ -516,7 +521,7 @@ all'assistente arriva solo il testo con i segnaposto. Gli strumenti sono cinque:
 | Strumento | Che cosa fa | Che cosa torna all'assistente |
 |---|---|---|
 | `read_anonymized` | legge un documento (Word, Excel, PowerPoint, PDF anche scansionato, immagini con testo, file di testo) | il testo con i segnaposto, a pezzi se è lungo |
-| `anonymize_copy` | scrive accanto all'originale una copia anonimizzata, nello stesso formato, di un file o di una cartella intera | dove sta la copia, e i conteggi |
+| `anonymize_copy` | scrive accanto all'originale una copia con i segnaposto, nello stesso formato, di un file o di una cartella intera | dove sta la copia, e i conteggi |
 | `restore_text` | rimette i valori veri in un testo scritto dall'assistente (una mail, una risposta) e lo lascia negli appunti, oppure in un file nuovo | solo quanti segnaposto ha ripristinato |
 | `restore_copy` | scrive una copia con i valori veri di un file o di una cartella con i segnaposto | solo dove sta la copia |
 | `omissis_status` | dice se Omissis è acceso e quali cartelle può usare | lo stato |
@@ -540,7 +545,7 @@ claude-desktop` fanno ciò che fa il pulsante.
 - funziona se l'assistente sceglie di usarlo. Le istruzioni che il server gli consegna glielo
   chiedono, e nella prova dal vivo l'ha fatto da solo; ma un assistente che ha anche strumenti propri
   per leggere i file può aprire l'originale. Per sicurezza: chiedere «usa Omissis», oppure fargli
-  lavorare una copia anonimizzata;
+  lavorare una copia con i segnaposto;
 - in un foglio Excel letto con `read_anonymized` anche i numeri passano dal riconoscimento (un
   telefono scritto come numero viene sostituito); nella copia fatta con `anonymize_copy` restano i
   limiti dei documenti descritti più sopra (numeri nelle celle numeriche, nomi dei fogli).

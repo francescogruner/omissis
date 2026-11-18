@@ -42,12 +42,17 @@ an Omissis server, because there is none. You keep using ChatGPT, Claude, Copilo
 with your own subscriptions**: no API keys, no new accounts. (An organisation can connect its PCs to a console of its
 own: off by default, it sends counts only, and the panel shows exactly what leaves.)
 
+In GDPR terms this is **pseudonymisation** (Article 4(5)): the data are replaced with placeholders, and the mapping
+needed to put them back is kept separately, encrypted on your PC. The AI service only receives placeholders; for you
+they remain personal data, because the vault links them back to the real values. In the panel the documents command
+is called "Anonymise" because it is the better-known word, but this is what it means technically.
+
 <p align="center">
   <img src="docs/screenshots/start-en.png" alt="Home page of the panel" width="49%">
   <img src="docs/screenshots/text-en.png" alt="Paste a text: it is masked and copied for you" width="49%">
 </p>
 <p align="center">
-  <img src="docs/screenshots/documents-en.png" alt="Drop a document: the anonymised copy downloads by itself" width="49%">
+  <img src="docs/screenshots/documents-en.png" alt="Drop a document: the copy with placeholders downloads by itself" width="49%">
   <img src="docs/screenshots/services-en.png" alt="One rule per AI service: protect, log, block" width="49%">
 </p>
 
@@ -57,8 +62,8 @@ own: off by default, it sends counts only, and the panel shows exactly what leav
 |---|---|
 | 🛡️ **Masks before sending** | In the browser, in desktop apps, in terminal tools: the text is checked on the PC and leaves with placeholders |
 | 🔁 **Restores the answer** | Real values come back while the answer streams in; a conversation reopened days later can still be restored |
-| 📎 **Attachments too** | Word, Excel, PowerPoint, text, PDF and images with text: the service receives the anonymised copy |
-| 📄 **Documents and folders** | Drop a file or a folder in the panel and get the anonymised copy, then put the real values back in the result |
+| 📎 **Attachments too** | Word, Excel, PowerPoint, text, PDF and images with text: the service receives the copy with placeholders |
+| 📄 **Documents and folders** | Drop a file or a folder in the panel and get the copy with placeholders, then put the real values back in the result |
 | ⌨️ **Any program** | Select text anywhere and press `Ctrl+Alt+S`; mask and restore the clipboard with two shortcuts |
 | 🚦 **One rule per service** | Protect, log, block or ignore each AI service; see which ones the PC contacts (Shadow AI) |
 | 🏢 **Ready for many PCs** | Silent install, locked settings and status reports from RMM, Intune or a logon script; optional central console |

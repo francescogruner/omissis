@@ -42,12 +42,17 @@ un server di Omissis, perché non esiste. ChatGPT, Claude, Copilot e gli altri s
 abbonamenti**: niente chiavi API, niente account nuovi. (Un'organizzazione può collegare i suoi PC a una console
 propria: di serie è spento, partono solo conteggi, e il pannello mostra esattamente che cosa parte.)
 
+In termini di GDPR è una **pseudonimizzazione** (art. 4, punto 5): i dati vengono sostituiti da segnaposto e la
+corrispondenza per rimetterli resta separata, cifrata sul tuo PC. Al servizio AI arrivano solo i segnaposto; per te
+restano dati personali, perché con l'archivio si risale ai valori veri. Nel pannello il comando dei documenti si
+chiama «Anonimizza» perché è la parola più conosciuta, ma il senso tecnico è questo.
+
 <p align="center">
   <img src="docs/screenshots/start-it.png" alt="La pagina iniziale del pannello" width="49%">
   <img src="docs/screenshots/text-it.png" alt="Incolli un testo: viene mascherato e copiato da solo" width="49%">
 </p>
 <p align="center">
-  <img src="docs/screenshots/documents-it.png" alt="Trascini un documento: la copia anonimizzata si scarica da sola" width="49%">
+  <img src="docs/screenshots/documents-it.png" alt="Trascini un documento: la copia con i segnaposto si scarica da sola" width="49%">
   <img src="docs/screenshots/services-it.png" alt="Una regola per ogni servizio AI: proteggi, registra, blocca" width="49%">
 </p>
 
@@ -57,8 +62,8 @@ propria: di serie è spento, partono solo conteggi, e il pannello mostra esattam
 |---|---|
 | 🛡️ **Maschera prima dell'invio** | Nel browser, nelle app desktop, negli strumenti da terminale: il testo viene controllato sul PC e parte con i segnaposto |
 | 🔁 **Ripristina la risposta** | I valori veri tornano mentre la risposta arriva; anche una conversazione riaperta giorni dopo si ripristina |
-| 📎 **Anche gli allegati** | Word, Excel, PowerPoint, testo, PDF e immagini con testo: al servizio arriva la copia anonimizzata |
-| 📄 **Documenti e cartelle** | Trascini un file o una cartella nel pannello e ottieni la copia anonimizzata; poi rimetti i valori veri nel risultato |
+| 📎 **Anche gli allegati** | Word, Excel, PowerPoint, testo, PDF e immagini con testo: al servizio arriva la copia con i segnaposto |
+| 📄 **Documenti e cartelle** | Trascini un file o una cartella nel pannello e ottieni la copia con i segnaposto; poi rimetti i valori veri nel risultato |
 | ⌨️ **Qualsiasi programma** | Selezioni un testo ovunque e premi `Ctrl+Alt+S`; mascheri e ripristini gli appunti con due scorciatoie |
 | 🚦 **Una regola per servizio** | Proteggi, registra, blocca o ignora ogni servizio AI; vedi quali contatta il PC (Shadow AI) |
 | 🏢 **Pronto per molti PC** | Installazione silenziosa, impostazioni bloccate e stato da RMM, Intune o script di accesso; console centrale facoltativa |
