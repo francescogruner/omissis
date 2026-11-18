@@ -88,6 +88,16 @@ class Fake(BaseHTTPRequestHandler):
         route = self.path[4:] if self.path.startswith(("/llm/", "/api/v1/")) else self.path
         if SEEN["key"] in ("wrong", "Bearer sbagliata"):
             return self._post(401, "application/json", b'{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}')
+        if route.startswith("/v1internal:"):   # Antigravity: la richiesta di Gemini dentro {"request": ...}, la risposta dentro {"response": ...}
+            parts = body["request"]["contents"][-1]["parts"]
+            received = next((p["text"] for p in reversed(parts) if isinstance(p.get("text"), str)), "")
+            mail = re.search(r"\[EMAIL_\d+\]", received)
+            args = {"path": "bozze/mail.txt", "content": received, "recipients": [mail.group() if mail else "[EMAIL_1]"]}
+            one = lambda part, **more: ("", {"response": {"candidates": [{"content": {"role": "model", "parts": [part]}, **more}]}, "traceId": "t1"})   # noqa: E731
+            ev = [one({"text": "Devo scrivere a " + received[:30], "thought": True})] + [one({"text": x}) for x in chunks("Ho ricevuto: " + received, 6)]
+            ev += [one({"functionCall": {"name": "write_file", "args": args}, "thoughtSignature": "firma-nuova=="}),
+                   one({"text": "", "thoughtSignature": "firma-finale=="}, finishReason="STOP")]
+            return self._sse(ev)
         received = last_text(body)
         text = "Ho ricevuto: " + received
         mail = re.search(r"\[EMAIL_\d+\]", received)   # il numero dipende da cio' che l'archivio contiene gia'
@@ -299,6 +309,49 @@ def main():
     except ValueError:
         inner = {}
     mark("argomenti di un'azione con un valore «difficile»: il JSON resta valido", inner == {"path": hard, "note": ["per " + hard]})
+
+    # --- Antigravity (agy e l'app): la richiesta di Gemini dentro {"request": ...}, mandata a pezzi (chunked) come fa agy
+    before = settings.FILE.read_bytes() if settings.FILE.exists() else None
+    antigravity = {"model": "gemini-4-neon", "project": "progetto-di-prova", "requestId": "agent/1", "request": {
+        "systemInstruction": {"role": "user", "parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": "<USER_REQUEST>\n" + TEXT + "\n</USER_REQUEST>"}]},
+                     {"role": "model", "parts": [{"functionCall": {"name": "read_file", "args": {"path": "contatti/Giulia Ferraresi.txt"}},
+                                                  "thoughtSignature": "firma-vecchia=="}]},
+                     {"role": "user", "parts": [{"functionResponse": {"name": "read_file", "response": {
+                         "output": "Giulia Ferraresi; giulia.ferraresi@nevatek.example; 347 5551234; Aldo Bruschi"}}}]},
+                     {"role": "user", "parts": [{"text": TEXT}]}],
+        "tools": [{"functionDeclarations": [{"name": "read_file"}]}, {"functionDeclarations": [{"name": "write_file"}]}]}}
+
+    def agy(policy):
+        settings.write({**settings.read(), "policies": {**settings.read()["policies"], "antigravity": policy}})
+        data = json.dumps(antigravity).encode("utf-8")
+        req = urllib.request.Request(f"http://127.0.0.1:{GW_PORT}/antigravity/v1internal:streamGenerateContent?alt=sse", data=iter([data[:999], data[999:]]),
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer gettone-google"})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return r.status, r.read().decode("utf-8")
+        except urllib.error.HTTPError as ex:
+            return ex.code, ex.read().decode("utf-8")
+    status, raw = agy("protect")
+    arrived, ev = SEEN["body"], events(raw)
+    parts = [p for e in ev for c in e["response"]["candidates"] for p in c["content"]["parts"]]
+    text = "".join(p["text"] for p in parts if "text" in p and not p.get("thought"))
+    action = next((p["functionCall"]["args"] for p in parts if "functionCall" in p), {})
+    mark("Antigravity: richiesta a pezzi letta e nulla in chiaro (messaggi, istruzioni, azione fatta, risultato), firma e percorso intatti", status == 200
+          and reveal(arrived) == 0 and "[PERSONA_" in json.dumps(arrived) and SEEN["path"] == "/v1internal:streamGenerateContent?alt=sse"
+          and SEEN["key"] == "Bearer gettone-google" and arrived["project"] == "progetto-di-prova"
+          and arrived["request"]["contents"][1]["parts"][0]["thoughtSignature"] == "firma-vecchia==", f"stato {status} · in chiaro {reveal(arrived)}")
+    mark("Antigravity: testo e argomenti della nuova azione tornano con i valori veri, firme intatte", all(s in text for s in SENSITIVE) and "[PERSONA_" not in text
+          and all(s in action.get("content", "") for s in SENSITIVE) and action.get("recipients") == ["giulia.ferraresi@nevatek.example"]
+          and any(p.get("thoughtSignature") == "firma-finale==" for p in parts) and any(p.get("thoughtSignature") == "firma-nuova==" for p in parts),
+          f"testo {sum(s in text for s in SENSITIVE)}/4")
+    status, raw = agy("record")
+    mark("Antigravity su «Registra» (di serie): passa com'è, come dice il pannello", status == 200 and reveal(SEEN["body"]) == 4)
+    if before is None:
+        settings.FILE.unlink()
+    else:
+        settings.FILE.write_bytes(before)
+    settings._cache.update(mtime=None, data=None)
 
     # --- chi ha gia' un proprio gateway lo tiene: Omissis gli sta davanti
     before = settings.FILE.read_bytes() if settings.FILE.exists() else None

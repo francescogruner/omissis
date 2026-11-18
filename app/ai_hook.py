@@ -50,7 +50,7 @@ PLATFORMS = {
     "claude": {"service": "anthropic-api", "client": "Claude Code (plugin)", "gateway": ("ANTHROPIC_BASE_URL",)},
     "codex": {"service": "chatgpt", "client": "Codex (plugin)", "gateway": ("OPENAI_BASE_URL",)},
     "gemini": {"service": "gemini-api", "client": "Gemini CLI (plugin)", "gateway": ("GOOGLE_GEMINI_BASE_URL",)},
-    "antigravity": {"service": "antigravity", "client": "Antigravity (hook)", "gateway": (), "json": True},
+    "antigravity": {"service": "antigravity", "client": "Antigravity (hook)", "gateway": ("CLOUD_CODE_URL",), "json": True},
 }
 EVENTS = ("UserPromptSubmit", "BeforeAgent", "PreInvocation")   # come ogni app chiama il momento «il messaggio sta per partire»
 OFF = {"it": "Omissis non risponde: il messaggio non è partito, per non mandarlo senza protezione. Avvia Omissis e riprova. "

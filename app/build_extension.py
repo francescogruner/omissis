@@ -19,7 +19,7 @@ import catalog
 
 HERE = Path(__file__).resolve().parent
 EST = HERE / "extension"
-VERSION = "0.1.0"
+VERSION = "0.1.1"   # 0.1.1: niente sfarfallio dei segnaposto quando la pagina ridisegna la risposta (la 0.1.0 negli store)
 
 
 def models(services):

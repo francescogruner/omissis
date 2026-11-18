@@ -4,6 +4,7 @@
 (() => {
   'use strict';
   const RX = /\[[A-Z][A-Z_]{1,22}_\d{1,7}\]/g;
+  const RX_ONE = new RegExp(RX.source);   // senza /g: test() non deve ricordare dove si era fermato
   const topmost = window.top === window;
   // dentro un'app desktop le finestre hanno un indirizzo interno: il connettore dice a quale servizio appartengono
   const HOST_SITE = globalThis.MSP_HOST_SITE || location.hostname;
@@ -174,6 +175,9 @@
       p.onmessage = async ev => {
         const {n, m} = ev.data || {};
         if (!m) return;
+        // la risposta com'e' arrivata dal servizio: i suoi segnaposto la pagina li potra' ridisegnare (ChatGPT a fine risposta)
+        if (m.t === 'chunk') fromStream(m);
+        else if (m.t === 'whole') learn(m.text);
         let r;
         try {
           r = await send(m);
@@ -183,8 +187,9 @@
         }
         if (m.t === 'request') {
           if (r.action === 'block') notice(REASONS[r.reason] || REASONS.extension, true);
-          else if (r.action === 'replace' && notices) {
-            notice(replaced(r.replacements), false);
+          else if (r.action === 'replace') {
+            learn(r.body);   // il messaggio mascherato: la pagina lo mostrera' con i segnaposto
+            if (notices) notice(replaced(r.replacements), false);
           }
         }
         p.postMessage({n, r});
@@ -194,9 +199,44 @@
 
   // ---------------------------------------------------------------- valori veri nel testo della pagina
   // Rete di sicurezza per cio' che non passa da fetch (XMLHttpRequest, WebSocket, testo incollato gia'
-  // mascherato): dove nel testo visibile compare un segnaposto conosciuto, mostra il valore.
-  const well_known = new Map(), queue = new Set();
-  let observer = null, timer = 0;
+  // mascherato) e per le pagine che ridisegnano un messaggio partendo da una copia con i segnaposto: ChatGPT lo fa a
+  // fine risposta (visto il 18/11/2026). Dove nel testo visibile compare un segnaposto conosciuto, mostra il valore.
+  // I valori gia' conosciuti si rimettono dentro il MutationObserver, che gira prima che il browser disegni: cosi' il
+  // segnaposto non compare nemmeno per un fotogramma. Per conoscerli prima che servano si chiedono al programma appena
+  // passano di qui: il testo mascherato della casella, le richieste mascherate, le risposte che stanno arrivando.
+  const well_known = new Map(), queue = new Set(), asking = new Set(), waiting = new Set(), tails = new Map();
+  let observer = null;
+
+  /** Chiede i valori di questi segnaposto; poi sistema i nodi che li aspettavano. */
+  async function fetchValues(needed) {
+    const list = [...needed].slice(0, 500), stamp = Date.now();
+    list.forEach(s => asking.add(s));
+    let mapping = {};
+    try { mapping = ((await send({t: 'values', placeholder: list})) || {}).mapping || {}; } catch (e) { /* estensione ricaricata: restano i segnaposto */ }
+    // anche senza risposta si annota (valore null, si richiede dopo 30 secondi): altrimenti si chiederebbe di nuovo all'infinito
+    // un valore che contiene a sua volta un segnaposto non si usa: riscriverlo farebbe ripartire il controllo senza fine
+    const usable = v => typeof v === 'string' && !RX_ONE.test(v);
+    for (const s of list) { asking.delete(s); well_known.set(s, {value: usable(mapping[s]) ? mapping[s] : null, when: stamp}); }
+    if (waiting.size) { const w = [...waiting]; waiting.clear(); settle(w); }
+  }
+
+  /** I segnaposto di un testo che la pagina mostrera' tra poco: se ne chiedono i valori in anticipo. */
+  function learn(text) {
+    if (!observer || typeof text !== 'string' || !text.includes('[')) return Promise.resolve();
+    const needed = new Set((text.match(RX) || []).filter(s => !well_known.has(s) && !asking.has(s)));
+    return needed.size ? fetchValues(needed) : Promise.resolve();
+  }
+
+  // un pezzo della risposta come arriva dal servizio, prima del ripristino: i segnaposto sono ASCII, quindi basta atob.
+  // Un segnaposto puo' essere spezzato tra due pezzi: si tiene la coda del precedente.
+  function fromStream(m) {
+    if (!observer || !m.id) return;
+    let text = '';
+    try { text = m.data ? atob(m.data) : ''; } catch (e) { return; }
+    const joined = (tails.get(m.id) || '') + text;
+    if (m.end) tails.delete(m.id); else tails.set(m.id, joined.slice(-40));
+    learn(joined);
+  }
 
   // Alcune pagine scrivono un segnaposto spezzato in piu' pezzi di testo vicini ("[PERSONA" + "_" + "3]").
   const RX_OPENS = /\[(?:[A-Z][A-Z_]{0,22}\d{0,7})?$/, RX_WHOLE = /^\[[A-Z][A-Z_]{1,22}_\d{1,7}\]/, RX_PART = /^\[(?:[A-Z][A-Z_]{0,23}\d{0,7})?$/;
@@ -244,51 +284,84 @@
     return !p || p.isContentEditable || /^(SCRIPT|STYLE|TEXTAREA|NOSCRIPT|TITLE)$/.test(p.tagName) || !!p.closest('[data-omissis]');
   }
 
-  async function clear() {
-    timer = 0;
-    const nodes = [...queue].filter(t => t.isConnected);
-    queue.clear();
-    const stamp = Date.now(), needed = new Set();
-    for (const t of nodes) {
-      const s2 = split(t);
-      for (const s of (t.data.match(RX) || []).concat(s2 ? [s2.seg] : [])) {
-        const v = well_known.get(s);
-        if (!v || (v.value === null && stamp - v.when > 30000)) needed.add(s);
+  // Segnaposto spezzati gia' sistemati: se la pagina riscrive uno dei pezzi com'era (React lo fa quando aggiorna il nodo),
+  // accanto al valore ricompare la sua parte di segnaposto («Ferraresi1]», visto il 18/11/2026) e va tolta di nuovo.
+  const mended = new WeakMap();
+
+  function mend(s, value) {
+    const parts = s.chunks.map(([n, da, a], i) => ({n, piece: i === 0 ? n.data.slice(da) : n.data.slice(0, a)}));
+    s.chunks.forEach(([n, da, a], i) => { n.data = i === 0 ? n.data.slice(0, da) + value : n.data.slice(a); });
+    const g = {parts: parts.filter((p, i) => i === 0 || p.piece), value};
+    for (const p of g.parts) mended.set(p.n, g);
+  }
+
+  function repair(g) {
+    const [h, ...rest] = g.parts;
+    const headBack = h.n.data.endsWith(h.piece);
+    if (!headBack && !h.n.data.endsWith(g.value)) return;   // il primo pezzo ora dice altro: il gruppo non vale piu'
+    const back = rest.filter(p => p.n.data.startsWith(p.piece));
+    if (headBack) h.n.data = h.n.data.slice(0, h.n.data.length - h.piece.length) + g.value;
+    for (const p of back) p.n.data = p.n.data.slice(p.piece.length);
+  }
+
+  /** Rimette nei nodi i valori gia' conosciuti. I segnaposto ancora da chiedere vanno in «missing», i loro nodi in attesa. */
+  function apply(nodes, missing) {
+    const stamp = Date.now();
+    let t = null;
+    const value = s => {
+      const v = well_known.get(s);
+      if (v && v.value !== null) return v.value;
+      if (!v || asking.has(s) || stamp - v.when > 30000) {   // mai chiesto, in arrivo, o sconosciuto da tempo: si riprova
+        if (!asking.has(s)) missing.add(s);
+        waiting.add(t);
       }
-    }
-    if (needed.size) {
-      let mapping;
-      try { mapping = (await send({t: 'values', placeholder: [...needed].slice(0, 500)})).mapping || {}; } catch (e) { return; }
-      for (const s of needed) well_known.set(s, {value: typeof mapping[s] === 'string' ? mapping[s] : null, when: stamp});
-    }
-    for (const t of nodes) {
-      if (!t.isConnected || untouchable(t)) continue;
-      const fresh = t.data.replace(RX, s => { const v = well_known.get(s); return v && v.value !== null ? v.value : s; });
+      return null;
+    };
+    for (t of nodes) {
+      if (!t.isConnected) continue;
+      if (untouchable(t)) { for (const s of t.data.match(RX) || []) value(s); continue; }   // la casella: solo per conoscerli
+      const fresh = t.data.replace(RX, s => value(s) ?? s);
       if (fresh !== t.data) t.data = fresh;
       const s2 = split(t);   // il valore va nel primo pezzo, gli altri perdono la loro parte di segnaposto
-      const v2 = s2 && well_known.get(s2.seg);
-      if (v2 && v2.value !== null && !s2.chunks.some(([n]) => untouchable(n))) {
-        s2.chunks.forEach(([n, da, a], i) => { n.data = i === 0 ? n.data.slice(0, da) + v2.value : n.data.slice(a); });
-      }
+      const v2 = s2 ? value(s2.seg) : null;
+      if (typeof v2 === 'string' && !s2.chunks.some(([n]) => untouchable(n))) mend(s2, v2);
     }
+  }
+
+  function settle(nodes) {
+    const missing = new Set();
+    apply(nodes, missing);
+    if (missing.size) fetchValues(missing);
+  }
+
+  function flush() {
+    const nodes = [...queue];
+    queue.clear();
+    settle(nodes);
   }
 
   function pageText() {
     const pol = policy(HOST_SITE);
     const is_active = !suspended && !!(status && status.restore) && (pol === 'protect' || pol === 'record');
     if (is_active && !observer) {
-      observer = new MutationObserver(list_name => {
-        for (const r of list_name) {
-          if (r.type === 'characterData') examine(r.target);
-          else for (const x of r.addedNodes) examine(x);
+      // tutto dentro il callback, senza rimandare: il browser disegna solo dopo
+      observer = new MutationObserver(records => {
+        for (const r of records) {
+          if (r.type === 'characterData') {
+            const g = mended.get(r.target);
+            if (g) repair(g);
+            examine(r.target);
+          } else for (const x of r.addedNodes) examine(x);
         }
-        if (queue.size && !timer) timer = setTimeout(clear, 80);
+        if (queue.size) flush();
       });
       observer.observe(document, {subtree: true, childList: true, characterData: true});
-      if (document.body) { examine(document.body); if (queue.size && !timer) timer = setTimeout(clear, 80); }
+      if (document.body) { examine(document.body); if (queue.size) flush(); }
     } else if (!is_active && observer) {
       observer.disconnect();
       observer = null;
+      queue.clear();
+      waiting.clear();
     }
   }
 
@@ -409,10 +482,13 @@
       if (!r || (r.action !== 'passthrough' && r.action !== 'replace')) { notice(REASONS[r && r.reason] || REASONS.extension, true); return; }
       let ready_now = text;
       if (r.action === 'replace') {
+        // la pagina mostrera' il messaggio con i segnaposto appena parte: i valori devono essere gia' qui
+        const learning = learn(r.text);
         if (!await write(el, r.text)) { notice(PHRASES.box, true); return; }
         ready_now = r.text;
         if (notices) notice(replaced(r.replacements), false);
         await new Promise(ok => setTimeout(ok, 80));   // l'app deve accorgersi del testo nuovo
+        await Promise.race([learning, new Promise(ok => setTimeout(ok, 400))]);
       }
       approved = {el, text: flat(ready_now)};
       dispatch(el, how, button);

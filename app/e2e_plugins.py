@@ -135,7 +135,9 @@ def main():
         # --- dove lo strumento passa gia' dal gateway di Omissis, il plugin non interviene: li' i dati vengono sostituiti davvero
         via = [run("claude", prompt(PERSONAL), ANTHROPIC_BASE_URL="http://127.0.0.1:8777")[0], run("codex", prompt(PERSONAL), OPENAI_BASE_URL="http://localhost:8777/v1")[0],
                run("claude", prompt(PERSONAL), ANTHROPIC_BASE_URL="https://api.altrove.example")[0]]
-        check("strumento mandato al gateway di Omissis: il plugin lascia fare; mandato altrove: controlla come sempre", via == [0, 0, 2], str(via))
+        # Antigravity con CLOUD_CODE_URL verso il gateway (agy o l'app aperti cosi'): il messaggio parte e i dati li sostituisce il gateway
+        via += [ag(PERSONAL, CLOUD_CODE_URL="http://127.0.0.1:8777/antigravity")[:2], (ag(PERSONAL, CLOUD_CODE_URL="https://altrove.example")[1] or {}).get("terminationBehavior")]
+        check("strumento mandato al gateway di Omissis: il plugin lascia fare; mandato altrove: controlla come sempre", via == [0, 0, 2, (0, {}), "terminate"], str(via))
 
         # --- cio' che non e' da controllare, e un'app che il comando non conosce
         quiet = [run("claude", prompt("   "))[0], run("claude", {"hook_event_name": "PreToolUse", "prompt": PERSONAL})[0], run("sconosciuta", prompt(PERSONAL))[0],

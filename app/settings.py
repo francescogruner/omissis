@@ -276,7 +276,7 @@ def _clean(data):
     clean["categories"] = sorted({str(x) for x in clean["categories"] or [] if str(x).isupper() and len(str(x)) <= 24})
     own = clean["gateway_upstreams"] if isinstance(clean["gateway_upstreams"], dict) else {}
     clean["gateway_upstreams"] = {str(k): str(v).strip().rstrip("/") for k, v in own.items()
-                                  if re.fullmatch(r"[a-z0-9-]{1,30}", str(k)) and str(k) != "codex" and address_ok(v)}
+                                  if re.fullmatch(r"[a-z0-9-]{1,30}", str(k)) and str(k) not in ("codex", "antigravity") and address_ok(v)}
     clean["groups_off"] = sorted({str(g) for g in (clean["groups_off"] if isinstance(clean["groups_off"], list) else []) if str(g) in GROUPS})
     extra = clean["mcp_folders"] if isinstance(clean["mcp_folders"], list) else []
     clean["mcp_folders"] = list(dict.fromkeys(str(x).strip().strip('"') for x in extra if str(x).strip()))[:20]

@@ -9,6 +9,7 @@ basta una variabile d'ambiente.
 
   Claude Code     ANTHROPIC_BASE_URL=http://127.0.0.1:8767/anthropic
   OpenAI e simili OPENAI_BASE_URL=http://127.0.0.1:8767/openai/v1
+  Antigravity     CLOUD_CODE_URL=http://127.0.0.1:8767/antigravity    (agy e l'app, con l'accesso Google)
 
 Le credenziali (chiave o accesso con abbonamento) passano cosi' come sono e non vengono mai scritte.
 Se il motore non risponde la richiesta viene fermata (503), mai inoltrata in chiaro.
@@ -45,6 +46,8 @@ JUMP_RESPONSE = {"content-length", "connection", "keep-alive", "transfer-encodin
 LOCAL = {"ollama": ("http://127.0.0.1:11434", "openai", "Ollama"), "lmstudio": ("http://127.0.0.1:1234", "openai", "LM Studio")}
 # dove parla Codex quando l'accesso e' quello di ChatGPT (abbonamento) e non una chiave: stesso formato, altro indirizzo
 CHATGPT_CODEX = "https://chatgpt.com/backend-api/codex"
+# dove parla Antigravity (agy e l'app) con l'accesso Google: lo si cambia con la variabile CLOUD_CODE_URL (agy 1.5.10, 18/11/2026)
+CLOUD_CODE = "https://daily-cloudcode-pa.googleapis.com"
 
 
 def chatgpt_account(headers):
@@ -88,6 +91,29 @@ def unpack(body, encoding):
         return None
 
 
+def read_chunked(stream):
+    """Il corpo di una richiesta mandata a pezzi (Transfer-Encoding: chunked). -> bytes, oppure "big" se supera il limite,
+    oppure "bad" se non si legge."""
+    body = b""
+    while True:
+        line = stream.readline(1000)
+        try:
+            size = int(line.split(b";")[0].strip(), 16)
+        except ValueError:
+            return "bad"
+        if size == 0:
+            while stream.readline(1000) not in (b"\r\n", b"\n", b""):   # eventuali intestazioni in coda
+                pass
+            return body
+        if len(body) + size > MAX_BODY:
+            return "big"
+        piece = stream.read(size)
+        if len(piece) != size:
+            return "bad"
+        body += piece
+        stream.readline(10)
+
+
 def routes():
     """nome usato nell'indirizzo -> (indirizzo del servizio vero, adattatore, servizio del catalogo o None, nome)."""
     out = {}
@@ -99,6 +125,8 @@ def routes():
         out[name] = (address, adapter, None, label)
     # Codex con l'accesso di ChatGPT: le regole sono quelle del servizio ChatGPT, il formato quello dell'API OpenAI
     out["codex"] = (CHATGPT_CODEX, "openai", catalog.PER_ID.get("chatgpt"), "Codex (ChatGPT)")
+    # Antigravity: CLOUD_CODE_URL=http://127.0.0.1:8767/antigravity. Valgono le regole del servizio Antigravity
+    out["antigravity"] = (CLOUD_CODE, "cloudcode", catalog.PER_ID.get("antigravity"), "Antigravity")
     return out
 
 
@@ -214,7 +242,7 @@ class Gateway:
                 own = None   # l'accesso in abbonamento va soltanto a ChatGPT, mai a un indirizzo scelto da altri
                 if account:
                     more["ChatGPT-Account-ID"] = account
-        if name == "codex":
+        if name in ("codex", "antigravity"):   # accesso dell'account (ChatGPT, Google): va solo al servizio, mai a un indirizzo scelto da altri
             own = None
         if own:
             address = own
@@ -235,11 +263,17 @@ class Gateway:
             self.counts["blocked"] += 1
             return h._error(426, "collegamento WebSocket non gestito: lo strumento deve usare le richieste normali (HTTP)")
         if h.headers.get("Transfer-Encoding", "").lower() == "chunked":
-            return h._error(411, "richiesta senza lunghezza dichiarata: non gestita")
-        length = int(h.headers.get("Content-Length") or 0)
-        if length > MAX_BODY:
-            return h._error(413, "richiesta troppo grande per essere controllata")
-        body = h.rfile.read(length) if length else b""
+            # Antigravity manda il corpo a pezzi, senza dichiararne la lunghezza: lo si legge tutto prima di controllarlo
+            body = read_chunked(h.rfile)
+            if not isinstance(body, bytes):
+                h.close_connection = True
+                return h._error(413 if body == "big" else 400, "richiesta troppo grande per essere controllata" if body == "big"
+                                else "richiesta a pezzi non leggibile")
+        else:
+            length = int(h.headers.get("Content-Length") or 0)
+            if length > MAX_BODY:
+                return h._error(413, "richiesta troppo grande per essere controllata")
+            body = h.rfile.read(length) if length else b""
         kind = h.headers.get("Content-Type", "")
         packed = h.headers.get("Content-Encoding", "").strip().lower() not in ("", "identity")
         ad, entry = None, {"service": who, "via": "gateway", "method": h.command, "path": activity.clean_path(path), "byte": len(body),

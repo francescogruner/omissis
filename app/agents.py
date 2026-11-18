@@ -29,7 +29,7 @@ TECHNICAL = ["SEGRETO", "ACCOUNT", "HOSTNAME", "DOMINIO", "URL", "IP", "MAC", "I
 KNOWN = ["Claude", "claude", "Claude Code", "Claude Agent SDK", "Anthropic", "anthropic", "OpenAI", "openai", "Codex", "codex", "ChatGPT",
          "Gemini", "Google", "Microsoft", "GitHub", "Git", "git", "JetBrains", "VS Code", "Visual Studio Code", "Bash", "PowerShell", "Windows",
          "Linux", "macOS", "Python", "Node", "npm", "Docker", "Markdown", "MCP", "Jupyter", "Fable", "Opus", "Sonnet", "Haiku", "Mythos",
-         "Tool", "Tools", "Agent", "Skill", "Send", "address", "llama", "Ollama"]
+         "Tool", "Tools", "Agent", "Skill", "Send", "address", "llama", "Ollama", "Antigravity", "Cascade", "Jetski"]
 
 
 def vocabulary(body):
@@ -38,11 +38,15 @@ def vocabulary(body):
     out = set()
     if not isinstance(body, dict):
         return []
-    for s in body.get("tools") or []:
+    inner = body.get("request") if isinstance(body.get("request"), dict) else {}   # Antigravity: la richiesta di Gemini e' in una busta
+    for s in (body.get("tools") or []) + (inner.get("tools") or []):
         if not isinstance(s, dict):
             continue
-        name = s.get("name") or (s.get("function") or {}).get("name") if isinstance(s.get("function"), dict) or s.get("name") else None
-        if isinstance(name, str) and name:
+        names = [d.get("name") for d in s.get("functionDeclarations") or [] if isinstance(d, dict)]   # formato di Gemini
+        names.append(s.get("name") or ((s.get("function") or {}).get("name") if isinstance(s.get("function"), dict) else None))
+        for name in names:
+            if not isinstance(name, str) or not name:
+                continue
             out.add(name)
             for chunk in name.replace("__", " ").replace(":", " ").split():
                 if len(chunk) >= 3:
@@ -245,4 +249,80 @@ class OpenAIAgent(R.OpenAI):
             any(isinstance(c, dict) and c.get("finish_reason") for c in ev.get("choices") or [])
 
 
-CLASSES = {"anthropic": AnthropicAgent, "openai": OpenAIAgent}
+class CloudCodeAgent(R.Adapter):
+    """L'API di Gemini come la usa Antigravity (agy e l'app): POST /v1internal:streamGenerateContent?alt=sse con la richiesta
+    di Gemini dentro {"request": ...}, e ogni evento della risposta dentro {"response": ...}. Va anche senza la busta (l'API
+    di Gemini cosi' com'e'). Visto dal vivo con agy 1.5.10 il 18/11/2026.
+
+    Le altre chiamate di Antigravity allo stesso indirizzo (account, modelli, quote, statistiche della conversazione) non
+    hanno i «contents»: lì si controlla ogni campo il cui nome parla di testo, come per i servizi di formato non noto."""
+    name = "cloudcode"
+
+    @staticmethod
+    def _inside(body):
+        if isinstance(body, dict) and isinstance(body.get("request"), dict) and "contents" in body["request"]:
+            return body["request"]
+        return body if isinstance(body, dict) and "contents" in body else None
+
+    def request(self, path, kind, text):
+        if "json" not in kind:
+            return None
+        try:
+            body = json.loads(text)
+        except ValueError:
+            return None
+        ref = []
+        self.technical = []
+        r = self._inside(body)
+        if r is None:
+            R.Generic()._search(body, ref)
+            return ref, (lambda: json.dumps(body, ensure_ascii=False)), body
+        s = r.get("systemInstruction")
+        for p in (s.get("parts") if isinstance(s, dict) else None) or []:
+            if isinstance(p, dict) and isinstance(p.get("text"), str) and len(p["text"]) >= MINIMUM_SYSTEM:
+                ref.append((p, "text"))
+                self.technical.append((p, "text"))
+        for c in r.get("contents") or []:
+            for p in (c.get("parts") if isinstance(c, dict) else None) or []:
+                self._part(p, ref)
+        return ref, (lambda: json.dumps(body, ensure_ascii=False)), body
+
+    @staticmethod
+    def _part(p, ref):
+        """Un pezzo di un messaggio: testo (anche i ragionamenti), azione chiesta dal modello con i suoi argomenti, risultato
+        dell'azione (contenuto di file, uscita di comandi), codice eseguito e sua uscita. Le firme dei ragionamenti
+        (thoughtSignature), le immagini e i file allegati non si toccano."""
+        if not isinstance(p, dict):
+            return
+        if isinstance(p.get("text"), str):
+            ref.append((p, "text"))
+        if isinstance(p.get("functionCall"), dict):
+            leaves(p["functionCall"].get("args"), ref)
+        if isinstance(p.get("functionResponse"), dict):
+            leaves(p["functionResponse"].get("response"), ref)
+        for k, field in (("executableCode", "code"), ("codeExecutionResult", "output")):
+            if isinstance(p.get(k), dict) and isinstance(p[k].get(field), str):
+                ref.append((p[k], field))
+
+    @staticmethod
+    def _parts(ev):
+        r = ev.get("response") if isinstance(ev, dict) and isinstance(ev.get("response"), dict) else ev
+        candidates = [c for c in ((r.get("candidates") if isinstance(r, dict) else None) or []) if isinstance(c, dict)]
+        parts = [p for c in candidates for p in ((c.get("content") or {}).get("parts") if isinstance(c.get("content"), dict) else None) or []
+                 if isinstance(p, dict)]
+        return candidates, parts
+
+    def delta(self, ev):
+        """Solo i pezzi di testo della risposta passano dal flusso che trattiene i segnaposto spezzati tra un evento e l'altro.
+        Un evento con un'azione, un ragionamento o la fine della risposta si ripristina per intero (vedi fine)."""
+        candidates, parts = self._parts(ev)
+        if any(c.get("finishReason") for c in candidates) or any(not isinstance(p.get("text"), str) or p.get("thought") for p in parts):
+            return []
+        return [(p, "text") for p in parts]
+
+    def end(self, ev):
+        candidates, parts = self._parts(ev)
+        return any(c.get("finishReason") for c in candidates) or any("functionCall" in p for p in parts)
+
+
+CLASSES = {"anthropic": AnthropicAgent, "openai": OpenAIAgent, "cloudcode": CloudCodeAgent}

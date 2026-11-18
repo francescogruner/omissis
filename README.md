@@ -77,8 +77,8 @@ Verified **live** means on the real service, with made-up data, checking what ac
 |---|---|---|
 | 🌐 | **Browser extension** on Edge: Claude, ChatGPT, Perplexity, Gemini, Copilot for Microsoft 365, Le Chat, Grok, Qwen, Poe, Manus, Genspark, Kimi, Z.ai (Chrome and Brave share the same engine) | ✅ live, 17 Nov 2026 |
 | 📎 | Attachments in the browser (a Word file on ChatGPT) | ✅ live |
-| 🖥️ | Desktop apps: **ChatGPT**, **Perplexity**, **Microsoft Copilot** (connector), **Antigravity** (its own hooks) | ✅ live |
-| ⌨️ | Terminal: **Claude Code** (gateway and plugin), **Codex** (gateway), **Antigravity CLI** (hooks) | ✅ live |
+| 🖥️ | Desktop apps: **ChatGPT**, **Perplexity**, **Microsoft Copilot** (connector), **Antigravity** (gateway, or its own hooks) | ✅ live |
+| ⌨️ | Terminal: **Claude Code** (gateway and plugin), **Codex** (gateway), **Antigravity CLI** (gateway and hooks) | ✅ live |
 | 📄 | Documents inside AI apps (MCP server) with Claude Code; keyboard shortcuts on the clipboard | ✅ live |
 | 🧪 | Kimi (plugin), opencode, aider and OpenAI/Anthropic-compatible tools (gateway), Gemini CLI (plugin; API key or Vertex AI only: since 17 Nov 2026 Google refuses sign-in with a personal account), MCP server in Cursor and Windsurf | 🧪 automated tests |
 | ⏳ | Claude desktop app, Codex plugin (needs approval with `/hooks`), MCP inside Claude Desktop | ⏳ to be tested |
@@ -109,7 +109,7 @@ If the engine does not answer, protected requests are **blocked**, never forward
 | **Browser extension** (`app/extension/`) | Chrome / Edge / Brave, Manifest V3. Works inside the page, before the request is encrypted: no proxy, no certificate. Masks the composer, the requests and the attachments; logs visits to AI services and can block them |
 | **Desktop-app connector** (`app/connector.py`) | Brings the same extension code into Chromium-based desktop apps (ChatGPT, Perplexity, Claude, Copilot) through the debugging port. If the app is already open without protection it says so and, on request, reopens it protected |
 | **Plugins and hooks** (`app/ai_hook.py`) | For apps with a hook system of their own (Claude Code, Codex, Kimi, Gemini CLI, Antigravity): every message is checked before it is sent, and one with personal data is stopped, with the protected version on the clipboard. The plugins are in [`plugins/`](plugins/README.md), in this same repository |
-| **Terminal gateway** (`app/gateway.py`) | For Claude Code, Codex, opencode, aider and any tool with a configurable base URL: point it at `http://127.0.0.1:8767/<service>`. Masks prompts, tool results and past tool calls, restores text and new tool arguments. Works with subscription sign-ins and can sit in front of a gateway you already have |
+| **Terminal gateway** (`app/gateway.py`) | For Claude Code, Codex, Antigravity (CLI and app), opencode, aider and any tool with a configurable base URL: point it at `http://127.0.0.1:8767/<service>`. Masks prompts, tool results and past tool calls, restores text and new tool arguments. Works with subscription sign-ins and can sit in front of a gateway you already have |
 | **MCP server** (`app/mcp_server.py`) | For Claude Desktop, Claude Code, Codex, Cursor, Windsurf, Antigravity and the other apps that speak MCP: the assistant has Omissis read your documents and only receives the text with placeholders; restoring writes on the PC and never returns the real values |
 | **Proxy** (`app/addon.py`) | A [mitmproxy](https://mitmproxy.org) addon for clients that speak the provider APIs or honour a proxy with a locally trusted certificate |
 | **Manual tools** | Mask / restore pasted text and correct the result by hand; clipboard shortcuts registered as Windows hotkeys (the program never sees other keystrokes); anonymise and restore Word, Excel, PowerPoint, text files and whole folders; scanned PDFs and images are read with the OCR built into Windows |
@@ -216,7 +216,9 @@ Be clear about the limits before relying on it:
   cannot know (project code names, internal identifiers), and test with made-up data first.
 - **Plugins and hooks stop, they do not rewrite.** In Claude Code, Codex, Kimi and Antigravity a message with
   personal data is stopped and the protected version goes to the clipboard, to paste. If the Omissis command is
-  missing, those apps let the message through.
+  missing, those apps let the message through. Claude Code, Codex and Antigravity can go through the gateway
+  instead, which replaces the data without stopping anything; for Antigravity the `CLOUD_CODE_URL` variable is not
+  documented by Google and may change with an update.
 - **Files an agent reads by itself** on the PC are masked only through the gateway, not through plugins and hooks.
 - **Coding agents get a lot of context masked.** Through the gateway, file contents and command output are masked
   in full; this protects more but can confuse the model on long working sessions.
@@ -236,6 +238,7 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 - [x] Browser extension verified live on 13 services, with attachments
 - [x] Desktop apps: ChatGPT, Perplexity, Microsoft Copilot, Antigravity
 - [x] Terminal: Claude Code, Codex, Antigravity CLI
+- [x] Antigravity (CLI and app) through the gateway, with a subscription: data is replaced instead of the message being stopped
 - [ ] Live validation of the Claude desktop app
 - [ ] Microsoft Store, Chrome Web Store and Edge Add-ons: submitted on 18/11/2026, in review
 - [ ] Code signing for the installer (Windows shows the SmartScreen warning today)

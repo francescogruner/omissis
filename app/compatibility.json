@@ -1,6 +1,6 @@
 {
  "_what": "Cio' che l'autore ha verificato di persona, con quale programma e quale versione. livello: dal_vivo (servizio vero, dati inventati) | servizio_finto (prove automatiche contro un servizio simulato).",
- "updated": "2026-11-17",
+ "updated": "2026-11-18",
  "entries": [
   {
    "service": "chatgpt",
@@ -73,6 +73,24 @@
    "method": "hook",
    "level": "live",
    "data": "2026-11-17"
+  },
+  {
+   "service": "antigravity",
+   "via": "gateway",
+   "client": "Antigravity CLI",
+   "version": "1.5.10",
+   "method": "api",
+   "level": "live",
+   "data": "2026-11-18"
+  },
+  {
+   "service": "antigravity",
+   "via": "gateway",
+   "client": "Antigravity",
+   "version": "2.32.2",
+   "method": "api",
+   "level": "live",
+   "data": "2026-11-18"
   },
   {
    "service": "chatgpt",

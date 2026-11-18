@@ -427,14 +427,15 @@ Limiti dell'estensione:
 
 ## Strumenti da terminale: il gateway
 
-Per Claude Code, Codex, opencode, aider e ogni programma a cui si può dire dove sta il servizio.
-`gateway.py` parte insieme alla protezione su `http://127.0.0.1:8767`: lo strumento parla con lui
-invece che con il servizio vero, lui sostituisce i dati, inoltra in HTTPS e rimette i valori veri
-nella risposta. Niente certificato e niente proxy:
+Per Claude Code, Codex, Antigravity, opencode, aider e ogni programma a cui si può dire dove sta il
+servizio. `gateway.py` parte insieme alla protezione su `http://127.0.0.1:8767`: lo strumento parla
+con lui invece che con il servizio vero, lui sostituisce i dati, inoltra in HTTPS e rimette i valori
+veri nella risposta. Niente certificato e niente proxy:
 
 ```
 $env:ANTHROPIC_BASE_URL="http://127.0.0.1:8767/anthropic"; claude
 $env:OPENAI_BASE_URL="http://127.0.0.1:8767/openai/v1"
+$env:CLOUD_CODE_URL="http://127.0.0.1:8767/antigravity"; agy
 ```
 
 Gli altri indirizzi (DeepSeek, Mistral, Groq, OpenRouter, Ollama, LM Studio…) sono nella sezione
@@ -466,7 +467,7 @@ Su questo PC Codex da terminale e OpenCode usano l'accesso con l'account ChatGPT
 sono coperti**. Codex 0.164 ha un'impostazione per cambiare indirizzo (`openai_base_url`) e comprime
 le richieste con zstd: la strada c'è, ma va provata dal vivo con l'account prima di dichiararla.
 
-Verificato: `e2e_gateway.py` (33 controlli contro un servizio finto) e **due prove dal vivo con
+Verificato: `e2e_gateway.py` (36 controlli contro un servizio finto) e **due prove dal vivo con
 Claude Code** e accesso in abbonamento, con dati inventati. Nella prima un messaggio semplice: 0
 valori in chiaro verso il servizio, risposta tornata con i valori veri. Nella seconda un'azione:
 Claude Code ha scritto un file, sul disco ci sono i valori veri e il servizio ha visto solo
@@ -499,12 +500,67 @@ non si saprebbe leggere, viene rifiutato e lo strumento ripiega sulle richieste 
 **Provato solo con un servizio finto**: dal vivo con Codex non ancora, e la configurazione di
 Codex è condivisa con l'app di ChatGPT, quindi va cambiata quando l'app non sta lavorando.
 
+**Antigravity (agy e l'app) con l'accesso Google.** Antigravity non ha un'impostazione documentata
+per cambiare indirizzo, ma la CLI (`agy` 1.5.10) e il `language_server` dell'app (2.32.2) leggono la
+variabile `CLOUD_CODE_URL` e mandano lì tutte le chiamate che altrimenti andrebbero a
+`daily-cloudcode-pa.googleapis.com`: account, modelli, quote e le chiamate al modello
+(`/v1internal:streamGenerateContent?alt=sse`). Il gateway le riceve su `/antigravity` e le inoltra a
+Google con l'accesso dell'account così com'è: funziona con l'abbonamento, senza chiavi. Il formato è
+quello di Gemini dentro una busta (`{"request": …}` all'andata, `{"response": …}` in ogni evento del
+ritorno), letto da `agents.CloudCodeAgent`:
+
+- all'andata si sostituiscono il testo dei messaggi (anche i ragionamenti rimandati), gli argomenti
+  delle azioni già fatte (`functionCall`), i loro risultati (`functionResponse`: file letti, uscita
+  dei comandi) e, come contesto tecnico, le istruzioni di sistema; le firme dei ragionamenti
+  (`thoughtSignature`) e le immagini non si toccano;
+- al ritorno si ripristinano il testo, anche spezzato tra un evento e l'altro, e gli argomenti delle
+  nuove azioni, che arrivano interi in un solo evento;
+- `agy` manda il corpo della richiesta a pezzi (`Transfer-Encoding: chunked`), senza lunghezza: il
+  gateway lo legge tutto prima di controllarlo;
+- le altre chiamate allo stesso indirizzo passano dal controllo dei campi di testo per nome, come i
+  servizi di formato non noto;
+- valgono le regole del servizio Antigravity, che di serie è su «Registra»: per sostituire i dati va
+  messo su **Proteggi** (il pannello lo ricorda accanto alla riga da copiare). L'accesso dell'account
+  Google va solo a Google, mai a un gateway proprio;
+- con `CLOUD_CODE_URL` verso questo PC l'hook di Antigravity si fa da parte: i dati li sostituisce
+  il gateway e il messaggio non viene più fermato.
+
+L'app va aperta con la variabile, e se è già aperta va chiusa prima, perché altrimenti si porta in
+primo piano la finestra che c'è già:
+
+```
+$env:CLOUD_CODE_URL="http://127.0.0.1:8767/antigravity"; & "$env:LOCALAPPDATA\Programs\antigravity\Antigravity.exe"
+```
+
+**Provato dal vivo il 18/11/2026** (abbonamento Google AI Pro, copia di prova, dati inventati), con
+un registratore tra il gateway e Google per vedere cosa usciva davvero. In 58 richieste registrate
+sono passati 0 valori veri.
+- **CLI 1.5.10**: con un messaggio semplice la mail è tornata con nome e IBAN veri. In un'altra
+  prova `agy` ha letto un file con dati inventati e ne ha scritto un altro: sul disco c'erano i
+  valori veri, a Google erano arrivati solo segnaposto. Con un secondo messaggio nella stessa
+  conversazione non ci sono stati errori sulle firme dei ragionamenti.
+- **App 2.32.2**, aperta con la variabile in una seconda copia separata: il messaggio e la chiamata
+  che dà il titolo alla conversazione sono arrivati a Google con i segnaposto, e la risposta a
+  schermo aveva i valori veri.
+
+Da sapere:
+- nei percorsi dentro le azioni vengono sostituiti anche il nome utente e certi nomi di cartelle,
+  ma tornano giusti al ritorno;
+- se il modello inventa un segnaposto che non esiste (alla domanda sul cognome ha risposto
+  `[COGNOME_2]`, ricavandolo da `[PERSONA_2]`), quello resta com'è;
+- la telemetria che Antigravity mandasse ad altri indirizzi di Google, fuori da `CLOUD_CODE_URL`,
+  non passa dal gateway e non è stata osservata;
+- le conversazioni con `--remote-agent` girano nel cloud di Google: lì il gateway non c'è.
+
+La variabile non è documentata da Google e può cambiare con un aggiornamento.
+
 **Chi ha già un proprio gateway** (aziendale, LiteLLM, OpenRouter…) lo tiene: nella sezione
 Terminale si scrive il suo indirizzo al posto dell'API di Anthropic o di OpenAI, e Omissis gli sta
 davanti: sostituisce i dati e inoltra lì invece che al servizio vero (per gli altri nomi:
 `gateway_upstreams` in `settings.json`). Le credenziali passano così come sono, quindi vanno a
-quell'indirizzo: è una scelta di chi lo scrive. Fa eccezione l'accesso in abbonamento di Codex, che
-va sempre e solo a ChatGPT. Provato solo con un servizio finto.
+quell'indirizzo: è una scelta di chi lo scrive. Fanno eccezione l'accesso in abbonamento di Codex,
+che va sempre e solo a ChatGPT, e l'accesso Google di Antigravity, che va solo a Google. Provato
+solo con un servizio finto.
 
 ## Server MCP: i documenti, dentro le app (sperimentale)
 
@@ -579,7 +635,7 @@ Dal pannello: sezione App desktop → Avvia protetta (la protezione deve essere 
 | Microsoft 365 Copilot, Copilot dentro Teams e Outlook | non coperte: sono WebView2, e il servizio non ha un formato che il programma sa leggere. Nel browser Copilot per Microsoft 365 si protegge dalla casella di scrittura (vedi l'estensione) | — |
 | Visual Studio (GitHub Copilot) | non coperta: è un programma nativo, le richieste partono da un suo processo e non da una finestra web. Il servizio si può solo registrare o bloccare | — |
 | Editor derivati da VS Code (Cursor, Windsurf) | non coperti dal connettore: la chat parla con il servizio da un processo dell'editor, e la casella è un editor di codice che non si riscrive come una casella web | non installati sul PC di prova |
-| Antigravity (app desktop) | non dal connettore: il modello lo chiama `language_server.exe`, non la finestra. Si protegge con i **suoi hook** (vedi «Lo stesso per le altre app che hanno gli hook») | sì, 17/11/2026, versione 2.32.2 |
+| Antigravity (app desktop) | non dal connettore: il modello lo chiama `language_server.exe`, non la finestra. Aperta con `CLOUD_CODE_URL` passa dal **gateway**, che sostituisce i dati (vedi «Strumenti da terminale: il gateway»); altrimenti la proteggono i **suoi hook**, che fermano il messaggio (vedi «Lo stesso per le altre app che hanno gli hook») | hook 17/11/2026, gateway 18/11/2026, versione 2.32.2 |
 | Perplexity | app dello Store senza un comando da lanciare: il connettore la apre chiedendolo a Windows, come il menu Start, con la porta di debug (le sue finestre interne sono `perplexity.localhost`) | provata dal vivo il 17/11/2026 (versione 2026.11), con l'accesso e dati inventati: il messaggio è partito con i segnaposto e il modello ha risposto «PERSONA-1» |
 
 Se un'app rifiuta la porta quando la si riavvia (lo fa Kimi), il connettore se ne accorge in pochi
@@ -641,7 +697,9 @@ cambia soltanto come ogni app gli passa il messaggio e quale servizio del catalo
   `GOOGLE_GEMINI_BASE_URL` che puntano a questo PC) il plugin non interviene: lì i dati vengono sostituiti davvero, ed
   è meglio. Per Codex mandato al gateway dal suo `config.toml` l'hook non può saperlo: lì non vanno usati insieme.
 - **Antigravity** (17/11/2026) non ha un plugin che valga anche per l'app: app, CLI e IDE leggono gli hook dallo stesso
-  file, `~/.gemini/config/hooks.json`. Dal pannello, sotto il comando, «Collega Antigravity» ci aggiunge una voce
+  file, `~/.gemini/config/hooks.json`. Dal 18/11/2026 c'è anche la strada del gateway (`CLOUD_CODE_URL`), che
+  sostituisce i dati invece di fermare il messaggio; quando la variabile punta a questo PC l'hook si fa da parte. Per
+  l'hook: dal pannello, sotto il comando, «Collega Antigravity» aggiunge a quel file una voce
   `omissis` (evento `PreInvocation`, comando `omissis-hook antigravity`) e lascia com'è il resto; «Scollega» e «Togli
   il comando» la tolgono, e un file che non si legge come JSON non viene riscritto. Antigravity chiama l'hook prima di
   ogni chiamata al modello: conta solo la prima del turno (`invocationNum` 0), quella col messaggio scritto. Per

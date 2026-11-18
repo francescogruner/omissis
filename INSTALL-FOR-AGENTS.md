@@ -104,8 +104,11 @@ press **Install the command** in the panel (Connections, Desktop apps, "Plugins 
 | Antigravity (app and CLI) | no command: after **Install the command**, ask the person to press **Link Antigravity** in the same place of the panel, then to close and reopen Antigravity (until it is reopened it does not find the command, and lets messages through) |
 
 A plugin checks every message before it is sent and stops those that hold personal data: the protected version
-goes to the clipboard, to paste. Claude Code and Codex can instead be sent through the Omissis gateway, which
-replaces the data for real: the exact line is in the panel, Connections, Terminal. Use one or the other, not both.
+goes to the clipboard, to paste. Claude Code, Codex and Antigravity can instead be sent through the Omissis gateway,
+which replaces the data for real: the exact line is in the panel, Connections, Terminal. Use one or the other, not
+both (with the gateway the Antigravity hook steps aside by itself). For Antigravity the line sets `CLOUD_CODE_URL`
+for `agy`; the app has to be closed and reopened from that same terminal to pick it up, and the Antigravity service
+has to be on **Protect** in the panel (it starts on Record).
 
 **Desktop apps** (ChatGPT, Microsoft Copilot, Perplexity, Claude). They are started protected from the panel: Connections, Desktop apps.
 Starting one closes and reopens it: the person does it, when the app is not working on something.
