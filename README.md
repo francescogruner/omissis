@@ -232,7 +232,8 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 - [x] Desktop apps: ChatGPT, Perplexity, Microsoft Copilot, Antigravity
 - [x] Terminal: Claude Code, Codex, Antigravity CLI
 - [ ] Live validation of the Claude desktop app
-- [ ] Code signing for the installer and Microsoft Store publication; extension in the browser stores
+- [ ] Microsoft Store, Chrome Web Store and Edge Add-ons: submitted on 18/11/2026, in review
+- [ ] Code signing for the installer (Windows shows the SmartScreen warning today)
 - [ ] Native messaging instead of the local HTTP bridge for the extension
 - [ ] Firefox
 - [ ] Redacted image output for scans; automatic restore of files downloaded from chats

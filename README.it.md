@@ -235,7 +235,8 @@ Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 - [x] App desktop: ChatGPT, Perplexity, Microsoft Copilot, Antigravity
 - [x] Terminale: Claude Code, Codex, Antigravity CLI
 - [ ] Verifica dal vivo dell'app desktop di Claude
-- [ ] Firma del codice dell'installer e Microsoft Store; estensione negli store dei browser
+- [ ] Microsoft Store, Chrome Web Store ed Edge Add-ons: inviati il 18/11/2026, in revisione
+- [ ] Firma del codice dell'installer (oggi Windows mostra l'avviso di SmartScreen)
 - [ ] Messaggistica nativa del browser al posto del collegamento HTTP locale per l'estensione
 - [ ] Firefox
 - [ ] Scansioni restituite come immagine oscurata; ripristino automatico dei file scaricati dalle chat
