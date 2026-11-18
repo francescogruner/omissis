@@ -91,7 +91,8 @@ def main():
     if not os.environ.get("OMISSIS_MANAGED_FILE"):
         sys.exit("serve OMISSIS_MANAGED_FILE: Kimi di serie è su «Registra», e per provare «Proteggi» la regola va imposta")
     # --- di serie Kimi, come ogni servizio non ancora provato dal vivo, è su «Registra»: il plugin lascia partire e conta la visita
-    rule(None)
+    # la regola si impone «Registra» invece di toglierla: nella copia di prova chi la usa puo' aver gia' scelto «Proteggi»
+    rule("record")
     default = run(message(PERSONAL))
     check("regola di serie («Registra»): il messaggio parte anche con dati personali; per fermarli il servizio va messo su «Proteggi»", default == (0, "", None), str(default[0]))
 

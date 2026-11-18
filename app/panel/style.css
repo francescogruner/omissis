@@ -71,7 +71,9 @@ pre { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-rad
 .side-footer { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px 10px 4px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2); }
 .side-status { display: flex; align-items: center; gap: 8px; color: var(--text); text-decoration: none; }
 .body { min-width: 0; }
-main { max-width: 1000px; margin: 0 auto; padding: 40px 32px 80px; }
+main { max-width: 1240px; margin: 0 auto; padding: 40px 40px 80px; }
+/* il pannello porta il fuoco sulla pagina quando cambia sezione (per chi usa un lettore di schermo): niente cornice attorno a tutto */
+main:focus, main:focus-visible { outline: none; }
 .head { margin-bottom: 28px; }
 .head p { margin-top: 8px; color: var(--text-2); max-width: 84ch; }
 .block { display: flex; flex-direction: column; gap: 16px; }
@@ -144,8 +146,19 @@ button.label.drop:hover { border-color: var(--border-2); color: var(--text); }
 .note.warning { border-color: transparent; background: var(--warning-background); color: var(--warning); }
 .note.error { border-color: transparent; background: var(--error-background); color: var(--error); }
 .note .button { min-height: 30px; }
-.note .grow { flex: 1 1 320px; }
-.note.warning .button { margin-left: auto; }
+/* righe delle app: sotto il nome una riga di spiegazione; avvisi e passi stanno dentro la riga, non in blocchi a parte */
+.setting.app .help { grid-column: 1; }
+.setting .app-extra { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.hint { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
+.hint .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); flex: none; }
+.hint.error { color: var(--error); }
+.hint.error .dot { background: var(--error); }
+.hint.standalone { padding: 0 20px 16px; }
+.button.small { min-height: 26px; padding: 2px 12px; font-size: 12.5px; }
+details.steps { border: 1px solid var(--border); border-radius: var(--radius-small); padding: 10px 14px; background: var(--background-2); }
+details.steps summary { font-size: 13px; color: var(--text); font-weight: 500; }
+details.steps[open] summary { margin-bottom: 8px; }
+details.steps .listing { font-size: 13px; }
 /* i comandi da copiare: il codice e, accanto, il suo pulsante */
 .button.copy { min-height: 24px; padding: 1px 10px; margin: 2px 4px 2px 6px; font-size: 12px; vertical-align: middle; }
 [data-hook-note="how"] .listing li { line-height: 2; }
@@ -161,6 +174,12 @@ th { text-align: left; font-weight: 500; font-size: 12px; color: var(--text-2); 
 td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
 tbody tr:last-child td { border-bottom: 0; }
 td .below { color: var(--text-2); font-size: 12.5px; }
+/* inventario degli strumenti AI: le colonne brevi non vanno a capo, giudizio e nota hanno lo spazio che serve */
+table.inventory td:nth-child(2), table.inventory td:nth-child(3) .below { white-space: nowrap; }
+table.inventory td:nth-child(2) { color: var(--text-2); }
+table.inventory td:last-child { width: 240px; min-width: 220px; }
+table.inventory td:last-child select { width: 100%; }
+table.inventory td { padding-top: 14px; padding-bottom: 14px; }
 .empty { padding: 28px 20px; text-align: center; color: var(--text-2); }
 
 .status-large { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }

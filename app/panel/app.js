@@ -764,8 +764,8 @@ const connectBrowser = test(async el => {
 });
 
 /** L'avviso «questo servizio non e' su Proteggi», con il pulsante che lo mette senza passare da Servizi. */
-const policyNote = (text, id, name, where) => `<div class="note warning" data-${where}-note="policy"><span class="grow">${esc(text)}</span>`
-  + (id ? `<button class="button" data-protect="${esc(id)}" data-name="${esc(name)}">${esc(t("app.note.protect"))}</button>` : "") + `</div>`;
+const policyNote = (text, id, name, where) => `<div class="hint warning${where === "hook" ? " standalone" : ""}" data-${where}-note="policy"><span class="dot" aria-hidden="true"></span><span>${esc(text)}</span>`
+  + (id ? `<button class="button small" data-protect="${esc(id)}" data-name="${esc(name)}">${esc(t("app.note.protect"))}</button>` : "") + `</div>`;
 const wireProtect = (el, after) => $$("button[data-protect]", el).forEach(b => b.onclick = test(async () => {
   b.disabled = true;
   await api("/api/services", {id: b.dataset.protect, policy: "protect"});
@@ -796,15 +796,16 @@ function drawApp(listing, even_if_same = true) {
       : a.refuses ? "" : a.connected ? `<button class="button" data-app="${esc(a.id)}" data-action="detach">${esc(t("app.detach"))}</button>`
       : a.open_unprotected ? `<button class="button primary" data-app="${esc(a.id)}" data-name="${esc(a.name)}" data-action="relaunch">${esc(t("app.relaunch"))}</button>`
       : `<button class="button primary" data-app="${esc(a.id)}" data-action="launch">${esc(t("app.launch"))}</button>`;
-    const errors = (a.errors || []).map(e => `<div class="note error">${esc(e)}</div>`).join("");
-    // cio' che conviene sapere prima di fidarsi: un servizio non impostato su «Proteggi», un profilo separato
-    const notes = !a.installed ? "" : pl ? `<div class="note" data-app-note="plugin">${esc(t("app.plugin.note", {name: a.name}))}</div>`
-        + (a.policy !== "protect" ? policyNote(t("app.plugin.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}), a.service_id, a.service, "app") : "")
-        + (pl.ready && !pl.installed ? `<div class="note" data-app-note="plugin-steps"><b>${esc(t("app.plugin.steps"))}</b><ol class="listing"><li>${esc(t("app.plugin.step.1", {name: a.name}))}<br><code id="pluginSentence">${esc(pl.sentence)}</code> <button class="button" id="pluginCopy">${esc(t("app.plugin.copy"))}</button></li><li>${esc(t("app.plugin.step.2"))}</li><li>${esc(t("app.plugin.step.3"))}</li></ol><span class="help">${esc(t("app.plugin.folder", {folder: pl.folder}))}</span></div>` : "")
-      : a.refuses ? `<div class="note warning" data-app-note="refuses">${esc(t("app.note.refuses", {name: a.name}))}</div>`
-      : (a.policy !== "protect" ? policyNote(t("app.note.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}), a.service_id, a.service, "app") : "")
-      + (a.own_profile ? `<div class="note" data-app-note="profile">${esc(t("app.note.own_profile", {name: a.name}))}</div>` : "");
-    return `<div class="setting" data-app-line="${esc(a.id)}" data-outcome="${esc(a.connected ? a.outcome || "no" : "")}" data-open="${a.open_unprotected ? "unprotected" : ""}"><span class="name">${esc(a.name)} ${status}</span>${numbers}<span class="command">${button}</span></div>${notes}${errors}`;
+    // sotto il nome, una riga sola che dice come si protegge quell'app; poi, solo se servono, l'avviso e i passi
+    const about = !a.installed ? "" : pl ? `<span class="help" data-app-note="plugin">${esc(t("app.plugin.note", {name: a.name}))}</span>`
+      : a.refuses ? `<span class="help" data-app-note="refuses">${esc(t("app.note.refuses", {name: a.name}))}</span>`
+      : a.own_profile ? `<span class="help" data-app-note="profile">${esc(t("app.note.own_profile", {name: a.name}))}</span>` : "";
+    const policy = a.installed && a.policy !== "protect" && !a.refuses
+      ? policyNote(t(pl ? "app.plugin.policy" : "app.note.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}), a.service_id, a.service, "app") : "";
+    const steps = a.installed && pl && pl.ready && !pl.installed ? `<details class="steps" data-app-note="plugin-steps" open><summary>${esc(t("app.plugin.steps"))}</summary><ol class="listing"><li>${esc(t("app.plugin.step.1", {name: a.name}))}<br><code id="pluginSentence">${esc(pl.sentence)}</code><button class="button copy" id="pluginCopy">${esc(t("app.plugin.copy"))}</button></li><li>${esc(t("app.plugin.step.2"))}</li><li>${esc(t("app.plugin.step.3"))}</li></ol><span class="help">${esc(t("app.plugin.folder", {folder: pl.folder}))}</span></details>` : "";
+    const errors = (a.errors || []).map(e => `<div class="hint error"><span class="dot" aria-hidden="true"></span><span>${esc(e)}</span></div>`).join("");
+    const extra = policy + steps + errors;
+    return `<div class="setting app" data-app-line="${esc(a.id)}" data-outcome="${esc(a.connected ? a.outcome || "no" : "")}" data-open="${a.open_unprotected ? "unprotected" : ""}"><span class="name">${esc(a.name)} ${status}</span>${about}${numbers}<span class="command">${button}</span>${extra ? `<div class="app-extra">${extra}</div>` : ""}</div>`;
   }).join("");
   wireProtect(el, async () => drawApp(await api("/api/app")));
   if ($("#pluginCopy", el)) $("#pluginCopy", el).onclick = async () => { try { await navigator.clipboard.writeText($("#pluginSentence", el).textContent); notify(t("app.plugin.copied")); } catch (e) { /* la frase resta leggibile nella pagina */ } };
@@ -1001,7 +1002,7 @@ const detectedServices = test(async el => {
           <select id="invWhich" aria-label="${esc(t("inventory.which_ones"))}">${["present", "everyone", "gone", "to_review", "to_remove"].map(v => `<option value="${v}">${esc(t(`inventory.which_ones.${v}`))}</option>`).join("")}</select>
           <button class="button" id="invExport">${esc(t("inventory.export"))}</button><button class="button" id="invForget">${esc(t("inventory.forget"))}</button></div>
       </div>
-      <div class="table"><table><caption class="vh">${esc(t("inventory.title"))}</caption><thead><tr>
+      <div class="table"><table class="inventory"><caption class="vh">${esc(t("inventory.title"))}</caption><thead><tr>
         ${["name", "category", "seen", "rule", "verdict"].map(c => `<th scope="col">${esc(t(`inventory.column.${c}`))}</th>`).join("")}</tr></thead><tbody id="invTable"></tbody></table></div></section>`
     + card(`<div class="line"><h2>${esc(t("detected.network"))}</h2><span class="space"></span><span class="faded small" id="networkWhen"></span><button class="button" id="analyzeNetwork">${esc(t("detected.refresh"))}</button></div>
       <div id="network" class="block faded" aria-live="polite">${esc(t("detected.network.below"))}</div>`);
@@ -1024,7 +1025,7 @@ const detectedServices = test(async el => {
     $("#invTable").innerHTML = visible.length ? visible.map(e => `<tr>
         <td>${name(e.name, [e.detail, e.version].filter(Boolean).join(" · "))}</td>
         <td>${esc(t(`inventory.category.${e.category}`))}</td>
-        <td>${e.present ? "" : label(t("inventory.not_more"), "warning")}<div class="below">${esc(t("inventory.since", {first: day(e.first), last: day(e.last)}))}</div></td>
+        <td>${e.present ? "" : label(t("inventory.not_more"), "warning")}<div class="below">${esc(t("inventory.first", {first: day(e.first)}))}<br>${esc(t("inventory.last", {last: day(e.last)}))}</div></td>
         <td><span class="labels">${choice(e.policy)}${e.signal === "all_sites" ? label(t("detected.all_sites"), "error") : ""}</span></td>
         <td><select data-key="${esc(e.key)}" aria-label="${esc(t("inventory.verdict_for", {name: e.name}))}">${["", "approved", "to_remove"].map(g => `<option value="${g}"${g === (e.verdict || "") ? " selected" : ""}>${esc(t(`inventory.verdict.${g || "to_review"}`))}</option>`).join("")}</select>
           <input type="text" class="note-short" data-note="${esc(e.key)}" value="${esc(e.note || "")}" maxlength="300" placeholder="${esc(t("inventory.note"))}" aria-label="${esc(t("inventory.note_for", {name: e.name}))}"></td></tr>`).join("")
