@@ -99,14 +99,15 @@ press **Install the command** in the panel (Connections, Desktop apps, "Plugins 
 |---|---|
 | Claude Code | `claude plugin marketplace add francescogruner/omissis` then `claude plugin install omissis@omissis` |
 | Codex | `codex plugin marketplace add francescogruner/omissis`, enable Omissis among the plugins, then have the person approve its hook with `/hooks` |
-| Gemini CLI | `gemini extensions install https://github.com/francescogruner/omissis` |
+| Gemini CLI | `gemini extensions install https://github.com/francescogruner/omissis` (Gemini CLI no longer accepts personal Google accounts: only with an API key or Vertex AI) |
 | Kimi | `/plugins install https://github.com/francescogruner/omissis` |
+| Antigravity (app and CLI) | no command: after **Install the command**, ask the person to press **Link Antigravity** in the same place of the panel, then to close and reopen Antigravity (until it is reopened it does not find the command, and lets messages through) |
 
 A plugin checks every message before it is sent and stops those that hold personal data: the protected version
 goes to the clipboard, to paste. Claude Code and Codex can instead be sent through the Omissis gateway, which
 replaces the data for real: the exact line is in the panel, Connections, Terminal. Use one or the other, not both.
 
-**Desktop apps** (ChatGPT, Claude, Copilot). They are started protected from the panel: Connections, Desktop apps.
+**Desktop apps** (ChatGPT, Microsoft Copilot, Perplexity, Claude). They are started protected from the panel: Connections, Desktop apps.
 Starting one closes and reopens it: the person does it, when the app is not working on something.
 
 ## Step 5. What gets protected
