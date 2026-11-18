@@ -59,7 +59,11 @@ def main():
           and files["omissis-hook"].startswith(b"#!/bin/sh\n") and b"\r" not in files["omissis-hook"]
           and secrets_here and not any(s.encode() in c for s in secrets_here for c in files.values()), str(sorted(files)))
 
-    env = {**os.environ, "PATH": str(folder) + os.pathsep + os.environ.get("PATH", ""), "OMISSIS_HOOK_CLIPBOARD": str(clip)}
+    # dal PATH si tolgono le cartelle con un altro «omissis-hook» (quello di una copia vera di Omissis installata sul PC):
+    # la prova deve trovare solo il suo
+    others = [d for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip() and (Path(d.strip().strip('"')) / "omissis-hook.cmd").exists()]
+    clean = os.pathsep.join(d for d in os.environ.get("PATH", "").split(os.pathsep) if d not in others)
+    env = {**os.environ, "PATH": str(folder) + os.pathsep + clean, "OMISSIS_HOOK_CLIPBOARD": str(clip)}
     for name in ("ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "GOOGLE_GEMINI_BASE_URL"):   # questa prova non passa dal gateway
         env.pop(name, None)
     shells = {"cmd": lambda app: dict(args=f"omissis-hook {app}", shell=True)}

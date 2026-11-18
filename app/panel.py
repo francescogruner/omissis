@@ -385,7 +385,8 @@ def app_desktop():
                     # l'app si protegge con un suo plugin: se la cartella e' pronta, dove sta, e se in Kimi risulta installato
                     "plugin": kimi_plugin.state() if a.get("plugin") else None,
                     # la politica del servizio decide se i messaggi vengono mascherati: con «registra» l'app si collega e basta
-                    "service": service["name"] if service else "", "policy": settings.policy(service) if service else "protect"})
+                    "service": service["name"] if service else "", "service_id": service["id"] if service else "",
+                    "policy": settings.policy(service) if service else "protect"})
     return out
 
 

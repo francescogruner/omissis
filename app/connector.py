@@ -79,7 +79,8 @@ APP = {
                                                            r"%ProgramFiles(x86)%\Microsoft\Copilot\Application\mscopilot.exe",
                                                            r"%ProgramFiles%\Microsoft\Copilot\Application\mscopilot.exe"],
                 "process": ("copilotapp.exe|mscopilot.exe", r"\\copilot\\application\\(copilotapp|mscopilot)\.exe$"), "port": 9554, "site": "copilot.microsoft.com",
-                "service": "copilot", "own_profile": True},
+                # dalla 157 e' l'app di Microsoft 365 Copilot: la casella sta su m365copilotapp.svc.cloud.microsoft
+                "service": "copilot-365", "own_profile": True},
     # provata il 17/11/2026 sulla 26.11 (Electron 45, dallo Store): aperta con la porta di debug la tiene aperta
     "perplexity": {"name": "Perplexity", "package": ("PerplexityAI.PerplexityApp", "ai.perplexity.PerplexityPersonalComputer.Electron"),
                    "process": ("perplexity.exe", r"\\perplexityai\.perplexityapp_[^\\]+\\app\\perplexity\.exe$"), "port": 9555,

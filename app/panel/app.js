@@ -763,6 +763,20 @@ const connectBrowser = test(async el => {
   if (storeLink(ext)) { $("#estStore").href = storeLink(ext); $("#estStoreBox").hidden = false; }
 });
 
+/** L'avviso «questo servizio non e' su Proteggi», con il pulsante che lo mette senza passare da Servizi. */
+const policyNote = (text, id, name, where) => `<div class="note warning" data-${where}-note="policy"><span class="grow">${esc(text)}</span>`
+  + (id ? `<button class="button" data-protect="${esc(id)}" data-name="${esc(name)}">${esc(t("app.note.protect"))}</button>` : "") + `</div>`;
+const wireProtect = (el, after) => $$("button[data-protect]", el).forEach(b => b.onclick = test(async () => {
+  b.disabled = true;
+  await api("/api/services", {id: b.dataset.protect, policy: "protect"});
+  notify(t("app.note.protected", {service: b.dataset.name}));
+  await after();
+}));
+/** I comandi da copiare: ognuno con il suo pulsante. */
+const copyable = c => `<code>${esc(c)}</code><button class="button copy" data-copy="${esc(c)}">${esc(t("hooks.copy"))}</button>`;
+const wireCopy = el => $$("button[data-copy]", el).forEach(b => b.onclick = async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy); notify(t("hooks.copied")); } catch (e) { /* il comando resta leggibile nella pagina */ }
+});
 function drawApp(listing, even_if_same = true) {
   const el = $("#appListing");
   if (!el) return;
@@ -785,13 +799,14 @@ function drawApp(listing, even_if_same = true) {
     const errors = (a.errors || []).map(e => `<div class="note error">${esc(e)}</div>`).join("");
     // cio' che conviene sapere prima di fidarsi: un servizio non impostato su «Proteggi», un profilo separato
     const notes = !a.installed ? "" : pl ? `<div class="note" data-app-note="plugin">${esc(t("app.plugin.note", {name: a.name}))}</div>`
-        + (a.policy !== "protect" ? `<div class="note warning" data-app-note="policy">${esc(t("app.plugin.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}))}</div>` : "")
+        + (a.policy !== "protect" ? policyNote(t("app.plugin.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}), a.service_id, a.service, "app") : "")
         + (pl.ready && !pl.installed ? `<div class="note" data-app-note="plugin-steps"><b>${esc(t("app.plugin.steps"))}</b><ol class="listing"><li>${esc(t("app.plugin.step.1", {name: a.name}))}<br><code id="pluginSentence">${esc(pl.sentence)}</code> <button class="button" id="pluginCopy">${esc(t("app.plugin.copy"))}</button></li><li>${esc(t("app.plugin.step.2"))}</li><li>${esc(t("app.plugin.step.3"))}</li></ol><span class="help">${esc(t("app.plugin.folder", {folder: pl.folder}))}</span></div>` : "")
       : a.refuses ? `<div class="note warning" data-app-note="refuses">${esc(t("app.note.refuses", {name: a.name}))}</div>`
-      : (a.policy !== "protect" ? `<div class="note warning" data-app-note="policy">${esc(t("app.note.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}))}</div>` : "")
+      : (a.policy !== "protect" ? policyNote(t("app.note.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}), a.service_id, a.service, "app") : "")
       + (a.own_profile ? `<div class="note" data-app-note="profile">${esc(t("app.note.own_profile", {name: a.name}))}</div>` : "");
     return `<div class="setting" data-app-line="${esc(a.id)}" data-outcome="${esc(a.connected ? a.outcome || "no" : "")}" data-open="${a.open_unprotected ? "unprotected" : ""}"><span class="name">${esc(a.name)} ${status}</span>${numbers}<span class="command">${button}</span></div>${notes}${errors}`;
   }).join("");
+  wireProtect(el, async () => drawApp(await api("/api/app")));
   if ($("#pluginCopy", el)) $("#pluginCopy", el).onclick = async () => { try { await navigator.clipboard.writeText($("#pluginSentence", el).textContent); notify(t("app.plugin.copied")); } catch (e) { /* la frase resta leggibile nella pagina */ } };
   $$("button[data-app]", el).forEach(b => b.onclick = test(async () => {
     if (b.dataset.action === "relaunch" && !await confirm(t("app.relaunch.title", {name: b.dataset.name}), t("app.relaunch.text", {name: b.dataset.name}), t("app.relaunch"))) return;
@@ -814,7 +829,7 @@ const drawHook = h => {
   const on = h.ready && h.on_path;
   el.innerHTML = `<div class="setting" data-hook="${on ? "on" : "off"}"><span class="name">${esc(t("hooks.command"))} ${label(t(on ? "hooks.status.yes" : "hooks.status.no"), on ? "ok" : "")}</span>
       <span class="help">${esc(t(on ? "hooks.on" : "hooks.off"))}</span><span class="command"><button class="button${on ? "" : " primary"}" id="hookToggle">${esc(t(on ? "hooks.remove" : "hooks.install"))}</button></span></div>
-    <div class="note" data-hook-note="how"><b>${esc(t("hooks.how"))}</b><ul class="listing">${h.platforms.map(p => `<li>${esc(p.name)}: ${p.commands.map(c => `<code>${esc(c)}</code>`).join(` ${esc(t("hooks.then"))} `)}</li>`).join("")}</ul>
+    <div class="note" data-hook-note="how"><b>${esc(t("hooks.how"))}</b><ul class="listing">${h.platforms.map(p => `<li>${esc(p.name)}: ${p.commands.map(copyable).join(` ${esc(t("hooks.then"))} `)}</li>`).join("")}</ul>
       <span class="help">${esc(t("hooks.limits"))}</span></div>`;
   const ag = h.antigravity || {};
   if (ag.present || ag.linked) {
@@ -822,11 +837,13 @@ const drawHook = h => {
     el.insertAdjacentHTML("beforeend", `<div class="setting" data-hook-antigravity="${linked ? "on" : "off"}"><span class="name">${esc(t("hooks.antigravity"))} ${label(t(linked ? "hooks.antigravity.yes" : "hooks.antigravity.no"), linked ? "ok" : "")}</span>
       <span class="help">${esc(t(linked ? "hooks.antigravity.on" : on ? "hooks.antigravity.off" : "hooks.antigravity.needs"))}</span>
       <span class="command"><button class="button${linked ? "" : " primary"}" id="antigravityToggle"${!linked && !on ? " disabled" : ""}>${esc(t(linked ? "hooks.antigravity.unlink" : "hooks.antigravity.link"))}</button></span></div>`
-      + (linked && h.antigravity_policy !== "protect" ? `<div class="note warning" data-hook-note="antigravity-policy">${esc(t("hooks.antigravity.policy", {policy: t(`services.policy.${h.antigravity_policy}`)}))}</div>` : "")
+      + (linked && h.antigravity_policy !== "protect" ? policyNote(t("hooks.antigravity.policy", {policy: t(`services.policy.${h.antigravity_policy}`)}), "antigravity", "Antigravity", "hook") : "")
       + (ag.unreadable ? `<div class="note warning" data-hook-note="antigravity-unreadable">${esc(t("hooks.antigravity.unreadable", {file: ag.file}))}</div>` : ""));
     $("#antigravityToggle").onclick = test(async () => drawHook(await api("/api/hook", {action: linked ? "antigravity_unlink" : "antigravity_link"})));
   }
   $("#hookToggle").onclick = test(async () => drawHook(await api("/api/hook", {action: on ? "remove" : "install"})));
+  wireCopy(el);
+  wireProtect(el, async () => drawHook(await api("/api/hook")));
 };
 const connectApp = el => {
   el.innerHTML = `<section class="card" aria-label="${esc(t("connections.card.app"))}" id="appListing"><div class="empty">…</div></section>`
@@ -927,7 +944,7 @@ const connectCompatibility = test(async el => {
   const line = g => `<tr><td><b>${esc(g.name)}</b></td><td>${esc(tSe("via." + g.via, g.via))}</td><td>${esc(g.client || t("compatibility.unknown"))}</td>
     <td>${label(t(`compatibility.status.${g.status}`), g.status === "works" ? "ok" : "warning")}<div class="below">${g.methods.map(m => esc(t(`compatibility.method.${m}`))).join(", ")}</div></td>
     <td>${when(g.last_ok) || "–"}<div class="below">${esc(t("compatibility.counts", {ok: g.ok, restoring: g.restoring, unread: g.unread}))}</div></td></tr>`;
-  const verified = v => `<tr><td><b>${esc(v.name || t("compatibility.every_service"))}</b></td><td>${esc(tSe("via." + v.via, v.via))}</td><td>${esc([v.client, v.version].filter(Boolean).join(" "))}</td>
+  const verified = v => `<tr><td><b>${esc(v.name || t(v.via === "clipboard" ? "compatibility.any_program" : "compatibility.every_service"))}</b></td><td>${esc(tSe("via." + v.via, v.via))}</td><td>${esc([v.client, v.version].filter(Boolean).join(" "))}</td>
     <td>${label(t(`compatibility.level.${v.level}`), v.level === "live" ? "ok" : "")}<div class="below">${esc(t(`compatibility.method.${v.method}`))}</div></td><td>${esc(v.data || "")}</td></tr>`;
   const head = columns => `<thead><tr>${columns.map(k => `<th scope="col">${esc(t(`compatibility.column.${k}`))}</th>`).join("")}</tr></thead>`;
   el.innerHTML = `<section class="card"><div class="inside"><div class="line"><h2>${esc(t("compatibility.sightings"))}</h2><span class="space"></span><button class="button" id="copyCompatibility">${esc(t("compatibility.copy"))}</button></div>
