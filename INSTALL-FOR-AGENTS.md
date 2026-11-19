@@ -81,8 +81,8 @@ powershell -ExecutionPolicy Bypass -File "$dir\Get-OmissisStatus.ps1"
 One line of JSON with version, model and state. Exit code `0` means protection is on, `1` installed but off,
 `2` not installed. If it is `1` right after installing, wait for the model and run it again.
 
-The panel is at <http://127.0.0.1:8766>. Tell the person to open it: on first start it shows a short guided setup.
-Do not go through that setup for them.
+The panel is at <http://127.0.0.1:8766>. Tell the person to open it: on first start it shows a guided setup that
+finds the AI tools on the PC, asks what to protect and connects it. Do not go through that setup for them.
 
 ## Step 4. Connect the tools (ASK for each one)
 

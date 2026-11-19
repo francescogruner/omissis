@@ -66,6 +66,7 @@ chiama «Anonimizza» perché è la parola più conosciuta, ma il senso tecnico 
 | 📄 **Documenti e cartelle** | Trascini un file o una cartella nel pannello e ottieni la copia con i segnaposto; poi rimetti i valori veri nel risultato |
 | ⌨️ **Qualsiasi programma** | Selezioni un testo ovunque e premi `Ctrl+Alt+S`; mascheri e ripristini gli appunti con due scorciatoie |
 | 🚦 **Una regola per servizio** | Proteggi, registra, blocca o ignora ogni servizio AI; vedi quali contatta il PC (Shadow AI) |
+| 🧭 **Primo avvio guidato** | Trova gli strumenti AI sul PC, fa spuntare cosa proteggere e lo collega; poi, quando apri un'app AI per la prima volta, chiede cosa fare |
 | 🏢 **Pronto per molti PC** | Installazione silenziosa, impostazioni bloccate e stato da RMM, Intune o script di accesso; console centrale facoltativa |
 | 🇮🇹 **Pensato per l'italiano** | Il modello è addestrato su dati italiani (codici fiscali, partite IVA, IBAN, indirizzi) e lavora in 23 lingue |
 
@@ -191,6 +192,13 @@ app\.venv\Scripts\python app\panel.py
 Questa è l'**installazione leggera**: il modello gira sul processore in formato ONNX, senza PyTorch (circa 150 MB di
 librerie invece di qualche GB), e trova esattamente gli stessi dati del motore PyTorch (lo controlla
 `model/compare_engines.py`). Per usare la scheda grafica si installa invece `model\requirements.txt`.
+
+Al primo avvio il pannello apre una configurazione guidata di otto passi, ognuno saltabile: un video di 26 secondi e
+una prova con dati inventati, la ricerca degli strumenti AI sul PC (programmi, estensioni, comandi da terminale,
+modelli in locale, siti AI), cosa proteggere, il collegamento di ciò che hai scelto (estensione del browser, app
+desktop, plugin di Claude Code, Antigravity dal gateway), quali dati sostituire, la ricerca periodica, gli altri PC.
+Poi, quando apri un'app AI che non ha ancora una regola, una notifica vicino all'orologio chiede cosa fare:
+proteggere, registrare soltanto, bloccare, disattivare per quell'app, non ora, non chiederlo più.
 
 Il pannello si apre su `http://127.0.0.1:8766`. Da lì: mascherare un testo a mano, anonimizzare documenti, caricare
 e collegare l'estensione, collegare le app desktop e gli strumenti da terminale. Tutto il resto è in

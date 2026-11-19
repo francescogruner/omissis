@@ -55,6 +55,10 @@ and whatever is written in this registry key always wins over the console's rule
 `"always_on": true` in the locked settings means protection cannot be stopped from the panel or from the icon next to
 the clock, and the program cannot be quit from the icon. It does not stop a user who closes it from Task Manager.
 
+`"onboarded": true` hides the guided setup. Without it, on first start the user goes through it with your locked
+choices shown as locked and without the steps you decided. `"ask_apps": false` turns off the question Omissis asks
+when an AI app without a rule is opened; apps whose rule you set in `policies` never ask.
+
 Tested on 14 November 2026 on a single Windows 11 PC with Windows PowerShell 5.1 (silent install in 21 seconds,
 state, removal with nothing left behind); `Set-OmissisPolicy.ps1` on a scratch key of the user and, without
 administrator rights, on the real key, where it refuses. Not yet tested: `Set-OmissisPolicy.ps1` actually run as

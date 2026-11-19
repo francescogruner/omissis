@@ -207,7 +207,11 @@ def close_app(key, grace=8):
     """Chiude l'app: prima chiede alle sue finestre di chiudersi, poi ferma cio' che resta (molte app, chiusa la finestra,
     restano accese vicino all'orologio, e finche' sono accese non si possono riavviare con la porta). Va chiamata solo quando
     chi usa il PC lo ha chiesto: quello che nell'app non era stato inviato o salvato si perde."""
-    process = APP[key].get("process")
+    return close_process(APP[key].get("process"), grace)
+
+
+def close_process(process, grace=8):
+    """Come close_app, per un programma qualsiasi: (nome, espressione per il percorso completo)."""
     mine = set(processes(process))
     if not mine:
         return True

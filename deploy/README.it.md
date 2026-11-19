@@ -62,6 +62,8 @@ Solo le chiavi scritte nel file vengono imposte; ogni altra impostazione resta c
 | `groups_off` | `payments`, `organizations`, `it`, `records` | Gruppi di dati da **non** sostituire, scritti a mano (vince sul profilo). Di serie solo `organizations`: spegnere uno degli altri riduce la protezione |
 | `always_on` | `true` | La protezione non si ferma dal pannello né dall'icona, e il programma non si chiude dall'icona. Non ferma chi lo chiude da Gestione attività |
 | `view` | `simple`, `advanced` | Che cosa vede l'utente quando apre il pannello |
+| `onboarded` | `true` | La configurazione guidata non compare. Senza, al primo avvio l'utente la vede con le scelte già imposte bloccate e senza i passi decisi da te |
+| `ask_apps` | `true` (di serie), `false` | Quando l'utente apre un'app AI senza una regola, Omissis gli chiede che cosa fare. Le app con una regola imposta in `policies` non chiedono nulla |
 | `language` | `it`, `en`, `auto` | La lingua del pannello |
 | `engine_url`, `engine_key`, `engine_pin` | la configurazione data dal PC che presta il modello | Il PC non carica il modello: lo chiede a quel server della rete (vedi `app/README.it.md`, «Server di inferenza in rete») |
 

@@ -157,7 +157,7 @@ LOCAL = [
 RX_EXTENSION = re.compile(r"(?i)chat ?gpt|\bgpt\b|claude|copilot|gemini|perplexity|deepseek|\bai\b|a\.i\.|assistant|grammarly|deepl|"
                            r"monica|sider|merlin|maxai|harpa|wiseone|jasper|quillbot|otter|fireflies|tl;?dv|read ai|compose|"
                            r"codeium|tabnine|cline|continue|cody|roo|kilo|windsurf|amazon q|llm|ollama|whisper|transcri|summar|riassun")
-RX_CLI = ["claude", "codex", "gemini", "ollama", "aider", "llm", "opencode", "qwen", "cursor-agent", "copilot", "goose", "lms", "hermes", "openclaw", "antigravity"]
+RX_CLI = ["claude", "codex", "gemini", "ollama", "aider", "llm", "opencode", "qwen", "cursor-agent", "copilot", "goose", "lms", "hermes", "openclaw", "antigravity", "agy"]
 
 POLICIES = ("protect", "record", "block", "ignore")
 

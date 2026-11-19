@@ -66,6 +66,7 @@ is called "Anonymise" because it is the better-known word, but this is what it m
 | 📄 **Documents and folders** | Drop a file or a folder in the panel and get the copy with placeholders, then put the real values back in the result |
 | ⌨️ **Any program** | Select text anywhere and press `Ctrl+Alt+S`; mask and restore the clipboard with two shortcuts |
 | 🚦 **One rule per service** | Protect, log, block or ignore each AI service; see which ones the PC contacts (Shadow AI) |
+| 🧭 **Guided first start** | Finds the AI tools on the PC, lets you tick what to protect and connects it; later, when you open an AI app for the first time, it asks what to do |
 | 🏢 **Ready for many PCs** | Silent install, locked settings and status reports from RMM, Intune or a logon script; optional central console |
 | 🇮🇹 **Italian first** | The model is trained on Italian data (tax codes, VAT numbers, IBANs, Italian addresses) and works in 23 languages |
 
@@ -191,6 +192,13 @@ app\.venv\Scripts\python app\panel.py
 This is the **light install**: the model runs on the CPU in ONNX format, without PyTorch (about 150 MB of libraries
 instead of several GB), and finds exactly the same data as the PyTorch engine (`model/compare_engines.py` checks
 it). To use a GPU, install `model\requirements.txt` instead.
+
+On first start the panel opens a guided setup of eight steps, each one can be skipped: a 26-second video and a try
+with made-up data, a search for the AI tools on the PC (programs, extensions, terminal commands, local models, AI
+sites), what to protect, connecting what you chose (browser extension, desktop apps, the Claude Code plugin,
+Antigravity through the gateway), which data to replace, the periodic search, other PCs. Afterwards, when you open
+an AI app that has no rule yet, a notification next to the clock asks what to do: protect, only record, block,
+turn off for that app, not now, don't ask again.
 
 The panel opens at `http://127.0.0.1:8766`. From there: mask a text by hand, anonymise documents, load and pair the
 browser extension, connect desktop apps and terminal tools. Everything else is in

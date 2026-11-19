@@ -45,6 +45,9 @@ DEFAULTS = {
     "console_pin": "",            # impronta SHA-256 del certificato della console, per quelle in rete locale che se lo fanno da se'
     "console_rules": False,       # True: questo PC applica le regole che la console gli manda (solo quelle di CONSOLE_RULES)
     "onboarded": False,           # la configurazione guidata del primo avvio e' gia' stata vista (o saltata)
+    # quando si apre un'app AI che non ha ancora una regola scelta, Omissis chiede che cosa fare (una volta per app)
+    "ask_apps": True,
+    "ask_never": [],              # le app per cui chi usa il PC ha risposto «Non chiederlo piu'» (id del servizio)
     # server di inferenza in rete (facoltativo, vedi remote.py). Un PC o presta il suo modello o lo chiede a un altro
     "engine_url": "",             # indirizzo https del server: il modello lo ha lui, questo PC gli chiede il riconoscimento
     "engine_key": "",             # la chiave che il server da' ai PC dell'organizzazione
@@ -149,9 +152,15 @@ def locked(cfg_imposed=None):
 
 
 def first_run(test=False):
-    """Va proposta la configurazione guidata? Solo a chi apre il programma per la prima volta e lo configura da se':
-    su un PC con impostazioni imposte ha gia' deciso chi lo amministra, e nelle prove automatiche coprirebbe la pagina."""
-    return not test and not read()["onboarded"] and not any(locked().values())
+    """Va proposta la configurazione guidata? A chi apre il programma per la prima volta. Su un PC con impostazioni imposte
+    la guida salta i passi gia' decisi e mostra bloccate le regole imposte; chi amministra il PC la toglie del tutto
+    imponendo onboarded. Nelle prove automatiche no: coprirebbe la pagina."""
+    return not test and not read()["onboarded"]
+
+
+def own_policies():
+    """Le regole scelte da chi usa il PC, servizio per servizio (senza quelle di serie e senza quelle imposte)."""
+    return {k: v for k, v in (_own().get("policies") or {}).items() if k in catalog.PER_ID}
 
 
 def read():
@@ -269,6 +278,8 @@ def _clean(data):
     clean["policies"] = {k: v for k, v in (clean["policies"] or {}).items()
                            if k in catalog.PER_ID and v in catalog.POLICIES}
     clean["onboarded"] = clean["onboarded"] is True
+    clean["ask_apps"] = clean["ask_apps"] is not False
+    clean["ask_never"] = sorted({str(x) for x in (clean["ask_never"] if isinstance(clean["ask_never"], list) else []) if str(x) in catalog.PER_ID})
     clean["always_on"] = clean["always_on"] is True
     clean["profile"] = clean["profile"] if clean["profile"] in PROFILES else ""
     date = clean["shortcuts"] if isinstance(clean["shortcuts"], dict) else {}

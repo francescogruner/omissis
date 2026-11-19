@@ -63,11 +63,41 @@ Le sezioni, senza doppioni:
 | Attività | il registro delle richieste | tecnico |
 | Archivio | la corrispondenza tra segnaposto e valori: ricerca, eliminazioni mirate, pulizia | tecnico |
 
-**Configurazione guidata.** La prima volta che si apre il pannello compare una finestra di pochi passi,
-ognuno saltabile: una prova con dati inventati (che non entra nei conteggi), dove si usa l'AI (browser, app
-installate, terminale), il collegamento dell'estensione del browser, e due righe su che cosa sapere. Chiusa o
-saltata, non torna più (`onboarded` nelle impostazioni); si rivede dalla Guida. Non compare sui PC con
-impostazioni imposte da chi li amministra. L'estensione, appena installata, apre a sua volta una pagina che
+**Configurazione guidata.** La prima volta che si apre il pannello compare una finestra di otto passi, ognuno
+saltabile (`onboarding.py` e la parte 4 di `app.js`):
+
+1. il video di 26 secondi e una prova con dati inventati (che non entra nei conteggi);
+2. la ricerca degli strumenti AI sul PC, in sette ricerche mostrate una alla volta (programmi installati e aperti,
+   estensioni del browser e dell'editor, comandi da terminale, modelli in locale, siti AI aperti di recente); finita,
+   diventa un'analisi dell'inventario come quella a mano;
+3. «Cosa proteggo?»: una riga per servizio trovato, con dove è stato trovato e come si protegge. Si spunta quello da
+   proteggere (al primo avvio è tutto spuntato, anche ciò che è «in prova»); quelli che non si lasciano leggere
+   (Cursor, GitHub Copilot) si possono solo registrare o bloccare; i modelli in locale non hanno nulla da proteggere.
+   Senza la ricerca si propongono i più usati. Andando avanti si salvano solo le regole cambiate;
+4. i collegamenti per ciò che si è scelto: l'estensione del browser, le app desktop (chiudi e riapri protetta),
+   il plugin di Claude Code (installato con i comandi di Claude Code), Antigravity (si chiude e si riapre con
+   `CLOUD_CODE_URL` rivolto al gateway, ed è collegato al comando di Omissis), i comandi per i plugin di Codex e
+   Gemini CLI. Ciò che si lascia «più tardi» finisce nell'elenco «Da fare» del riepilogo;
+5. il profilo dei dati da sostituire, con le voci una per una;
+6. ogni quanto ripetere la ricerca e l'avviso per le app AI nuove;
+7. gli altri PC: la guida per installarlo su molti PC, prestare il modello, la pagina della console;
+8. il riepilogo. Se una regola nuova lo chiede, alla fine la protezione si riavvia.
+
+Chiusa o saltata, non torna più (`onboarded` nelle impostazioni); si rivede dalla Guida. Sui PC con impostazioni
+imposte da chi li amministra i passi già decisi (dati da sostituire, altri PC) non compaiono e le regole imposte si
+vedono bloccate; chi amministra il PC la toglie del tutto imponendo `onboarded`.
+
+**Avviso per le app AI nuove.** Ogni 15 secondi il programma guarda quali app AI sono aperte (Claude, ChatGPT,
+Kimi, Copilot, Perplexity, Antigravity, Cursor, Windsurf, DeepL; riconosciute dal programma e dal suo percorso,
+così il Claude da terminale non si confonde con l'app). Quando se ne apre una per cui chi usa il PC non ha ancora
+scelto una regola, compare una notifica vicino all'orologio; il clic apre una finestrella del pannello
+(`#/ask/<servizio>`, Edge in modalità app) con le scelte: Proteggi (dove si può: l'app si chiude e si riapre
+protetta), Registra soltanto, Blocca (per quelle che non si leggono), Disattiva per quest'app, Non ora, Non
+chiederlo più (`ask_never`). Le app in attesa di risposta compaiono anche nella pagina Inizio. Mai durante la
+configurazione guidata; si spegne in Servizi AI → Rilevati su questo PC (`ask_apps`). Se la regola l'ha imposta
+chi amministra il PC non si chiede nulla: la notifica lo dice una volta.
+
+L'estensione, appena installata, apre a sua volta una pagina che
 dice che cosa manca (il collegamento al programma) e lo fa fare con un clic: il pannello aperto da lì
 (`#/connect`) consegna da solo il codice di collegamento a quel browser.
 

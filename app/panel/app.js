@@ -198,6 +198,7 @@ DRAW.start = el => {
     <div id="reduced"></div>
     <div id="remoteDown"></div>
     <div id="update"></div>
+    <div id="asks"></div>
     <div class="badges">${["text", "documents", "guide"].map(v => `<a class="badge" href="#/${v}">${icon(v)}<b>${esc(t(`start.badge.${v}`))}</b><span>${esc(t(`start.badge.${v}.below`))}</span></a>`).join("")}</div>
     <div class="grid">${["messages", "replacements", "blocked"].map(k => card(`<div class="number" id="n-${k}">0</div><div class="faded small">${esc(t(`start.today.${k}`))}</div>`)).join("")}
       ${card(`<div class="number" id="n-entries">–</div><div class="faded small">${esc(t("start.entries"))}</div>`, "", "only-advanced")}</div>
@@ -210,6 +211,12 @@ DRAW.start = el => {
     ${card(`<h2>${esc(t("start.chart.kinds"))}</h2><div class="bars" id="byKind"></div>`, "", "only-advanced")}`;
   $("#main_switch").onclick = test(async () => { await api("/api/protection", {action: ["active", "model"].includes(S?.phase) ? "stop" : "launch"}); readStatus(); });
   $("#restart").onclick = test(async () => { await api("/api/protection", {action: "restart"}); readStatus(); });
+  // le app AI aperte che aspettano una risposta: se la notifica vicino all'orologio e' sfuggita, si risponde da qui
+  api("/api/ask").then(x => {
+    if (!$("#asks")) return;
+    $("#asks").innerHTML = x.pending.map(e => `<div class="note" data-ask="${esc(e.id)}"><span>${esc(t("start.ask", {app: e.name}))}</span>
+      <a class="button small" href="/#/ask/${encodeURIComponent(e.id)}" target="_blank" rel="noopener">${esc(t("start.ask.choose"))}</a></div>`).join("");
+  }).catch(() => {});
   channels();
 };
 REFRESH.start = s => {
@@ -997,6 +1004,7 @@ const detectedServices = test(async el => {
     + `<section class="card"><div class="inside">
         <div class="line"><div><h2>${esc(t("inventory.title"))}</h2><div class="faded small" id="invWhen" aria-live="polite"></div></div><span class="space"></span>
           <label class="line small" for="invEvery">${esc(t("inventory.repeat"))}<select id="invEvery">${["weekly", "daily", "never"].map(v => `<option value="${v}">${esc(t(`inventory.repeat.${v}`))}</option>`).join("")}</select></label>
+          <label class="line small"><span class="toggle"><input type="checkbox" role="switch" id="invAsk"><span></span></span><span>${esc(t("inventory.ask"))}</span></label>
           <button class="button primary" id="analyze">${esc(t("inventory.analyze"))}</button></div>
         <div id="invNews" class="block"></div>
         <div class="line"><input type="search" id="invSearch" class="space" placeholder="${esc(t("inventory.search"))}" aria-label="${esc(t("inventory.search"))}">
@@ -1043,6 +1051,9 @@ const detectedServices = test(async el => {
   $("#invSearch").oninput = draw;
   $("#invWhich").onchange = draw;
   $("#invEvery").onchange = test(async e => { await save({scan: e.target.value}); inv = await api("/api/inventory"); draw(); });
+  // l'avviso quando si apre un'app AI senza una regola scelta (lo stesso interruttore della configurazione guidata)
+  api("/api/settings").then(i => { $("#invAsk").checked = i.ask_apps; lock(i, [["#invAsk", "ask_apps"]]); }).catch(() => {});
+  $("#invAsk").onchange = test(e => save({ask_apps: e.target.checked}));
   $("#analyze").onclick = test(async e => {
     e.target.disabled = true;
     $("#invWhen").textContent = t("detected.pending");
@@ -1166,39 +1177,201 @@ DRAW.vault = el => {
 
 // ------------------------------------------------------------------ 4. configurazione guidata
 
-// Al primo avvio, e quando la si richiama dalla Guida: pochi passi, ognuno saltabile. Non decide nulla che non si possa
-// cambiare dopo dalle pagine normali; alla chiusura il programma si ricorda che e' stata vista.
+// Al primo avvio, e quando la si richiama dalla Guida: otto passi, ognuno saltabile. Ogni scelta vale subito e si cambia
+// dopo dalle pagine normali. Su un PC gestito i passi gia' decisi da chi lo amministra non compaiono e le regole imposte si
+// vedono bloccate. Alla chiusura il programma si ricorda che e' stata vista.
 const session = (key, value) => { try { if (value === undefined) return sessionStorage.getItem(key); sessionStorage.setItem(key, value); } catch { /* memoria del browser non disponibile */ } return null; };
 const connectThis = test(async () => { const d = await extensionData(); window.postMessage({omissis: "connect", token: d.token, port: d.port}, location.origin); });
+const SOURCES = ["programs", "processes", "browser", "editor", "commands", "local", "network"];
+const GUIDE_PAGES = {kit: "deploy", console: "console"};
+const guidePage = k => `https://github.com/francescogruner/omissis/blob/main/${GUIDE_PAGES[k]}/${LANGUAGE === "it" ? "README.it.md" : "README.md"}`;
 
-function welcome(from = 0) {
+async function welcome(from = 0) {
   const d = $("#welcome");
   if (d.open) return;
   // se la pagina viene ricaricata a meta' (serve dopo aver installato l'estensione) si riprende dal passo in cui si era
-  const st = {step: from || Number(session("welcome_step")) || 1, where: {browser: true, app: false, terminal: false}, tried: false};
-  try { if (!from) Object.assign(st.where, JSON.parse(session("welcome_where") || "{}")); } catch { /* si riparte dalle scelte di serie */ }
-  const steps = () => [1, 2, ...(st.where.browser ? [3] : []), 4];
-  const finish = async to => {
+  let saved = {};
+  try { if (!from) saved = JSON.parse(session("welcome_state") || "{}"); } catch { /* si riparte da capo */ }
+  const st = {step: 1, tried: false, scan: "idle", at: 0, shown: {}, total: 0, tools: null, pick: {}, rule: {}, conn: {}, others: "one", acts: {}, restart: false, open5: false, ...saved};
+  if (from) st.step = from;
+  if (st.scan === "running") st.scan = "idle";   // una ricerca interrotta da un ricaricamento si rifa'
+  let run = 0, cfg = null, apps = [], hooks = null;
+  const keep = () => session("welcome_state", JSON.stringify(st));
+  const lockedKey = k => cfg.managed.keys.includes(k);
+  const managed = () => cfg.managed.keys.length + cfg.managed.policies.length > 0;
+  const steps = () => [1, 2, 3, 4, ...(["profile", "groups_off", "categories"].some(lockedKey) ? [] : [5]), 6, ...(managed() ? [] : [7]), 8];
+  const rows = g => (st.tools || []).filter(r => r.group === g);
+  // spuntato: al primo avvio tutto cio' che si puo' proteggere; rivedendo la guida, cio' che e' protetto adesso
+  const picked = r => r.locked ? r.policy === "protect" : r.id in st.pick ? st.pick[r.id] : cfg.onboarded ? r.policy === "protect" : true;
+  const ruleOf = r => r.locked ? r.policy : st.rule[r.id] || (r.policy === "block" ? "block" : "record");
+  const stateOf = r => r.group === "protect" ? (r.locked ? r.policy : picked(r) ? "protect" : r.policy === "protect" ? "record" : r.policy) : ruleOf(r);
+  const profileNow = () => {
+    const same = (a, b) => [...a].sort().join() === [...b].sort().join();
+    return Object.keys(cfg.profiles).find(k => same(cfg.profiles[k].groups_off, cfg.groups_off) && same(cfg.profiles[k].categories, cfg.categories)) || "custom";
+  };
+  const special = () => cfg.profiles.special.categories;
+  const details = () => cfg.profiles.maximum.categories.filter(c => !special().includes(c));
+  const groupOn = g => g === "special" ? special().every(c => cfg.categories.includes(c)) : g === "details" ? details().every(c => cfg.categories.includes(c)) : !cfg.groups_off.includes(g);
+
+  const prepare = async () => {
+    const tasks = [api("/api/settings").then(x => { cfg = x; })];
+    if ([3, 4, 8].includes(st.step) && !st.tools) tasks.push(api("/api/welcome/tools").then(x => { st.tools = x.tools; }));
+    if ([4, 8].includes(st.step)) tasks.push(api("/api/app").then(x => { apps = x; }), api("/api/hook").then(x => { hooks = x; }));
+    await Promise.all(tasks.map(p => p.catch(() => {})));
+  };
+  // il passo «Cosa proteggo?» si applica andando avanti: solo le regole cambiate, mai quelle imposte
+  const applyRules = async () => {
+    const policies = {};
+    (st.tools || []).filter(r => !r.locked && r.group !== "local").forEach(r => { const want = stateOf(r); if (want !== r.policy) policies[r.id] = want; });
+    if (!Object.keys(policies).length) return;
+    const x = await api("/api/welcome/rules", {policies});
+    st.restart = st.restart || x.restart_needed;
+    st.tools.forEach(r => { if (policies[r.id]) r.policy = policies[r.id]; });
+  };
+  const finish = async (to, closed) => {
     guide = null;
-    session("welcome_step", ""); session("welcome_where", "");
+    session("welcome_state", "");
     if (d.open) d.close();
     await api("/api/settings", {onboarded: true}).catch(() => {});
+    // una regola nuova su un servizio che si legge (Gemini, Perplexity...) vale dal prossimo avvio della protezione
+    if (st.restart && S && S.phase === "active") { notify(t("welcome.8.restarting")); api("/api/protection", {action: "restart"}).then(readStatus).catch(() => {}); }
+    if (closed) notify(t("welcome.closed"));
     if (to) { if (view !== "advanced") changeView(true); location.hash = to; }
     else if (location.hash === "#/welcome") location.hash = "#/start";
   };
   // dopo un cambio di passo il fuoco va al pulsante per proseguire: chi usa la tastiera continua con Invio
-  const move = by => { const all = steps(), i = Math.max(0, all.indexOf(st.step)); st.step = all[Math.max(0, Math.min(all.length - 1, i + by))]; session("welcome_step", String(st.step)); draw(); $("#welcomeNext").focus(); };
-  const body = {
-    1: () => `<textarea id="welcomeText" aria-label="${esc(t("welcome.1.field"))}">${esc(t("welcome.1.example"))}</textarea>
-      <div class="line"><button class="button primary" id="welcomeTry">${esc(t("welcome.1.try"))}</button><button class="button" id="welcomeStart" hidden>${esc(t("start.launch"))}</button><span class="faded small" id="welcomeState" role="status"></span></div>
-      <div class="outcome" id="welcomeResult" aria-live="polite" hidden></div><p class="help" id="welcomeFound" hidden></p>`,
-    2: () => ["browser", "app", "terminal"].map(k => `<label class="pick"><input type="checkbox" data-where="${k}" ${st.where[k] ? "checked" : ""}><span><b>${esc(t(`welcome.where.${k}`))}</b><span class="help">${esc(t(`welcome.where.${k}.below`))}</span></span></label>`).join(""),
-    3: () => `<div class="line"><span class="label" id="welcomeExt">…</span><span class="space"></span><button class="button primary" id="welcomeConnect" hidden>${esc(t("browser.connect"))}</button></div>
-      <div id="welcomeInstall" hidden><div id="welcomeStoreBox" hidden><p class="help">${esc(t("welcome.3.store"))}</p>
-        <div class="line"><a class="button primary" id="welcomeStore" target="_blank" rel="noopener">${esc(t("browser.store"))}</a></div><p class="help">${esc(t("welcome.3.reload"))}</p></div>
-      <div id="welcomeManual"><p class="help">${esc(t("welcome.3.absent"))}</p><ol class="listing"><li>${t("browser.installation.1")}</li><li>${t("browser.installation.2")}<div class="line"><code id="welcomeFolder">…</code></div></li><li>${esc(t("welcome.3.reload"))}</li></ol></div></div>`,
-    4: () => `<ul class="listing"><li>${esc(t("welcome.4.default"))}</li><li>${esc(t("welcome.4.icon"))}</li>${st.where.app || st.where.terminal ? `<li>${esc(t("welcome.4.more"))}</li>` : ""}</ul>`,
+  const move = async (by, apply) => {
+    if (apply && by > 0 && st.step === 3) await applyRules();
+    const all = steps(), i = Math.max(0, all.indexOf(st.step));
+    st.step = all[Math.max(0, Math.min(all.length - 1, i + by))];
+    keep();
+    await prepare();
+    draw();
+    $("#welcomeNext")?.focus();
   };
+  const startScan = async () => {
+    const mine = ++run;
+    Object.assign(st, {scan: "running", at: 0, shown: {}, tools: null});
+    draw();
+    for (let j = 0; j < SOURCES.length; j++) {
+      const r = await api("/api/welcome/scan", {source: SOURCES[j]}).catch(() => ({show: []}));   // una ricerca andata male: si va avanti
+      if (mine !== run) return;
+      st.shown[SOURCES[j]] = r.show; st.at = j + 1;
+      if (st.step === 2) draw();
+    }
+    const r = await api("/api/welcome/scan", {source: "done"}).catch(() => null);
+    if (mine !== run) return;
+    Object.assign(st, {tools: r ? r.tools : null, total: r ? r.total : 0, scan: "done"});
+    keep();
+    if (st.step === 2) { draw(); $("#welcomeNext").focus(); }
+  };
+  // i collegamenti da fare per cio' che e' stato scelto al passo prima
+  const connections = () => {
+    const chosen = (st.tools || []).filter(r => r.group === "protect" && stateOf(r) === "protect"), out = [];
+    const web = chosen.filter(r => ["browser", "app", "box"].includes(r.how));
+    if (web.length) out.push({key: "browser", title: t("welcome.4.browser"), sub: t("welcome.4.browser.for", {names: web.map(r => r.name).join(", ")}),
+      done: !!(extension && extension.connected && extension.ok), todo_text: t("welcome.todo.browser")});
+    apps.filter(a => a.installed && !a.plugin && !a.refuses && chosen.some(r => r.id === a.service_id)).forEach(a => out.push({key: `app-${a.id}`, app: a, title: a.name,
+      todo: a.open_unprotected ? t("welcome.4.app.todo") : a.own_profile ? t("welcome.4.app.profile") : t("welcome.4.app.closed"), done: a.connected,
+      acts: [["app", a.open_unprotected ? t("welcome.4.reopen") : t("welcome.4.open"), true], ["later", t("welcome.4.later")]], ok: t("welcome.4.app.done"),
+      todo_text: t("welcome.todo.app", {name: a.name})}));
+    if (chosen.some(r => r.id === "anthropic-api" && r.how === "plugin"))
+      out.push({key: "cc", title: "Claude Code", todo: t("welcome.4.cc.todo"), acts: [["cc", t("welcome.4.cc.button"), true], ["later", t("welcome.4.later")]],
+        ok: t("welcome.4.cc.done"), todo_text: t("welcome.todo.cc")});
+    if (chosen.some(r => r.id === "antigravity"))
+      out.push({key: "ag", title: "Antigravity", todo: t("welcome.4.ag.todo"), acts: [["ag", t("welcome.4.reopen"), true], ["later", t("welcome.4.later")]],
+        ok: st.conn.ag === "linked" ? t("welcome.4.ag.linked") : t("welcome.4.ag.done"), todo_text: t("welcome.todo.ag")});
+    [["chatgpt", "codex"], ["gemini-api", "gemini"]].forEach(([id, platform]) => {
+      const p = hooks && hooks.platforms.find(x => x.id === platform);
+      if (p && chosen.some(r => r.id === id && r.commands.includes(platform)))
+        out.push({key: platform, title: p.name, todo: t("welcome.4.cli.todo"), code: p.commands.join("\n"), acts: [["copy", t("welcome.4.cli.copy"), true]],
+          ok: t("welcome.4.cli.done"), todo_text: t("welcome.todo.cli", {name: p.name})});
+    });
+    return out;
+  };
+  const isDone = c => c.done || ["done", "linked"].includes(st.conn[c.key]);
+  const where = r => { const s = r.where.map(w => t(`welcome.where.${w}`)).join(", "); return s.charAt(0).toUpperCase() + s.slice(1); };
+  const meta = (r, how) => `<span class="tmeta">${esc([where(r), t(`welcome.how.${how}`)].filter(Boolean).join(" · "))}${r.locked ? ` · <b>${esc(t("welcome.locked"))}</b>` : ""}</span>`;
+
+  const BODY = {
+    1: () => `<div class="first">
+        <figure class="clip"><video src="/welcome.mp4" poster="/welcome.jpg" controls muted playsinline preload="metadata" aria-label="${esc(t("welcome.1.video"))}"></video>
+          <figcaption>${esc(t("welcome.1.video"))}${LANGUAGE === "it" ? "" : ` · ${esc(t("welcome.1.video_language"))}`}</figcaption></figure>
+        <div class="try"><h3>${esc(t("welcome.1.try_title"))}</h3>
+          <textarea id="welcomeText" aria-label="${esc(t("welcome.1.field"))}">${esc(t("welcome.1.example"))}</textarea>
+          <div class="line"><button class="button primary" id="welcomeTry">${esc(t("welcome.1.try"))}</button><button class="button" id="welcomeStart" hidden>${esc(t("start.launch"))}</button><span class="faded small" id="welcomeState" role="status"></span></div>
+          <div class="outcome" id="welcomeResult" aria-live="polite" hidden></div><p class="help" id="welcomeFound" hidden></p></div></div>`,
+    2: () => ["idle", "skipped"].includes(st.scan)
+      ? `<div class="line"><button class="button primary" id="welcomeScan">${esc(t("welcome.2.start"))}</button><span class="faded small">${esc(t("welcome.2.time"))}</span></div>`
+      : `<ul class="sources" aria-live="polite">${SOURCES.map((k, j) => {
+          const state = st.scan === "done" || j < st.at ? "ok" : j === st.at ? "run" : "wait", found = st.shown[k] || [];
+          const right = state === "ok" ? (found.length ? found.slice(0, 5).join(", ") + (found.length > 5 ? ` +${found.length - 5}` : "") : t("welcome.2.none")) : state === "run" ? t("welcome.2.looking") : "";
+          return `<li><span class="st ${state}" aria-hidden="true"></span><span>${esc(t(`welcome.source.${k}`))}</span><span class="found">${esc(right)}</span></li>`;
+        }).join("")}</ul>${st.scan === "done" ? `<p class="note small" id="welcomeTotal" role="status">${esc(st.total ? t("welcome.2.total", {n: num(st.total)}) : t("welcome.2.nothing"))}</p>` : ""}`,
+    3: () => {
+      const prot = rows("protect"), count = rows("count"), local = rows("local"), n = prot.filter(r => stateOf(r) === "protect").length;
+      const options = r => [...new Set(["record", "block", ruleOf(r)])].map(v => `<option value="${v}" ${ruleOf(r) === v ? "selected" : ""}>${esc(t(`welcome.state.${v}`))}</option>`).join("");
+      return `${st.scan !== "done" ? `<p class="note small">${esc(t("welcome.3.skipped"))}</p>` : ""}${(st.tools || []).some(r => r.locked) ? `<p class="note small">${esc(t("welcome.managed"))}</p>` : ""}
+        <div class="line"><span class="small faded" id="welcomeSelected">${esc(t("welcome.3.selected", {n, total: prot.length}))}</span><span class="space"></span>
+          <button class="button small" id="welcomeAll">${esc(t("welcome.3.all"))}</button><button class="button small" id="welcomeNone">${esc(t("welcome.3.none"))}</button></div>
+        <div class="tools">${prot.length ? `<p class="tgroup">${esc(t("welcome.3.group.protect"))}</p>` : ""}${prot.map(r => `<label class="tool${r.locked ? " locked" : ""}">
+            <input type="checkbox" data-pick="${esc(r.id)}" ${stateOf(r) === "protect" ? "checked" : ""} ${r.locked ? "disabled" : ""}>
+            <span class="tbody"><span class="tname">${esc(r.name)}${r.trial ? " " + label(t("welcome.3.trial")) : ""}</span>${meta(r, r.how)}</span>
+            ${label(t(`welcome.state.${stateOf(r)}`), stateOf(r) === "protect" ? "ok" : "")}</label>`).join("")}
+          ${count.length ? `<p class="tgroup">${esc(t("welcome.3.group.count"))}</p>` : ""}${count.map(r => `<div class="tool static${r.locked ? " locked" : ""}">
+            <span class="tbody"><span class="tname">${esc(r.name)}</span>${meta(r, "count")}</span>
+            <select data-rule="${esc(r.id)}" aria-label="${esc(t("welcome.3.rule_for", {name: r.name}))}" ${r.locked ? "disabled" : ""}>${options(r)}</select></div>`).join("")}
+          ${local.length ? `<p class="tgroup">${esc(t("welcome.3.group.local"))}</p>` : ""}${local.map(r => `<div class="tool static">
+            <span class="tbody"><span class="tname">${esc(r.name)}</span><span class="tmeta">${esc(t("welcome.how.local"))}</span></span>${label(t("welcome.3.local"))}</div>`).join("")}</div>`;
+    },
+    4: () => {
+      const list = connections();
+      if (!list.length) return `<p class="note small">${esc(t("welcome.4.empty"))}</p>`;
+      return `<div class="conns">${list.map(c => {
+        if (c.key === "browser") return `<div class="conn"><div class="what"><b>${esc(c.title)}</b><span class="help">${esc(c.sub)}</span>
+            <div id="welcomeInstall" hidden><div id="welcomeStoreBox" hidden><p class="help">${esc(t("welcome.ext.store"))}</p>
+              <div class="line"><a class="button primary small" id="welcomeStore" target="_blank" rel="noopener">${esc(t("browser.store"))}</a></div><p class="help">${esc(t("welcome.ext.reload"))}</p></div>
+            <div id="welcomeManual"><p class="help">${esc(t("welcome.ext.absent"))}</p><ol class="listing"><li>${t("browser.installation.1")}</li><li>${t("browser.installation.2")}<div class="line"><code id="welcomeFolder">…</code></div></li><li>${esc(t("welcome.ext.reload"))}</li></ol></div></div></div>
+          <div class="do"><span class="label" id="welcomeExt">…</span><button class="button primary small" id="welcomeConnect" hidden>${esc(t("browser.connect"))}</button></div></div>`;
+        const done = isDone(c), later = !done && st.conn[c.key] === "later";
+        const right = done ? label(c.ok, "ok") : later ? label(t("welcome.4.later_done"), "warning")
+          : c.acts.map(([v, text, main]) => `<button class="button small${main ? " primary" : ""}" id="conn-${c.key}-${v}" data-conn="${c.key}" data-do="${v}">${esc(text)}</button>`).join("");
+        return `<div class="conn" data-conn-row="${c.key}"><div class="what"><b>${esc(c.title)}</b>${done || later ? "" : `<span class="help">${esc(c.todo)}</span>`}${c.code && !done ? `<pre>${esc(c.code)}</pre>` : ""}</div><div class="do">${right}</div></div>`;
+      }).join("")}</div>`;
+    },
+    5: () => {
+      const now = profileNow();
+      return `<div class="picks" role="radiogroup" aria-label="${esc(t("profile.title"))}">${Object.keys(cfg.profiles).map(k => `<label class="pick">
+          <input type="radio" name="welcomeProfile" value="${k}" ${now === k ? "checked" : ""}>
+          <span><b>${esc(t(`profile.${k}`))}${k === "standard" ? " " + label(t("welcome.5.recommended")) : ""}</b><span class="help">${esc(t(`profile.${k}.below`))}</span></span></label>`).join("")}
+          ${now === "custom" ? `<p class="note small">${esc(t("welcome.5.custom_now"))}</p>` : ""}</div>
+        <details class="more" id="welcomeMore5" ${st.open5 ? "open" : ""}><summary>${esc(t("welcome.5.custom"))}</summary><div class="glist">${
+          ["people", "secrets", "payments", "it", "records", "organizations", "special", "details"].map(g => `<div class="grow"><span id="wg-${g}">${esc(["special", "details"].includes(g) ? t(`welcome.5.${g}`) : t(`groups.${g}`))}</span>${
+            ["people", "secrets"].includes(g) ? label(t("groups.always")) : `<span class="toggle"><input type="checkbox" role="switch" data-group="${g}" aria-labelledby="wg-${g}" ${groupOn(g) ? "checked" : ""}><span></span></span>`}</div>`).join("")}</div></details>`;
+    },
+    6: () => `<div class="card"><div class="setting"><span class="name" id="welcomeEveryName">${esc(t("welcome.6.repeat"))}</span><span class="help">${esc(t("welcome.6.repeat.below"))}</span>
+        <span class="command"><span class="choice" role="radiogroup" aria-labelledby="welcomeEveryName">${["daily", "weekly", "never"].map(k => `<label><input type="radio" name="welcomeEvery" value="${k}" ${cfg.scan === k ? "checked" : ""} ${lockedKey("scan") ? "disabled" : ""}>${esc(t(`welcome.6.${k}`))}</label>`).join("")}</span></span></div>
+      <div class="setting"><span class="name" id="welcomeAskName">${esc(t("welcome.6.ask"))}</span><span class="help">${esc(t("welcome.6.ask.below"))}</span>
+        <span class="command"><span class="toggle"><input type="checkbox" role="switch" id="welcomeAsk" aria-labelledby="welcomeAskName" ${cfg.ask_apps ? "checked" : ""} ${lockedKey("ask_apps") ? "disabled" : ""}><span></span></span></span></div></div>`,
+    7: () => `<div class="picks" role="radiogroup" aria-labelledby="welcomeTitle">${["one", "many"].map(k => `<label class="pick"><input type="radio" name="welcomeOthers" value="${k}" ${st.others === k ? "checked" : ""}>
+        <span><b>${esc(t(`welcome.7.${k}`))}</b><span class="help">${esc(t(`welcome.7.${k}.below`))}</span></span></label>`).join("")}</div>
+      ${st.others === "many" ? `<div class="acts">${["kit", "share", "console"].map(k => `<div class="act"><b>${esc(t(`welcome.7.${k}`))}</b><p class="help">${esc(t(`welcome.7.${k}.below`))}</p>
+        <div class="line">${st.acts[k] || (k === "share" && cfg.serve) ? label(t(`welcome.7.${k}.done`), "ok") : `<button class="button small" id="welcomeAct-${k}" data-act="${k}">${esc(t(`welcome.7.${k}.button`))}</button>`}</div></div>`).join("")}</div>
+        <p class="help">${esc(t("welcome.7.use"))}</p>` : ""}`,
+    8: () => {
+      const all = [...rows("protect"), ...rows("count")], names = s => all.filter(r => stateOf(r) === s).map(r => r.name);
+      const listing = a => a.length ? a.join(", ") : t("welcome.8.none");
+      const todo = connections().filter(c => !isDone(c)).map(c => c.todo_text);
+      const entry = (k, v) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
+      return `<dl class="summary">${entry(t("welcome.8.protected"), listing(names("protect")))}${entry(t("welcome.8.recorded"), listing(names("record")))}${names("block").length ? entry(t("welcome.8.blocked"), listing(names("block"))) : ""}
+          ${entry(t("welcome.8.profile"), t(`profile.${profileNow()}`) + (steps().includes(5) ? "" : " · " + t("welcome.locked")))}
+          ${entry(t("welcome.8.watch"), t(`welcome.6.${cfg.scan}`) + " · " + (cfg.ask_apps ? t("welcome.8.ask_on") : t("welcome.8.ask_off")))}
+          ${steps().includes(7) ? entry(t("welcome.8.others"), t(`welcome.7.${st.others}`)) : ""}</dl>
+        ${todo.length ? `<div class="note warning small" id="welcomeTodo"><div><b>${esc(t("welcome.8.todo"))}</b><ul class="listing">${todo.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div></div>` : ""}
+        ${st.restart ? `<p class="help">${esc(t("welcome.8.restart"))}</p>` : ""}<p class="help">${esc(t("welcome.8.tray"))}</p>`;
+    },
+  };
+
   const refresh = () => {
     if (st.step === 1 && $("#welcomeTry")) {
       const phase = !S ? "startup" : PHASES.includes(S.phase) ? S.phase : "stop", sc = S && S.downloading;
@@ -1208,7 +1381,7 @@ function welcome(from = 0) {
         : phase === "model" && sc && sc.total ? t("status.model.progress", {completed: megabyte(sc.completed), total: megabyte(sc.total), pc: Math.min(100, Math.floor(100 * sc.completed / sc.total))})
         : phase === "error" ? S.error : t(`status.${phase}`);
     }
-    if (st.step === 3 && $("#welcomeExt")) {
+    if (st.step === 4 && $("#welcomeExt")) {
       const status = !extension ? "absent" : !extension.connected ? "to_connect" : extension.ok ? "connected" : "no_response";
       const e = $("#welcomeExt");
       e.dataset.status = status;
@@ -1218,20 +1391,12 @@ function welcome(from = 0) {
       $("#welcomeInstall").hidden = !!extension;
     }
   };
-  const draw = () => {
-    const all = steps(), i = Math.max(0, all.indexOf(st.step)), last = i === all.length - 1;
-    st.step = all[i];
-    d.dataset.step = st.step;
-    d.innerHTML = `<div class="inside">
-        <div class="line"><span class="faded small" id="welcomeCount">${esc(t("welcome.step", {n: i + 1, total: all.length}))}</span><span class="space"></span><button class="button" id="welcomeSkip">${esc(t("welcome.skip"))}</button></div>
-        <h2 id="welcomeTitle">${esc(t(`welcome.${st.step}.title`))}</h2><p class="faded">${esc(t(`welcome.${st.step}.below`))}</p>${body[st.step]()}</div>
-      <div class="footer">${i ? `<button class="button" id="welcomeBack">${esc(t("welcome.back"))}</button>` : ""}${
-        last && (st.where.app || st.where.terminal) ? `<button class="button" id="welcomeMore">${esc(t("welcome.4.open_connections"))}</button>` : ""}
-        <button class="button${st.step !== 1 || st.tried ? " primary" : ""}" id="welcomeNext">${esc(t(last ? "welcome.finish" : "welcome.next"))}</button></div>`;
-    $("#welcomeSkip").onclick = () => finish();
-    if ($("#welcomeBack")) $("#welcomeBack").onclick = () => move(-1);
-    if ($("#welcomeMore")) $("#welcomeMore").onclick = () => finish(`#/connections/${st.where.app ? "app" : "terminal"}`);
-    $("#welcomeNext").onclick = () => last ? finish() : move(1);
+  const save = async changes => { cfg = {...cfg, ...await api("/api/settings", changes)}; };
+  const bind = () => {
+    $("#welcomeExit").onclick = () => finish(null, true);
+    if ($("#welcomeBack")) $("#welcomeBack").onclick = test(() => move(-1, false));
+    if ($("#welcomeSkip")) $("#welcomeSkip").onclick = test(() => { if (st.step === 2 && st.scan !== "done") { run++; st.scan = "skipped"; st.tools = null; } return move(1, false); });
+    $("#welcomeNext").onclick = test(() => st.step === steps()[steps().length - 1] ? finish() : move(1, true));
     if (st.step === 1) {
       $("#welcomeStart").onclick = test(async () => { await api("/api/protection", {action: "launch"}); readStatus(); });
       $("#welcomeTry").onclick = test(async () => {
@@ -1244,24 +1409,138 @@ function welcome(from = 0) {
         $("#welcomeNext").className = "button primary";
       });
     }
-    if (st.step === 2) $$("#welcome input[data-where]").forEach(c => { c.onchange = () => { st.where[c.dataset.where] = c.checked; session("welcome_where", JSON.stringify(st.where)); }; });
+    if (st.step === 2 && $("#welcomeScan")) $("#welcomeScan").onclick = () => startScan();
     if (st.step === 3) {
-      $("#welcomeConnect").onclick = connectThis;
-      api("/api/extension").then(x => {
-        if (!$("#welcomeFolder")) return;
-        $("#welcomeFolder").textContent = x.folder;
-        // estensione gia' pubblicata: basta un clic nello store, e le istruzioni a mano non servono
-        if (storeLink(x)) { $("#welcomeStore").href = storeLink(x); $("#welcomeStoreBox").hidden = false; $("#welcomeManual").hidden = true; }
-      }).catch(() => {});
-      window.postMessage({omissis: "ping"}, location.origin);
+      const redraw = focus => { keep(); draw(); $(focus)?.focus(); };
+      $$("#welcome [data-pick]").forEach(c => { c.onchange = () => { st.pick[c.dataset.pick] = c.checked; redraw(`[data-pick="${c.dataset.pick}"]`); }; });
+      $$("#welcome [data-rule]").forEach(c => { c.onchange = () => { st.rule[c.dataset.rule] = c.value; redraw(`[data-rule="${c.dataset.rule}"]`); }; });
+      [["#welcomeAll", true], ["#welcomeNone", false]].forEach(([b, v]) => { $(b).onclick = () => { rows("protect").filter(r => !r.locked).forEach(r => { st.pick[r.id] = v; }); redraw(b); }; });
     }
+    if (st.step === 4) {
+      $$("#welcome [data-do]").forEach(b => { b.onclick = test(async () => {
+        const key = b.dataset.conn, v = b.dataset.do;
+        b.disabled = true;
+        try {
+          if (v === "later") st.conn[key] = "later";
+          else if (v === "app") { const a = apps.find(x => `app-${x.id}` === key); apps = await api("/api/app", {id: a.id, action: a.open_unprotected ? "relaunch" : "launch"}); st.conn[key] = "done"; }
+          else if (v === "cc") { hooks = await api("/api/hook", {action: "claude_plugin"}); st.conn[key] = "done"; }
+          else if (v === "ag") { const x = await api("/api/hook", {action: "antigravity_relaunch"}); hooks = x; st.conn[key] = x.relaunched ? "done" : "linked"; }
+          else if (v === "copy") { await copy(connections().find(c => c.key === key).code); st.conn[key] = "done"; }
+        } finally { keep(); draw(); $("#welcomeNext").focus(); }
+      }); });
+      if ($("#welcomeConnect")) {
+        $("#welcomeConnect").onclick = connectThis;
+        api("/api/extension").then(x => {
+          if (!$("#welcomeFolder")) return;
+          $("#welcomeFolder").textContent = x.folder;
+          // estensione gia' pubblicata: basta un clic nello store, e le istruzioni a mano non servono
+          if (storeLink(x)) { $("#welcomeStore").href = storeLink(x); $("#welcomeStoreBox").hidden = false; $("#welcomeManual").hidden = true; }
+        }).catch(() => {});
+        window.postMessage({omissis: "ping"}, location.origin);
+      }
+    }
+    if (st.step === 5) {
+      $$('#welcome input[name="welcomeProfile"]').forEach(r => { r.onchange = test(async () => { await save({profile: r.value}); draw(); $(`#welcome input[value="${r.value}"]`).focus(); }); });
+      $$("#welcome [data-group]").forEach(c => { c.onchange = test(async () => {
+        const g = c.dataset.group, on = c.checked;
+        let off = cfg.groups_off.filter(x => x !== g), cats = [...cfg.categories];
+        if (g === "special" || g === "details") { const list = g === "special" ? special() : details(); cats = on ? [...new Set([...cats, ...list])] : cats.filter(x => !list.includes(x)); }
+        else if (!on) {
+          // spegnere un gruppo acceso di serie riduce la protezione: lo si chiede, come nelle Impostazioni
+          if (!cfg.groups_optional.includes(g) && !await confirm(t("groups.confirm.title", {name: t(`groups.${g}`)}), t("groups.confirm"), t("groups.confirm.yes"))) { draw(); return; }
+          off.push(g);
+        }
+        try { await save({groups_off: off, categories: cats}); } finally { draw(); $(`#welcome [data-group="${g}"]`)?.focus(); }
+      }); });
+      $("#welcomeMore5").ontoggle = e => { st.open5 = e.target.open; keep(); };
+    }
+    if (st.step === 6) {
+      $$('#welcome input[name="welcomeEvery"]').forEach(r => { r.onchange = test(() => save({scan: r.value})); });
+      $("#welcomeAsk").onchange = test(e => save({ask_apps: e.target.checked}));
+    }
+    if (st.step === 7) {
+      $$('#welcome input[name="welcomeOthers"]').forEach(r => { r.onchange = () => { st.others = r.value; keep(); draw(); $(`#welcome input[value="${r.value}"]`).focus(); }; });
+      $$("#welcome [data-act]").forEach(b => { b.onclick = test(async () => {
+        const k = b.dataset.act;
+        if (k === "share") { await api("/api/server", {action: "share", on: true}); cfg.serve = true; }
+        else window.open(guidePage(k), "_blank", "noopener");
+        st.acts[k] = true; keep(); draw(); $("#welcomeNext").focus();
+      }); });
+    }
+  };
+  const draw = () => {
+    const all = steps();
+    if (!all.includes(st.step)) st.step = all.find(s => s > st.step) || all[all.length - 1];
+    const i = all.indexOf(st.step), last = i === all.length - 1, waiting = st.step === 2 && ["idle", "running"].includes(st.scan);
+    d.dataset.step = st.step;
+    d.innerHTML = `<div class="inside">
+        <div class="line"><span class="faded small" id="welcomeCount">${esc(t("welcome.step", {n: i + 1, total: all.length}))}</span><span class="space"></span><button class="button small" id="welcomeExit">${esc(t("welcome.exit"))}</button></div>
+        <div class="bar" aria-hidden="true">${all.map((s, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div>
+        <h2 id="welcomeTitle">${esc(t(`welcome.${st.step}.title`))}</h2><p class="faded">${esc(t(`welcome.${st.step}.below`))}</p>${BODY[st.step]()}</div>
+      <div class="footer">${i ? `<button class="button" id="welcomeBack">${esc(t("welcome.back"))}</button>` : ""}<span class="space"></span>
+        ${last ? "" : `<button class="button plain" id="welcomeSkip">${esc(t("welcome.skip"))}</button>`}
+        <button class="button${st.step !== 1 || st.tried ? " primary" : ""}" id="welcomeNext" ${waiting ? "disabled" : ""}>${esc(last ? t("welcome.finish") : t("welcome.next"))}</button></div>`;
+    bind();
     refresh();
   };
   guide = {refresh};
-  d.oncancel = e => { e.preventDefault(); finish(); };
+  d.oncancel = e => { e.preventDefault(); finish(null, true); };
+  await prepare();
   draw();
   d.showModal();
   d.focus();   // all'apertura il fuoco sta sulla finestra, non su un pulsante a caso: il primo Tab porta dentro
+}
+
+// L'avviso per un'app AI aperta per la prima volta: la notifica vicino all'orologio apre questa pagina in una finestrella
+// (#/ask/<servizio>), con le scelte per quell'app e basta.
+async function askView(id) {
+  document.body.classList.add("asking");
+  document.title = "Omissis";
+  const el = $("#content");
+  const st = {choice: null, done: "", outcome: {}};
+  const e = await api(`/api/ask?id=${encodeURIComponent(id)}`).then(x => x.entry).catch(() => null);
+  const close = () => {
+    window.close();
+    // aperta in una scheda normale, la finestra non si chiude da sola: si torna al pannello
+    setTimeout(() => { document.body.classList.remove("asking"); location.hash = "#/start"; show(); }, 300);
+  };
+  const answer = test(async choice => {
+    st.outcome = await api("/api/ask", {id, choice});
+    st.done = choice;
+    draw();
+    $("#askClose").focus();
+  });
+  const draw = () => {
+    let inside, footer = `<span class="space"></span><button class="button primary" id="askClose">${esc(t("ask.close"))}</button>`;
+    const app = e ? e.name : "";
+    if (!e) inside = `<h1 id="askTitle">Omissis</h1><p>${esc(t("ask.unknown"))}</p>`;
+    else if (e.locked) inside = `<h1 id="askTitle">${esc(app)}</h1><p>${esc(t("ask.locked", {app, policy: t(`welcome.state.${e.policy}`)}))}</p>`;
+    else if (st.done) {
+      const text = st.done === "protect" ? (st.outcome.relaunch ? t("ask.done.relaunch", {app}) : t("ask.done.protect", {app})) : t(`ask.done.${st.done}`, {app});
+      inside = `<h1 id="askTitle">${esc(["later", "never"].includes(st.done) ? t("ask.ok") : t("ask.done"))}</h1><p>${esc(text)}</p>
+        ${st.outcome.restart ? `<p class="help">${esc(t("ask.restart"))}</p>` : ""}${st.done === "later" ? "" : `<p class="help">${esc(t("ask.change"))}</p>`}`;
+    } else {
+      const options = e.protectable ? ["protect", "record", "ignore"] : ["protect", "record", "block", "ignore"];
+      const detail = o => o !== "protect" ? t(`ask.${o}.below`, {app}) : e.protectable ? t(`ask.protect.${e.how}`, {app}) : t("ask.protect.off", {app});
+      inside = `<h1 id="askTitle">${esc(t("ask.title", {app}))}</h1><p class="faded">${esc(t("ask.below", {app}))}</p>
+        <div class="picks" role="radiogroup" aria-labelledby="askTitle">${options.map(o => {
+          const off = o === "protect" && !e.protectable;
+          return `<label class="pick${off ? " off" : ""}"><input type="radio" name="askChoice" value="${o}" ${st.choice === o ? "checked" : ""} ${off ? "disabled" : ""}>
+            <span><b>${esc(t(`ask.${o}`))}</b><span class="help">${esc(detail(o))}</span></span></label>`;
+        }).join("")}</div>`;
+      footer = `<button class="button plain" id="askNever">${esc(t("ask.never_button"))}</button><span class="space"></span>
+        <button class="button" id="askLater">${esc(t("ask.later_button"))}</button><button class="button primary" id="askApply" ${st.choice ? "" : "disabled"}>${esc(t("ask.apply"))}</button>`;
+    }
+    el.innerHTML = `<section class="card ask"><div class="inside">${inside}</div><div class="footer">${footer}</div></section>`;
+    if ($("#askClose")) $("#askClose").onclick = close;
+    if ($("#askApply")) {
+      $$('#content input[name="askChoice"]').forEach(r => { r.onchange = () => { st.choice = r.value; draw(); $(`#content input[value="${r.value}"]`).focus(); }; });
+      $("#askApply").onclick = () => answer(st.choice);
+      $("#askLater").onclick = () => answer("later");
+      $("#askNever").onclick = () => answer("never");
+    }
+  };
+  draw();
 }
 
 // ------------------------------------------------------------------ 5. avvio
@@ -1303,7 +1582,12 @@ async function launch() {
   applyTheme(i.theme || "auto");
   drawMenu(); applyView();
   $("#advanced").onchange = e => changeView(e.target.checked);
-  addEventListener("hashchange", () => show());
+  addEventListener("hashchange", () => { if (!document.body.classList.contains("asking")) show(); });
+  if (location.hash.startsWith("#/ask/")) {   // la finestrella dell'avviso per un'app AI: solo le scelte per quell'app
+    await askView(decodeURIComponent(location.hash.slice(6)));
+    await readStatus();
+    return;
+  }
   wantConnect = location.hash === "#/connect";
   const again = location.hash === "#/welcome";
   if (wantConnect) history.replaceState(null, "", "#/start");

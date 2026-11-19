@@ -152,30 +152,68 @@ def main():
                 mark(f"{language}: ogni pagina ha un titolo solo e il titolo della scheda", not without_title, ", ".join(without_title))
                 errors.clear()
 
-                # --- configurazione guidata (qui la si apre a mano: durante le prove non si propone da sola)
+                # --- configurazione guidata (qui la si apre a mano: durante le prove non si propone da sola). Nella copia di
+                # prova la ricerca non guarda il PC: trova sempre ChatGPT, Claude, Cursor, GitHub Copilot, claude, agy e Ollama
                 try:
                     today = lambda: call(code, "/api/status")["stats"]["today"]["messages"]   # noqa: E731
                     counted, stored = today(), call(code, "/api/status")["entries"]
+                    kept = {k: call(code, "/api/settings")[k] for k in ("policies", "groups_off", "categories", "ask_apps", "scan")}
                     call(code, "/api/settings", {"onboarded": False})
                     pag.goto(PANEL + "/#/welcome")
                     pag.reload()
                     pag.wait_for_selector("#welcome[open] #welcomeTry:not([disabled])", timeout=30000)
+                    video = pag.evaluate("(() => { const v = document.querySelector('#welcome video'); return !!v && v.getAttribute('src') === '/welcome.mp4'; })()")
+                    video_ok = urllib.request.urlopen(PANEL + "/welcome.mp4", timeout=20).headers.get("Content-Type") == "video/mp4"
                     untranslated = set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
                     pag.click("#welcomeTry")
                     pag.wait_for_selector("#welcomeResult:not([hidden])", timeout=30000)
                     tried = pag.inner_text("#welcomeResult")
                     pag.click("#welcomeNext")
-                    pag.wait_for_selector('#welcome[data-step="2"]')
-                    pag.check('#welcome input[data-where="app"]')
+                    pag.wait_for_selector('#welcome[data-step="2"] #welcomeScan')
+                    pag.click("#welcomeScan")
+                    pag.wait_for_selector("#welcomeTotal", timeout=30000)
+                    found = pag.inner_text("#welcome .sources")
                     untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
                     pag.click("#welcomeNext")
-                    pag.wait_for_selector('#welcome[data-step="3"] #welcomeInstall:not([hidden])')
+                    pag.wait_for_selector('#welcome[data-step="3"] [data-pick="claude"]')
+                    rows = pag.evaluate("[...document.querySelectorAll('#welcome [data-pick]')].map(x => x.dataset.pick + (x.checked ? '+' : '-')).join(' ')")
+                    counted_rows = pag.evaluate("[...document.querySelectorAll('#welcome [data-rule]')].map(x => x.dataset.rule).join(' ')")
+                    pag.uncheck('#welcome [data-pick="gemini"]')
+                    pag.select_option('#welcome [data-rule="cursor"]', "block")
+                    untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
+                    pag.click("#welcomeNext")
+                    pag.wait_for_selector('#welcome[data-step="4"] #welcomeExt')
+                    policies = call(code, "/api/settings")["policies"]
                     browser = pag.get_attribute("#welcomeExt", "data-status")
-                    untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
-                    pag.click("#welcomeNext")
-                    pag.wait_for_selector('#welcome[data-step="4"] #welcomeMore')
+                    pag.click("#conn-cc-cc")
+                    pag.wait_for_selector('[data-conn-row="cc"] .label.ok')
+                    pag.click("#conn-ag-later")
+                    pag.wait_for_selector('[data-conn-row="ag"] .label.warning')
+                    if pag.locator("#conn-app-test-later").count():   # l'app di prova resta chiusa: la prova delle app la apre dopo
+                        pag.click("#conn-app-test-later")
                     untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
                     unnamed = pag.evaluate(WITHOUT_NAME)
+                    pag.click("#welcomeNext")
+                    pag.wait_for_selector('#welcome[data-step="5"] input[value="confidential"]')
+                    pag.check('#welcome input[name="welcomeProfile"][value="confidential"]')
+                    wait_until(lambda: call(code, "/api/settings")["groups_off"] == [])
+                    untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
+                    pag.click("#welcomeNext")
+                    pag.wait_for_selector('#welcome[data-step="6"] #welcomeAsk')
+                    pag.click("#welcomeAsk")
+                    wait_until(lambda: call(code, "/api/settings")["ask_apps"] is False)
+                    unnamed += pag.evaluate(WITHOUT_NAME)
+                    pag.click("#welcomeNext")
+                    pag.wait_for_selector('#welcome[data-step="7"]')
+                    pag.check('#welcome input[name="welcomeOthers"][value="many"]')
+                    pag.wait_for_selector("#welcomeAct-share")
+                    untranslated |= set(RX_KEY.findall(pag.inner_text("#welcome"))) & KEYS
+                    unnamed += pag.evaluate(WITHOUT_NAME)
+                    pag.click("#welcomeNext")
+                    pag.wait_for_selector('#welcome[data-step="8"] #welcomeTodo')
+                    summary = pag.inner_text("#welcome")
+                    untranslated |= set(RX_KEY.findall(summary)) & KEYS
+                    unnamed += pag.evaluate(WITHOUT_NAME)
                     pag.click("#welcomeNext")
                     wait_until(lambda: call(code, "/api/settings")["onboarded"] is True)
                     closed = not pag.evaluate("document.getElementById('welcome').open") and pag.evaluate("location.hash") == "#/start"
@@ -187,15 +225,56 @@ def main():
                     pag.keyboard.press("Escape")
                     wait_until(lambda: call(code, "/api/settings")["onboarded"] is True)
                     contact = pag.get_attribute("#contact", "href") or ""
-                    mark(f"{language}: configurazione guidata, prova con dati inventati (fuori dai conteggi e dall'archivio), scelte, estensione, fine; saltarla vale come vista",
+                    call(code, "/api/settings", kept)
+                    mark(f"{language}: configurazione guidata, prova con dati inventati (fuori dai conteggi e dall'archivio), video, ricerca, scelte, collegamenti, dati, controlli, altri PC, riepilogo; saltarla vale come vista",
                          "[PERSONA_1]" in tried and "Ferraresi" not in tried and today() == counted and call(code, "/api/status")["entries"] == stored
-                         and browser == "absent" and closed
+                         and video and video_ok and "Cursor" in found and "agy" in found
+                         and rows.startswith("chatgpt+ claude+ anthropic-api+ antigravity+ gemini+") and counted_rows == "cursor github-copilot"
+                         and policies.get("cursor") == "block" and policies.get("antigravity") == "protect" and policies.get("gemini", "record") == "record"
+                         and browser == "absent" and "Antigravity" in summary and "Cursor" in summary and closed
                          and not untranslated and not unnamed and not pag.evaluate("document.getElementById('welcome').open")
                          and contact.startswith("https://francescogruner.it/") and bool(pag.inner_text("#contact").strip()),
-                         f"sostituiti: {'[PERSONA_' in tried} · conteggi {counted}->{today()} · estensione {browser} · chiusa {closed} · senza traduzione {sorted(untranslated)[:3]} · senza nome {unnamed[:2]}")
+                         f"sostituiti: {'[PERSONA_' in tried} · conteggi {counted}->{today()} · video {video}/{video_ok} · righe {rows} | {counted_rows} · "
+                         f"regole {policies} · estensione {browser} · chiusa {closed} · senza traduzione {sorted(untranslated)[:3]} · senza nome {unnamed[:2]}")
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: configurazione guidata", False, str(ex)[:200])
-                    call(code, "/api/settings", {"onboarded": True})
+                    call(code, "/api/settings", {"onboarded": True, **kept})
+                    pag.goto(PANEL + "/#/start")
+                    pag.reload()
+                    pag.wait_for_selector("#menu a")
+                errors.clear()
+
+                # --- l'avviso per un'app AI aperta: la finestrella con le scelte per quell'app
+                try:
+                    kept = {k: call(code, "/api/settings")[k] for k in ("policies", "ask_never")}
+                    pag.goto(PANEL + "/#/ask/cursor")
+                    pag.reload()
+                    pag.wait_for_selector("#askTitle")
+                    title, menu = pag.inner_text("#askTitle"), pag.is_visible("#menu")
+                    protect_off = pag.is_disabled('#content input[value="protect"]')
+                    unnamed = pag.evaluate(WITHOUT_NAME)
+                    untranslated = set(RX_KEY.findall(pag.inner_text("#content"))) & KEYS
+                    pag.check('#content input[value="block"]')
+                    pag.click("#askApply")
+                    pag.wait_for_selector("#askClose")
+                    blocked = call(code, "/api/settings")["policies"].get("cursor")
+                    pag.goto(PANEL + "/#/ask/claude")
+                    pag.reload()
+                    pag.wait_for_selector("#askNever")
+                    claude_options = pag.evaluate("[...document.querySelectorAll('#content input[name=askChoice]')].map(x => x.value + (x.disabled ? '-' : '')).join(' ')")
+                    pag.click("#askNever")
+                    pag.wait_for_selector("#askClose")
+                    never = call(code, "/api/settings")["ask_never"]
+                    call(code, "/api/settings", kept)
+                    pag.goto(PANEL + "/#/start")
+                    pag.reload()
+                    pag.wait_for_selector("#menu a")
+                    mark(f"{language}: avviso per un'app AI aperta (finestrella senza menu, «Proteggi» solo dove si può, regola applicata, «Non chiederlo più»)",
+                         "Cursor" in title and not menu and protect_off and blocked == "block" and claude_options == "protect record ignore" and "claude" in never
+                         and not unnamed and not untranslated and not errors,
+                         f"titolo {title} · menu {menu} · proteggi spento {protect_off} · regola {blocked} · scelte {claude_options} · mai {never} · {errors[:2]}")
+                except Exception as ex:   # noqa: BLE001
+                    mark(f"{language}: avviso per un'app AI aperta", False, str(ex)[:200])
                     pag.goto(PANEL + "/#/start")
                     pag.reload()
                     pag.wait_for_selector("#menu a")
@@ -213,12 +292,14 @@ def main():
                         pag.wait_for_selector("#welcome[open] #welcomeNext")
                         pag.click("#welcomeNext")
                         pag.wait_for_selector('#welcome[data-step="2"]')
+                        pag.click("#welcomeSkip")
+                        pag.wait_for_selector('#welcome[data-step="3"]')
                         pag.click("#welcomeNext")
-                        pag.wait_for_selector('#welcome[data-step="3"] #welcomeStoreBox:not([hidden])')
+                        pag.wait_for_selector('#welcome[data-step="4"] #welcomeStoreBox:not([hidden])')
                         mark("estensione pubblicata: la guida propone lo store e nasconde l'installazione a mano",
                              pag.get_attribute("#welcomeStore", "href") == "https://chromewebstore.google.com/detail/esempio" and not pag.is_visible("#welcomeManual")
                              and call(code, "/api/extension")["store"] == {})
-                        pag.click("#welcomeSkip")
+                        pag.click("#welcomeExit")
                     except Exception as ex:   # noqa: BLE001
                         mark("estensione pubblicata: la guida propone lo store", False, str(ex)[:200])
                     finally:

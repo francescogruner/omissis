@@ -42,6 +42,7 @@ import inventory
 import hook_command
 import kimi_plugin
 import mcp_server
+import onboarding
 import settings
 import i18n
 import weights
@@ -59,10 +60,11 @@ PANEL_PORT, ENGINE_PORT = paths.PANEL_PORT, paths.ENGINE_PORT
 NO_WINDOW = 0x08000000
 CODE = secrets.token_urlsafe(24)
 PAGE = HERE / "panel"   # i file della pagina: index.html, style.css, app.js, icon.svg, locales\<codice>.json
-STATIC = {"/style.css": "text/css; charset=utf-8", "/app.js": "text/javascript; charset=utf-8", "/icon.svg": "image/svg+xml"}
+STATIC = {"/style.css": "text/css; charset=utf-8", "/app.js": "text/javascript; charset=utf-8", "/icon.svg": "image/svg+xml",
+          "/welcome.mp4": "video/mp4", "/welcome.jpg": "image/jpeg"}   # il video del primo avvio e la sua copertina
 RX_LANGUAGE = re.compile(r"/locales/[a-z]{2,3}(-[A-Za-z]{2,4})?\.json")
 # la pagina carica solo file suoi: niente script o stili scritti dentro l'HTML, nessuna risorsa da fuori
-POLICY_PAGE = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; "
+POLICY_PAGE = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self'; "
                    "base-uri 'none'; frame-ancestors 'none'")
 # quanto e' provata la lettura di ciascun servizio: la pagina traduce il codice (servizi.lettura.<codice>)
 READING_STATUS = {"claude": "tested", "chatgpt": "tested", "anthropic": "tested", "openai": "tested",
@@ -342,6 +344,142 @@ def watch_apps():
             reattach()
         except Exception:   # noqa: BLE001
             pass
+
+
+# ------------------------------------------------------------------ l'avviso per le app AI aperte per la prima volta
+
+# app in attesa di una risposta (id -> nome), app aperte al giro prima, l'app dell'ultima notifica (il clic apre la sua finestrella)
+ASK = {"pending": {}, "seen": set(), "last": ""}
+
+
+def ask_entry(ident):
+    """Cio' che la finestrella dell'avviso deve sapere di un'app: come si protegge e la regola di adesso."""
+    s = catalog.PER_ID[ident]
+    key = onboarding.watched().get(ident, (None, None))[1]
+    a = connector.APP.get(key) if key else None
+    how = ("antigravity" if ident == "antigravity" else "plugin" if a and a.get("plugin") else "profile" if a and a.get("own_profile")
+           else "app" if a else "other")
+    return {"id": ident, "name": a["name"] if a else s["name"], "protectable": catalog.protectable(s), "how": how,
+            "policy": settings.policy(s), "locked": ident in settings.locked()["policies"]}
+
+
+def check_apps():
+    """Un giro dell'avviso: le app AI aperte da poco (al giro prima non c'erano) per cui chi usa il PC non ha ancora scelto
+    una regola. Si chiede con una notifica; il clic apre la finestrella con le scelte. Mai durante la configurazione guidata."""
+    now = onboarding.running()
+    before, ASK["seen"] = ASK["seen"], set(now)
+    cfg = settings.read()
+    if not cfg["onboarded"] or not cfg["ask_apps"] or NOTIFY is None:
+        return
+    fixed, own = settings.locked()["policies"], settings.own_policies()
+    for ident in sorted(set(now) - before):
+        key = now[ident]
+        if ident in cfg["ask_never"] or ident in own or ident in ASK["pending"]:
+            continue
+        if key and CONNECTORS.get(key) is not None and CONNECTORS[key].alive:   # aperta da Omissis: e' gia' protetta
+            continue
+        name = ask_entry(ident)["name"]
+        if ident in fixed:   # la regola l'ha decisa chi amministra il PC: lo si dice una volta, senza chiedere nulla
+            p = settings.policy(catalog.PER_ID[ident], cfg)
+            NOTIFY(i18n.t(f"ask.managed.{p if p in ('protect', 'block') else 'other'}", app=name))
+            settings.write({**cfg, "ask_never": sorted(set(cfg["ask_never"]) | {ident})})
+            cfg = settings.read()
+            continue
+        ASK["pending"][ident] = name
+        NOTIFY(i18n.t("ask.toast", app=name))
+        ASK["last"] = ident
+
+
+def watch_new_apps(every=15):
+    time.sleep(30)   # non subito: all'avvio il PC ha gia' da fare
+    while True:
+        try:
+            check_apps()
+        except Exception:   # noqa: BLE001  (un giro andato male non deve fermare i successivi)
+            pass
+        time.sleep(every)
+
+
+def open_window(address):
+    """Una finestrella del pannello senza barra degli indirizzi (Edge come app), per rispondere all'avviso."""
+    for base in (os.environ.get("ProgramFiles(x86)", ""), os.environ.get("ProgramFiles", "")):
+        edge = Path(base) / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+        if base and edge.exists():
+            subprocess.Popen([str(edge), f"--app={address}", "--window-size=520,720"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+    webbrowser.open(address)
+
+
+def balloon_click():
+    """Clic su una notifica di Omissis: quella di un'app nuova apre la finestrella per rispondere, le altre il pannello."""
+    ident = ASK["last"]
+    if ident in ASK["pending"]:
+        open_window(f"http://127.0.0.1:{PANEL_PORT}/#/ask/{ident}")
+    else:
+        webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
+
+
+def _quietly(f, *a):
+    """Per il lavoro in sottofondo chiesto da un clic: se va male lo dice una notifica, invece di sparire."""
+    try:
+        f(*a)
+    except Exception as ex:   # noqa: BLE001
+        if NOTIFY:
+            NOTIFY(str(ex))
+
+
+def relaunch_kind(ident):
+    """Che cosa fa «Proteggi» su un'app aperta adesso: «relaunch» (si chiude e si riapre protetta) oppure niente."""
+    if SUP.test or SUP.phase != "active":
+        return ""
+    if ident == "antigravity":
+        return "relaunch" if SUP.gateway is not None and onboarding.antigravity_exe().exists() else ""
+    key = onboarding.watched().get(ident, (None, None))[1]
+    a = connector.APP.get(key) if key else None
+    if a is None or a.get("refuses") or a.get("plugin") or (key in CONNECTORS and CONNECTORS[key].alive):
+        return ""
+    return "relaunch" if a.get("own_profile") or connector.open_unprotected(key) else ""
+
+
+def relaunch_protected(ident):
+    """Chiude l'app e la riapre protetta: Antigravity passando dal gateway, le altre con la porta di debug."""
+    if ident == "antigravity":
+        onboarding.antigravity_relaunch(paths.GATEWAY_PORT)
+        return
+    key = onboarding.watched()[ident][1]
+    with APP_LOCK:
+        old = CONNECTORS.pop(key, None)
+        if old is not None:
+            old.close()
+        DETACHED.discard(key)
+        CONNECTORS[key] = connector.launch_app(key, close_first=True)
+
+
+def apply_protection(ident):
+    """Dopo «Proteggi» (dall'avviso): Antigravity si collega al comando di Omissis; se la regola nuova chiede di riavviare
+    la protezione la si riavvia, poi l'app aperta senza protezione si riapre protetta. Tutto in sottofondo."""
+    if ident == "antigravity":
+        if not hook_command.state()["ready"]:
+            hook_command.install()
+        try:
+            hook_command.antigravity_link()
+        except ValueError:   # file degli hook che non si legge: non si tocca, e il pannello lo segnala in Collegamenti
+            pass
+    restart, kind = SUP.restart_needed(), relaunch_kind(ident)
+
+    def run():
+        if restart:
+            SUP.stop()
+            SUP.launch()
+            for _ in range(240):
+                if SUP.phase == "active":
+                    break
+                time.sleep(0.5)
+        if kind:
+            relaunch_protected(ident)
+    if restart or kind:
+        threading.Thread(target=_quietly, args=(run,), daemon=True).start()
+    return {"relaunch": kind, "restart": restart}
 
 
 def mcp_state():
@@ -692,6 +830,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._respond(200, {"known": [], "enabled": settings.read().get("categories", [])})
             elif u.path == "/api/shortcuts":
                 self._respond(200, shortcuts())
+            elif u.path == "/api/ask":   # le app AI in attesa di una risposta e, con ?id=, quella da mostrare nella finestrella
+                ident = q.get("id", "")
+                self._respond(200, {"pending": [ask_entry(i) for i in list(ASK["pending"]) if i in catalog.PER_ID],
+                                     "entry": ask_entry(ident) if ident in catalog.PER_ID else None})
+            elif u.path == "/api/welcome/tools":   # il passo «Cosa proteggo?» senza la ricerca: gli strumenti piu' usati
+                self._respond(200, {"tools": onboarding.tools()})
             elif u.path == "/api/inventory":
                 self._respond(200, inventory_status())
             elif u.path == "/api/inventory/csv":
@@ -865,6 +1009,20 @@ class Handler(BaseHTTPRequestHandler):
                         hook_command.antigravity_link()
                     except ValueError:
                         raise Refusal(i18n.t("hooks.antigravity.unreadable", file=str(hook_command.antigravity_file())))
+                elif action == "antigravity_relaunch":   # dalla configurazione guidata: collegata, e riaperta dal gateway se c'e'
+                    if not hook_command.state()["ready"]:
+                        hook_command.install()
+                    try:
+                        hook_command.antigravity_link()
+                    except ValueError:
+                        raise Refusal(i18n.t("hooks.antigravity.unreadable", file=str(hook_command.antigravity_file())))
+                    kind = relaunch_kind("antigravity")
+                    if kind:
+                        relaunch_protected("antigravity")
+                    self._respond(200, {**hook_state(), "relaunched": bool(kind)})
+                    return
+                elif action == "claude_plugin":   # dalla configurazione guidata: il comando e il plugin di Claude Code
+                    onboarding.claude_plugin(PLUGIN_REPO, SUP.test)
                 elif action == "antigravity_unlink":
                     hook_command.antigravity_unlink()
                 elif action == "remove":
@@ -963,6 +1121,39 @@ class Handler(BaseHTTPRequestHandler):
                                                                  "label": str(data.get("label") or "")[:40],
                                                                  "idle_days": None if days in (None, "") else max(0.0, float(days)),
                                                                  "count_only": bool(data.get("count_only"))}))
+            elif p == "/api/welcome/scan":   # le ricerche del primo avvio, una alla volta; «done» le mette insieme
+                source = str(data.get("source", ""))
+                if source != "done" and source not in onboarding.SOURCES:
+                    raise Refusal(i18n.t("program.not_found"))
+                self._respond(200, onboarding.finish_scan(SUP.test) if source == "done" else onboarding.scan_source(source, SUP.test))
+            elif p == "/api/welcome/rules":   # il passo «Cosa proteggo?»: le regole scelte, solo per i servizi non imposti
+                cfg, fixed = settings.read(), settings.locked()["policies"]
+                wanted = {k: v for k, v in ((str(k), str(v)) for k, v in (data.get("policies") or {}).items())
+                          if k in catalog.PER_ID and v in catalog.POLICIES and k not in fixed
+                          and (v != "protect" or catalog.protectable(catalog.PER_ID[k]))}
+                if wanted:
+                    settings.write({**cfg, "policies": {**cfg["policies"], **wanted}})
+                self._respond(200, {"restart_needed": SUP.restart_needed(), "applied": sorted(wanted)})
+            elif p == "/api/ask":   # la risposta all'avviso per un'app AI aperta: una regola, «Non ora» o «Non chiederlo piu'»
+                ident, choice, cfg = str(data.get("id", "")), str(data.get("choice", "")), settings.read()
+                s = catalog.PER_ID.get(ident)
+                if s is None:
+                    raise Refusal(i18n.t("program.app_unknown"))
+                outcome = {}
+                if choice == "never":
+                    settings.write({**cfg, "ask_never": sorted(set(cfg["ask_never"]) | {ident})})
+                elif choice in catalog.POLICIES:
+                    if ident in settings.locked()["policies"]:
+                        raise Refusal(i18n.t("managed.locked"))
+                    if choice == "protect" and not catalog.protectable(s):
+                        raise Refusal(i18n.t("ask.not_protectable", app=s["name"]))
+                    settings.write({**cfg, "policies": {**cfg["policies"], ident: choice}})
+                    if choice == "protect":
+                        outcome = apply_protection(ident)
+                elif choice != "later":
+                    raise Refusal(i18n.t("program.not_found"))
+                ASK["pending"].pop(ident, None)
+                self._respond(200, outcome)
             elif p == "/api/inventory/scan":
                 news = analyze("manual")
                 self._respond(200, {"news": news, **inventory_status()})
@@ -1082,7 +1273,23 @@ def icon(server):
 
     threading.Thread(target=refresh, daemon=True).start()
 
-    def notify(message):   # esito delle scorciatoie sugli appunti, come notifica di Windows
+    # Il clic su una notifica arriva all'icona come NIN_BALLOONUSERCLICK, che pystray non gestisce: lo si intercetta qui.
+    # Se pystray cambia e la voce non c'e', le notifiche restano come prima (senza clic).
+    try:
+        handlers = ic._message_handlers
+        message = next(k for k, v in handlers.items() if getattr(v, "__name__", "") == "_on_notify")
+        original = handlers[message]
+
+        def on_notify(wparam, lparam):
+            if lparam == 0x0405:   # NIN_BALLOONUSERCLICK
+                threading.Thread(target=balloon_click, daemon=True).start()
+            return original(wparam, lparam)
+        handlers[message] = on_notify
+    except Exception:   # noqa: BLE001
+        pass
+
+    def notify(message):   # esito delle scorciatoie sugli appunti e avvisi, come notifica di Windows
+        ASK["last"] = ""   # il clic su questa notifica apre il pannello (l'avviso per un'app nuova lo rimette dopo)
         try:
             ic.notify(message, "Omissis")
         except Exception:   # noqa: BLE001
@@ -1144,6 +1351,7 @@ def main():
     if not a.test:   # nelle prove niente lavoro in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
         threading.Thread(target=watch, daemon=True).start()
         threading.Thread(target=watch_apps, daemon=True).start()
+        threading.Thread(target=watch_new_apps, daemon=True).start()
         threading.Thread(target=central.loop, args=(lambda: SUP.phase,), daemon=True).start()
     if not a.do_not_launch:
         SUP.launch()
