@@ -10,7 +10,11 @@ on:
         description: "Versione (per esempio 0.1.5)"
         required: true
       only:
-        description: "Solo una parte: app, safari oppure desktop (vuoto = app e safari)"
+        description: "Solo una parte: app, update, icon, safari oppure desktop (vuoto = app e safari; update = solo costruzione e prova degli aggiornamenti; icon = solo molti avvii con l'icona)"
+        required: false
+        default: ""
+      parts:
+        description: "Per la prova degli aggiornamenti: quali parti (vuoto = tutte: update rollback auto move login uninstall)"
         required: false
         default: ""
       apps:
@@ -36,6 +40,7 @@ jobs:
           python-version: "3.12"
 
       - name: Costruisce Omissis.app e il .dmg
+        id: build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version || github.ref_name }}
@@ -43,6 +48,7 @@ jobs:
 
       # L'app non ha la firma Apple: qui si annota come la giudica macOS quando arriva da Internet. Non ferma il lavoro.
       - name: Come la giudica macOS se arriva da Internet (solo per sapere)
+        if: inputs.only != 'update'
         continue-on-error: true
         run: |
           set +e
@@ -53,9 +59,32 @@ jobs:
           echo "--- programmi dentro l'app senza firma"; find "$RUNNER_TEMP/Omissis.app" -type f -perm +111 -name "python3*" -exec codesign -dv {} \; 2>&1 | grep -c "not signed"
 
       - name: Prove automatiche (senza browser)
+        if: inputs.only != 'update'
+        timeout-minutes: 25
+        env:
+          OMISSIS_ICON_STARTS: ${{ inputs.only == 'icon' && '24' || '4' }}
+          OMISSIS_ONLY_ICON: ${{ inputs.only == 'icon' && '1' || '' }}
         run: bash packaging/mac/ci_tests.sh
 
+      # Cio' che sul Mac il programma fa al posto di un installer, con l'app appena costruita: aggiornamento (riuscito,
+      # fallito con ritorno alla versione di prima, fatto all'avvio), apertura dal disco di installazione e spostamento
+      # in Applicazioni, avvio all'accesso, disinstallazione. La chiave delle firme e' una usa e getta creata li'.
+      - name: Aggiornamento, spostamento in Applicazioni, avvio all'accesso, disinstallazione
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && inputs.only != 'icon' }}
+        timeout-minutes: 25
+        env:
+          OMISSIS_UPDATE_PARTS: ${{ inputs.parts }}
+        run: dist/Omissis.app/Contents/Resources/python/bin/python3 packaging/mac/update_test.py $OMISSIS_UPDATE_PARTS
+
       - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Omissis-mac-prove
+          path: dist/update/
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.only != 'update'
         with:
           name: Omissis-mac-arm64
           path: dist/*.dmg
@@ -64,7 +93,7 @@ jobs:
   # Prova dell'estensione per Safari: la converte e la compila, senza firma Apple. È una prova a parte: se fallisce
   # non ferma l'app. Il registro della conversione dice quali voci del manifest Safari non conosce.
   safari:
-    if: github.event_name == 'workflow_dispatch' && inputs.only != 'app' && inputs.only != 'desktop'
+    if: github.event_name == 'workflow_dispatch' && inputs.only != 'app' && inputs.only != 'desktop' && inputs.only != 'update' && inputs.only != 'icon'
     runs-on: macos-latest
     timeout-minutes: 30
     continue-on-error: true

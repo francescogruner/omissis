@@ -85,7 +85,7 @@ chiama «Anonimizza» perché è la parola più conosciuta, ma il senso tecnico 
 | ⏳ | Plugin di Codex (va approvato con `/hooks`), MCP dentro Claude Desktop | ⏳ da provare |
 | ⏳ | App desktop di **Claude**: si protegge dalla rete del computer, con un pulsante del pannello (*Collegamenti → App → Proteggi Claude*; dalla versione 0.1.5, per Windows non ancora pubblicata) che mette il certificato e manda al proxy di Omissis solo il traffico verso claude.ai. La si usa come sempre, con il proprio accesso. Provato il 20/11/2026 con l'app vera su Windows e su Mac (6.28899.2), fino alla finestra d'ingresso; un messaggio sostituito con un accesso vero non è ancora stato visto | ⏳ da provare con un account |
 | 🚫 | Copilot dentro Teams e Outlook, chat di Cursor e Windsurf (i documenti passano dal server MCP, vedi sopra), Firefox, Linux | ❌ non coperti |
-| 🍎 | **Mac** (processore Apple): versione di prova 0.1.5, non firmata con Apple. Costruita e provata in automatico su un Mac di GitHub; nessuno l'ha ancora usata su un Mac vero. [Come si installa](packaging/mac/README.md#italiano) | 🧪 di prova |
+| 🍎 | **Mac** (processore Apple): versione di prova 0.1.6, non firmata con Apple. Costruita e provata in automatico su un Mac di GitHub; nessuno l'ha ancora usata su un Mac vero. Si aggiorna da sola, parte all'accesso, legge le scansioni e ha le scorciatoie sugli appunti. La prima versione di prova, la 0.1.5, no: chi l'ha installata riscarica quella nuova una volta. [Come si installa](packaging/mac/README.md#italiano) | 🧪 di prova |
 
 L'elenco completo e datato è su [omissis.eu](https://omissis.eu) e, per il tuo PC, nel pannello (*Collegamenti →
 Compatibilità*), che annota anche con quale versione di ogni programma la sostituzione ha funzionato l'ultima volta.
@@ -260,7 +260,8 @@ Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 - [x] App desktop di Claude: un pulsante nel pannello la protegge dalla rete del computer (certificato e file PAC)
 - [ ] App desktop di Claude: prova di un messaggio con un accesso vero
 - [x] Mac (processore Apple): versione di prova, non firmata
-- [ ] Mac: firma Apple, scorciatoie da tastiera, lettura delle scansioni, aggiornamenti automatici
+- [x] Mac: aggiornamenti automatici, avvio all'accesso, spostamento in Applicazioni e disinstallazione dal pannello, lettura delle scansioni, scorciatoie sugli appunti (nella versione di prova 0.1.6)
+- [ ] Mac: firma Apple; la prova di una persona su un Mac vero
 - [ ] Microsoft Store, Chrome Web Store ed Edge Add-ons: inviati il 18/11/2026, in revisione
 - [ ] Firma del codice dell'installer (oggi Windows mostra l'avviso di SmartScreen)
 - [ ] Messaggistica nativa del browser al posto del collegamento HTTP locale per l'estensione

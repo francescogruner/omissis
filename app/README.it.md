@@ -1138,6 +1138,18 @@ installato (senza altre librerie di sistema), lo scaricamento dalla pagina vera 
 aggiornamento dalla pagina vera delle versioni.
 Senza firma del codice, Windows mostra l'avviso di SmartScreen al primo avvio dell'installer.
 
+**Sul Mac** non c'è un installer. L'app (`Omissis.app`) porta con sé interprete e librerie, i dati
+stanno in `~/Library/Application Support/Omissis`, e ciò che su Windows fa l'installer lo fa il
+programma (`macapp.py`), dal pannello: avvio all'accesso, spostamento nella cartella Applicazioni,
+aggiornamento, disinstallazione. Per gli aggiornamenti il foglio è `update-mac-arm64.json`, con la
+stessa firma, e il file è l'immagine disco (`.dmg`): l'app nuova viene scompattata e controllata
+accanto a quella in uso, lo scambio avviene a programma chiuso, e se la versione nuova non parte
+entro due minuti torna quella di prima. Si aggiorna da sola solo l'app che sta in un posto suo:
+aperta dal disco di installazione, lo dice e propone di spostarsi. Provato su un Mac di GitHub
+(i particolari in `packaging/mac/README.md`); una persona, su un Mac vero, non l'ha ancora fatto.
+Senza la firma Apple, al primo avvio macOS ferma l'app: la si apre da Impostazioni di Sistema →
+Privacy e sicurezza → «Apri comunque».
+
 **La versione per il Microsoft Store.** È lo stesso programma in un pacchetto firmato dallo Store,
 quindi senza avviso di SmartScreen. Dentro quel tipo di pacchetto Windows tiene separato ciò che il
 programma scrive, e questo cambia quattro cose:

@@ -41,6 +41,7 @@ import gateway
 import inventory
 import hook_command
 import kimi_plugin
+import macapp
 import mcp_server
 import onboarding
 import settings
@@ -922,6 +923,68 @@ def certificate(action=None):
     return {"exists": cer.exists(), "installed": sistema.certificate(cer, action if action in ("install", "remove") else None)}
 
 
+# ------------------------------------------------------------------ l'app sul Mac
+
+def system_card():
+    """Cio' che la pagina deve sapere del sistema su cui gira. Sul Mac: dove sta l'app (da li' dipende se si aggiorna da
+    sola), se parte all'accesso, se dal pannello si puo' togliere. Su Windows queste cose le fa l'installer."""
+    where = macapp.location()
+    return {"name": "mac" if where else sistema.NAME, "location": where,
+            "login_item": macapp.login_item() if where else {"supported": False, "on": False},
+            "uninstall": where in ("ok", "move"), "applications": str(macapp.applications()) if where == "move" else ""}
+
+
+def move_app():
+    """Sul Mac: copia l'app nella cartella Applicazioni e la riapre da li' (questa copia si chiude)."""
+    if sistema.FAKE_SYSTEM:   # nelle prove senza Mac: come se fosse andata
+        sistema._fake_system({"mac_location": "ok"})
+        return
+    try:
+        macapp.move(updates.relaunch_arguments(), DATA / "updates")
+    except macapp.Error as ex:
+        raise Refusal(i18n.t("mac.move.error.there" if ex.code == "already_there" else "mac.move.error")) from ex
+    turn_off()
+
+
+def uninstall_app(remove_data):
+    """Sul Mac: toglie cio' che Omissis ha messo nel sistema (avvio all'accesso, comando da terminale, proxy e
+    certificato, voce in Claude Desktop), sposta l'app nel Cestino e chiude il programma. I dati restano, a meno che chi
+    usa il Mac abbia chiesto di cancellarli: allora spariscono anche l'archivio e la sua chiave nel Portachiavi."""
+    macapp.login_item(False)
+    for remove in (hook_command.remove,
+                   lambda: mcp_server.claude_desktop_install(DATA / "claude_desktop_config.json" if SUP.test else None, remove=True)):
+        try:
+            remove()
+        except Exception:   # noqa: BLE001  (una voce che non si riesce a togliere non deve fermare il resto)
+            pass
+    settings.write({**settings.read(), "app_proxy": []})
+    pac_apply(leaving=True)
+    cer = DATA / "ca" / "mitmproxy-ca-cert.cer"
+    if sistema.certificate(cer):
+        sistema.certificate(cer, "remove")   # macOS chiede conferma a chi usa il Mac
+    if remove_data:
+        sistema.keychain_forget("vault")
+    if sistema.FAKE_SYSTEM:   # nelle prove senza Mac: si annota soltanto
+        sistema._fake_system({"mac_location": "", "uninstalled": {"data": bool(remove_data)}})
+        return {"trashed": True, "data": bool(remove_data)}
+    out = macapp.uninstall(DATA if remove_data else None)
+    turn_off()
+    return {**out, "data": bool(remove_data)}
+
+
+def first_login_item(test):
+    """Al primo avvio dell'app in un posto suo, Omissis si mette tra i programmi che partono all'accesso al Mac (su
+    Windows lo fa l'installer, con la casella gia' spuntata). Si spegne dalle Impostazioni. Se l'app e' stata spostata,
+    la voce viene corretta."""
+    if macapp.location() != "ok" or (test and os.environ.get("OMISSIS_REAL_SYSTEM") != "1"):
+        return
+    macapp.login_item_follow()
+    note = DATA / "login_item.txt"
+    if not note.exists():
+        note.write_text("1", encoding="utf-8")
+        macapp.login_item(True)
+
+
 # ------------------------------------------------------------------ servizio web locale
 
 class Handler(BaseHTTPRequestHandler):
@@ -993,7 +1056,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, {**{k: v for k, v in settings.read().items() if k not in ("console_key", "engine_key")}, "certificate": certificate(),
                                      "groups": settings.GROUPS, "groups_always": settings.ALWAYS_ON, "groups_optional": list(settings.OPTIONAL),
                                      "profile_now": settings.profile_of(), "profiles": settings.PROFILES, "managed": settings.locked(),
-                                     "first_run": settings.first_run(SUP.test)})
+                                     "first_run": settings.first_run(SUP.test), "system": system_card()})
             elif u.path == "/api/console":
                 self._respond(200, central.state())
             elif u.path == "/api/server":
@@ -1269,9 +1332,24 @@ class Handler(BaseHTTPRequestHandler):
                 elif action == "install":
                     version = updates.install()
                     if version is None:
-                        raise Refusal(i18n.t("program.update_nothing_ready"))
+                        why = updates.STATUS["error"] if updates.STATUS["phase"] == "error" else ""
+                        raise Refusal(why or i18n.t("program.update_nothing_ready"))
                     turn_off()
                 self._respond(200, updates.status())
+            elif p == "/api/system":   # sul Mac, cio' che su Windows fa l'installer
+                action = data.get("action")
+                if action not in ("login_on", "login_off", "move", "uninstall") or not macapp.location():
+                    raise Refusal(i18n.t("program.not_found"))
+                if not system_allowed():
+                    raise Refusal(i18n.t("app.proxy.error.test"))
+                if action in ("login_on", "login_off"):
+                    macapp.login_item(action == "login_on")
+                elif action == "move":
+                    move_app()
+                else:
+                    self._respond(200, uninstall_app(bool(data.get("data"))))
+                    return
+                self._respond(200, system_card())
             elif p == "/api/try":
                 text = str(data.get("text", ""))
                 if len(text) > clipboard.MAX_TEXT:   # mai tagliare in silenzio: il pezzo tagliato sembrerebbe controllato
@@ -1471,8 +1549,12 @@ def icon(server):
         pystray.MenuItem(lambda _: i18n.t("icon.exit_app"), exit_app, enabled=lambda _: not stays_on())))
 
     def refresh():
-        latest, notified, waiting = None, "", 0
+        latest, notified, waiting, told, begun = None, "", 0, False, time.time()
         while ic.visible or latest is None:
+            if not told and time.time() - begun > 15:   # sul Mac: l'ultimo cambio di versione non e' riuscito
+                told, failed = True, updates.failed()
+                if failed:
+                    notify(i18n.t("updates.failed", v=failed))
             if len(ASK["pending"]) != waiting:   # compare o sparisce la voce per le app AI nuove
                 waiting = len(ASK["pending"])
                 try:
@@ -1556,7 +1638,10 @@ def main():
                                        "arguments": ["--headless=new", "--no-first-run", f"--user-data-dir={DATA / 'test_app'}",
                                                      "about:blank"]}
     class Service(ThreadingHTTPServer):
-        allow_reuse_address = False   # una seconda copia del programma deve accorgersi che la prima e' gia' accesa
+        # Una seconda copia del programma deve accorgersi che la prima e' gia' accesa: su Windows «riusare l'indirizzo»
+        # lascerebbe aprire due servizi sulla stessa porta. Sul Mac e su Linux no: li' serve solo a ripartire subito
+        # dopo una chiusura (un aggiornamento, un riavvio), quando il sistema tiene la porta ancora per mezzo minuto
+        allow_reuse_address = not sistema.WINDOWS
 
     try:
         server = Service(("127.0.0.1", PANEL_PORT), Handler)
@@ -1566,6 +1651,8 @@ def main():
             webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    updates.started()   # sul Mac: chi ha appena messo questa versione al posto della vecchia aspetta di saperla partita
+    first_login_item(a.test)
     threading.Thread(target=updates.loop, daemon=True).start()
     threading.Thread(target=keep_on, args=(3 if a.test else 30,), daemon=True).start()   # non fa nulla finche' always_on e' spento
     if not a.test:   # nelle prove niente lavoro in sottofondo: i risultati devono dipendere solo da cio' che la prova fa

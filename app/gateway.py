@@ -202,7 +202,9 @@ class Gateway:
             do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = do_HEAD = _everything
 
         class Service(ThreadingHTTPServer):
-            allow_reuse_address = False   # su Windows, altrimenti, due copie potrebbero aprire la stessa porta senza errore
+            # su Windows, altrimenti, due copie potrebbero aprire la stessa porta senza errore; sul Mac e su Linux
+            # serve invece a ripartire subito dopo una chiusura (li' due servizi sulla stessa porta non si aprono comunque)
+            allow_reuse_address = sys.platform != "win32"
 
             def handle_error(self, request, client_address):   # lo strumento ha chiuso il collegamento: non e' un errore
                 pass

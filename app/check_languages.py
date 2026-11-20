@@ -87,7 +87,9 @@ def main():
     whole, compound = uses()
     nonexistent = sorted(k for k in whole if k not in ref)
     without_feedback = sorted(c.pattern for c in compound if not any(c.match(k) for k in ref))
-    unused = sorted(k for k in ref if not k.startswith("_") and k not in whole and not any(c.match(k) for c in compound))
+    # «chiave.mac» e' la variante per Mac di «chiave»: la sceglie t() da sola, quindi e' usata se lo e' la sua base
+    base = lambda k: k[:-4] if k.endswith(".mac") else k   # noqa: E731
+    unused = sorted(k for k in ref if not k.startswith("_") and base(k) not in whole and not any(c.match(base(k)) for c in compound))
     if nonexistent:
         problems += len(nonexistent)
         print("usate nel codice ma assenti dai file:", ", ".join(nonexistent))

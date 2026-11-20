@@ -210,6 +210,59 @@ def main():
     paths.INSTALLED = {"version": current, "channel": "store"}
     mark("copia dello Store: nessun controllo, ci pensa lo Store", updates.mode() == "store" and not updates.installable())
 
+    # ------------------------------------------------------------ il foglio per il Mac
+    # Qui non c'e' un Mac: si guarda solo cio' che non dipende dal sistema, cioe' quale foglio si legge e che cosa si
+    # accetta. Lo scambio delle due versioni dentro l'app lo provano e2e_macapp.py e, sul Mac vero, packaging/mac.
+    paths.INSTALLED = {"version": current, "channel": "github"}
+    real_target = updates.target
+    updates.target = lambda: "mac-arm64"
+    try:
+        image = os.urandom(300_000)
+
+        def mac_sheet(platform="mac-arm64", file=None, name=None, con=key):
+            file = file or f"Omissis-{new_one}-mac-arm64.dmg"
+            sheet = json.dumps({"product": "omissis", "version": new_one, "platform": platform, "file": file, "byte": len(image),
+                                "sha256": hashlib.sha256(image).hexdigest(), "notes": "test"}).encode("utf-8")
+            for k in [k for k in SERVED if k.startswith("/versioni/")]:
+                del SERVED[k]
+            name = name or "update-mac-arm64.json"
+            SERVED[f"/versioni/{name}.sig"] = base64.b64encode(con.sign(sheet))
+            SERVED[f"/versioni/{name}"] = sheet
+            SERVED[f"/versioni/{file}"] = image
+            updates.STATUS.update(phase="never", version="", error="")
+            REQUESTS.clear()
+
+        mac_sheet()
+        updates.check()
+        mark("Mac: legge il suo foglio (update-mac-arm64.json), non quello di Windows",
+              updates.STATUS["phase"] == "available" and updates.STATUS["version"] == new_one and [p for p, _ in REQUESTS][:1] == ["/versioni/update-mac-arm64.json"],
+              str([p for p, _ in REQUESTS]))
+        mac_sheet(name="update.json")
+        mark("Mac: il foglio di Windows da solo non vale (nessuna versione per il Mac: nessun errore)", updates.check()["phase"] == "updated")
+        mac_sheet(platform="mac-x86_64")
+        mark("Mac: un foglio per un altro processore viene ignorato", updates.check()["phase"] == "error" and updates.STATUS["version"] == "")
+        mac_sheet(file=f"Omissis-{new_one}-setup.exe")
+        mark("Mac: un foglio che indica un installer di Windows viene ignorato", updates.check()["phase"] == "error")
+        mac_sheet(con=foreign)
+        mark("Mac: foglio firmato con un'altra chiave: ignorato", updates.check()["phase"] == "error" and "firma" in updates.STATUS["error"])
+        mac_sheet()
+        updates.check()
+        mark("Mac: lo stato per la pagina dice per quale sistema si cercano le versioni e l'esito dell'ultimo scambio",
+              updates.status()["platform"] == "mac-arm64" and updates.status()["failed"] == "" and "reason" in updates.status(),
+              str({k: updates.status()[k] for k in ("platform", "reason", "failed")}))
+    finally:
+        updates.target = real_target
+
+    # la chiave usa e getta delle prove vale solo in una copia di prova
+    throwaway = base64.b64encode(foreign.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode("ascii")
+    os.environ["OMISSIS_UPDATES_TEST_KEY"] = throwaway
+    os.environ.pop("OMISSIS_TEST", None)
+    ignored = updates._key() == updates.PUBLIC_KEY
+    os.environ["OMISSIS_TEST"] = "1"
+    taken = updates._key() == throwaway
+    del os.environ["OMISSIS_UPDATES_TEST_KEY"], os.environ["OMISSIS_TEST"]
+    mark("chiave di prova per le firme: accettata solo da una copia di prova, ignorata da una copia normale", ignored and taken)
+
     server.shutdown()
     shutil.rmtree(TEMP, ignore_errors=True)
     print(f"\n{sum(outcomes)}/{len(outcomes)} controlli superati")

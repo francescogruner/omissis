@@ -471,6 +471,108 @@ def main():
                             pass
                         Path(fake).write_text("{}", encoding="utf-8")
 
+                # --- il Mac: cio' che su Windows fa l'installer (spostare l'app in Applicazioni, avvio all'accesso, toglierla).
+                # Senza un Mac: il file che fa da sistema dice dove «sta» l'app, e annota cio' che il pannello chiede di fare
+                if fake:
+                    try:
+                        def system(change=None):
+                            if change is not None:
+                                Path(fake).write_text(json.dumps(change), encoding="utf-8")
+                            return json.loads(Path(fake).read_text(encoding="utf-8")) if Path(fake).exists() else {}
+                        system({"mac_location": "move"})
+                        pag.goto(PANEL + "/#/start")
+                        pag.reload()
+                        pag.wait_for_selector("#update button[data-system=move]", timeout=15000)
+                        wait(pag, "() => document.querySelector('#sideText').textContent.trim().length > 0", timeout=10)
+                        said = pag.inner_text("#update")
+                        blind = pag.evaluate(WITHOUT_NAME)
+                        pag.click("#update button[data-system=move]")
+                        pag.wait_for_selector("#confirm[open]", timeout=5000)
+                        asked = pag.inner_text("#confirm")
+                        pag.click("#confirmYes")
+                        moved = wait_until(lambda: system().get("mac_location") == "ok", 10)
+                        gone = wait(pag, "() => !document.querySelector('#update button[data-system=move]')", timeout=15)
+                        mark(f"{language}: Mac: l'app aperta dal disco di installazione si sposta in Applicazioni con un clic e una conferma",
+                             moved and gone and not blind and "mac.move" not in said + asked and len(said) > 60 and len(asked) > 80, said[:90].replace("\n", " "))
+
+                        pag.goto(PANEL + "/#/settings/general")
+                        pag.reload()
+                        pag.wait_for_selector("#macLogin", state="attached", timeout=15000)
+                        wait(pag, "() => document.querySelector('#sideText').textContent.trim().length > 0", timeout=10)
+                        card = pag.inner_text("#macCard")
+                        blind = pag.evaluate(WITHOUT_NAME)
+                        pag.click("#macLogin")
+                        on = wait_until(lambda: system().get("login_item") is True, 10)
+                        pag.wait_for_timeout(600)
+                        pag.click("#macLogin")
+                        off = wait_until(lambda: system().get("login_item") is False, 10)
+                        mark(f"{language}: Mac: nelle impostazioni l'avvio all'accesso si accende e si spegne con un interruttore",
+                             on and off and not blind and "mac." not in card and len(card) > 120, f"acceso {on} · spento {off} · senza nome {blind[:2]}")
+
+                        pag.wait_for_timeout(600)
+                        pag.click("#macRemove")
+                        pag.wait_for_selector("#confirm[open]", timeout=5000)
+                        kept = pag.inner_text("#confirm")
+                        pag.click("#confirmNo")
+                        still = not system().get("uninstalled")
+                        pag.check("#macData")
+                        pag.click("#macRemove")
+                        pag.wait_for_selector("#confirm[open]", timeout=5000)
+                        deleted = pag.inner_text("#confirm")
+                        pag.click("#confirmYes")
+                        pag.wait_for_selector("#goodbye", timeout=15000)
+                        bye = pag.inner_text("#goodbye")
+                        mark(f"{language}: Mac: «Togli Omissis» chiede conferma, dice che fine fanno i dati e poi saluta",
+                             still and kept != deleted and system().get("uninstalled") == {"data": True} and "mac.remove" not in kept + deleted + bye and len(bye) > 30,
+                             bye[:80])
+
+                        # nella configurazione guidata: al primo passo l'avviso di spostamento, tra i controlli l'avvio all'accesso
+                        system({"mac_location": "move"})
+                        pag.goto(PANEL + "/#/welcome")
+                        pag.reload()
+                        pag.wait_for_selector("#welcome[open] button[data-system=move]", timeout=30000)
+                        first = pag.inner_text("#welcome")
+                        system({"mac_location": "ok", "login_item": False})
+                        for step in (2, 3, 4, 5, 6):
+                            pag.click("#welcomeSkip")
+                            pag.wait_for_selector(f'#welcome[data-step="{step}"]', timeout=15000)
+                        pag.wait_for_selector("#welcomeLogin", state="attached", timeout=5000)
+                        wait(pag, "() => document.querySelector('#sideText').textContent.trim().length > 0", timeout=10)
+                        blind = pag.evaluate(WITHOUT_NAME)
+                        sixth = pag.inner_text("#welcome")
+                        pag.click("#welcomeLogin")
+                        guided = wait_until(lambda: system().get("login_item") is True, 10)
+                        pag.click("#welcomeExit")
+                        wait(pag, "() => !document.getElementById('welcome').open", timeout=5)
+                        mark(f"{language}: Mac: la configurazione guidata propone di spostare l'app e, tra i controlli, l'avvio all'accesso",
+                             guided and not blind and "mac." not in first + sixth, f"acceso {guided} · senza nome {blind[:2]}")
+
+                        # su un Mac la pagina parla del Mac: tasti, barra dei menu, Portachiavi (e mai «questo PC»)
+                        system({"mac_location": "ok"})
+                        mac = ctx.new_page()
+                        mac.add_init_script("Object.defineProperty(Navigator.prototype, 'platform', {get: () => 'MacIntel'})")
+                        seen, wrong = {}, []
+                        for view in ("start", "guide", "settings/general", "vault", "connections/proxy"):
+                            mac.goto(f"{PANEL}/#/{view}")
+                            mac.reload()
+                            mac.wait_for_selector("#panel > *")
+                            mac.wait_for_timeout(900)
+                            seen[view] = mac.inner_text("main")
+                            # nella Guida i nomi dei tasti delle scorciatoie li scrive il programma, che qui gira su Windows
+                            wrong += [f"{view}: {w}" for w in ("Windows", "orologio", "clock", "questo PC", "this PC", "Ctrl", "AltGr")
+                                      if w in seen[view] and not (w == "Ctrl" and view == "guide")]
+                        mac.close()
+                        mark(f"{language}: Mac: su un Mac la pagina nomina i tasti, la barra dei menu e il Portachiavi del Mac, non quelli di Windows",
+                             not wrong and "Control" in seen["settings/general"] and "Cmd" in seen["guide"]
+                             and ("Portachiavi" if language == "it" else "Keychain") in seen["vault"] and "Mac" in seen["start"], "; ".join(wrong[:5]))
+                    except Exception as ex:   # noqa: BLE001
+                        mark(f"{language}: Mac: spostamento, avvio all'accesso e disinstallazione dal pannello", False, f"{type(ex).__name__}: {ex}"[:200])
+                    finally:
+                        Path(fake).write_text("{}", encoding="utf-8")
+                        pag.goto(PANEL + "/#/connections/app")   # dove stavano le prove di prima e dove riprendono quelle dopo
+                        pag.reload()
+                        pag.wait_for_selector("#menu a")
+
                 # --- il comando per i plugin delle app AI: si installa e si toglie dal pannello (nelle prove il PATH vero non viene toccato)
                 try:
                     import hook_command

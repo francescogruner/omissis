@@ -12,6 +12,10 @@ il programma li scarica al primo avvio, come su Windows.
 L'app non e' firmata ne' notarizzata (serve l'Apple Developer Program): al primo avvio macOS la ferma, e la si apre da
 Impostazioni di Sistema > Privacy e sicurezza > «Apri comunque».
 
+Lo stesso .dmg serve anche agli aggiornamenti automatici: le copie installate lo scaricano e ne prendono l'app
+(app/macapp.py). Perche' lo accettino va pubblicato insieme al suo foglio firmato, update-mac-<processore>.json: lo
+scrive chi pubblica, sul suo computer, dove sta la chiave delle firme.
+
 --smoke-test avvia l'app costruita in modalita' di prova (senza icona e senza browser) e controlla che il pannello
 risponda. Con --platform si puo' provare la costruzione anche su Linux (senza .dmg ne' Info.plist).
 """
@@ -113,6 +117,13 @@ def build(version, arch, plat):
     run([python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-compile", "--only-binary=:all:",
          "-r", HERE / "requirements-mac.txt"])
     copy_code(resources / "omissis")
+    # come l'installer per Windows: il programma dice la versione con cui e' stato costruito (la leggono il pannello e
+    # il controllo degli aggiornamenti)
+    stated = resources / "omissis" / "app" / "version.py"
+    text, found = re.subn(r'VERSION = "[^"]*"', f'VERSION = "{version}"', stated.read_text(encoding="utf-8"))
+    if found != 1:
+        sys.exit("app/version.py: non trovo la riga della versione")
+    stated.write_text(text, encoding="utf-8")
     (resources / "omissis" / "installed.json").write_text(json.dumps({"version": version, "channel": "github"}), encoding="utf-8")
     launcher = contents / "MacOS" / "Omissis"
     launcher.write_text(LAUNCHER, encoding="utf-8")
@@ -170,6 +181,8 @@ def main():
     ap.add_argument("--platform", default="mac" if sys.platform == "darwin" else "linux", choices=["mac", "linux"])
     ap.add_argument("--smoke-test", action="store_true")
     a = ap.parse_args()
+    if not re.fullmatch(r"\d{1,4}(\.\d{1,4}){1,3}", a.version):
+        sys.exit("versione non valida: solo numeri separati da punti (per esempio 0.1.5)")
     OUT.mkdir(exist_ok=True)
     app, _ = build(a.version, a.arch, a.platform)
     print("costruita", app)

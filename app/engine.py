@@ -525,7 +525,9 @@ def serve(engine, port, token, extension_token, bridge):
                 self._respond(500, {"error": type(ex).__name__})
 
     class Service(ThreadingHTTPServer):
-        allow_reuse_address = False   # su Windows, altrimenti, due copie potrebbero aprire la stessa porta senza errore
+        # su Windows, altrimenti, due copie potrebbero aprire la stessa porta senza errore; sul Mac e su Linux serve
+        # invece a ripartire subito dopo una chiusura (li' due servizi sulla stessa porta non si aprono comunque)
+        allow_reuse_address = sys.platform != "win32"
 
     Service(("127.0.0.1", port), Handler).serve_forever()
 

@@ -265,6 +265,24 @@ def keychain_secret(account):
         return None
 
 
+def keychain_forget(account):
+    """Toglie dal Portachiavi il segreto creato da keychain_secret: serve quando chi usa il Mac cancella i dati di
+    Omissis (senza l'archivio quella chiave non apre piu' nulla)."""
+    fake = os.environ.get("OMISSIS_FAKE_KEYCHAIN")
+    try:
+        if fake and not WINDOWS:
+            import json
+            f = Path(fake)
+            data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+            if data.pop(account, None) is not None:
+                f.write_text(json.dumps(data), encoding="utf-8")
+        elif MAC:
+            import keyring
+            keyring.delete_password("Omissis", account)
+    except Exception:   # noqa: BLE001  (non c'era, o il Portachiavi non risponde: non c'e' altro da fare)
+        pass
+
+
 def _fake_system(change=None):
     """Solo per le prove (OMISSIS_FAKE_SYSTEM): un file che fa da impostazioni del computer, per non toccare quelle vere."""
     import json

@@ -2,18 +2,18 @@
 
 **English** · [Italiano](#italiano)
 
-The Mac build is out as a **preview** since 20 November 2026 (version 0.1.5, Apple silicon only): the `.dmg` is on the [releases page](https://github.com/francescogruner/omissis/releases). It is not signed with Apple, so macOS refuses to open it the first time: see «Installing the preview» below. On 20 November 2026 a GitHub Mac (macOS 26, Apple Silicon) built the app and the `.dmg`, started the app and passed the automated tests. The real Keychain, the menu bar icon and the real ChatGPT and Claude apps were tried there too. Nobody has used it on a Mac yet: a message replaced inside an app, with a signed-in account, is still to be seen.
+The Mac build is out as a **preview** since 20 November 2026 (now version 0.1.6, Apple silicon only): the `.dmg` is on the [releases page](https://github.com/francescogruner/omissis/releases). It is not signed with Apple, so macOS refuses to open it the first time: see «Installing the preview» below. On 20 November 2026 a GitHub Mac (macOS 26, Apple Silicon) built the app and the `.dmg`, started the app and passed the automated tests. The real Keychain, the menu bar icon and the real ChatGPT and Claude apps were tried there too. Nobody has used it on a Mac yet: a message replaced inside an app, with a signed-in account, is still to be seen.
 
 ## Installing the preview
 
 These are the usual steps for an app without an Apple signature. They have not been tried on a real Mac with this build.
 
-1. Download `Omissis-0.1.5-mac-arm64.dmg`, open it and drag Omissis to Applications.
+1. Download `Omissis-0.1.6-mac-arm64.dmg`, open it and drag Omissis to Applications.
 2. Open Omissis. macOS says it cannot verify the app: close the message.
 3. Open System Settings → Privacy & Security, scroll down to «Security» and press «Open Anyway» next to Omissis. macOS asks for your password or Touch ID.
 4. If macOS says the app «is damaged», it is the same refusal in another form: in Terminal run `xattr -dr com.apple.quarantine /Applications/Omissis.app`, then open it again.
 
-Missing compared with Windows: keyboard shortcuts, reading scanned documents, automatic updates (when a new `.dmg` comes out you download it again). If something does not work, please open an issue.
+From version 0.1.6 the preview updates itself, starts at sign-in, reads scans and has the clipboard shortcuts (see «What the program does in place of an installer»). The first preview, 0.1.5, has none of that and cannot update itself: if you installed it, download the new `.dmg` once. If something does not work, please open an issue.
 
 ## How it is built
 
@@ -26,7 +26,7 @@ The app is not frozen, the same as the Windows installer. `Omissis.app` contains
 `Contents/MacOS/Omissis` is a small launcher for `panel.py`. The model weights are downloaded at first start.
 
 ```
-python3 packaging/mac/build_mac.py --version 0.1.5 --smoke-test   # on a Mac: dist/Omissis.app and dist/Omissis-0.1.5-mac-arm64.dmg
+python3 packaging/mac/build_mac.py --version 0.1.6 --smoke-test   # on a Mac: dist/Omissis.app and dist/Omissis-0.1.6-mac-arm64.dmg
 bash packaging/mac/ci_tests.sh                                     # automated tests with the app's own Python
 ```
 
@@ -42,11 +42,38 @@ The workflow `.github/workflows/mac.yml` does the same on a GitHub Mac, and keep
 | Desktop apps | ChatGPT/Codex, Copilot, Perplexity (debug port), Kimi (plugin). The Claude app refuses the debug port | ChatGPT/Codex (debug port), Kimi (plugin). The Claude app refuses the debug port. Perplexity and Copilot for Mac are native apps: not covered this way |
 | Safari | — | not yet: see «Safari» below. Chrome, Edge, Brave and Arc use the same extension as on Windows |
 | Terminal tools | `omissis-hook` in the user PATH | `omissis-hook` added to `~/.zprofile` |
-| Global shortcuts (Ctrl+Alt+M…) | yes | not yet: use the icon menu |
-| Reading scans (OCR) | yes | not yet |
-| Automatic updates | yes | not yet: the panel links to the release page |
+| Global shortcuts | Ctrl+Alt+S, M and R | Control+Option+M and Control+Option+R, for the clipboard. Masking the selected text in place is not available: macOS lets only programs with the Accessibility permission press keys for you |
+| Reading scans (OCR) | the Windows engine | the text recognition of macOS (Vision) |
+| Automatic updates | signed sheet, silent installer | the same signed sheet, the `.dmg`; see below |
+| Start at sign-in | an option of the installer | a switch in the panel, on at first start |
+| Removing it | the Windows uninstaller | «Remove Omissis» in the panel settings |
 
 The app is not signed or notarized, so macOS blocks it the first time. To open it: System Settings → Privacy & Security → «Open Anyway».
+
+### What the program does in place of an installer
+
+On Windows an installer puts the program in place, starts it at sign-in, updates it and removes it. On a Mac there is no installer, so the program does those things itself (`app/macapp.py`), from the panel. It is there from version 0.1.6 (20 November 2026); the first preview, 0.1.5, does not have it.
+
+**Updates.** Same rules as on Windows: once a day the app reads a sheet from the releases page (`update-mac-arm64.json`), accepts it only if it carries the author's signature, downloads the `.dmg` named there and checks its size and SHA-256. A sheet for another processor, or one naming a Windows installer, is ignored. Then:
+
+- it mounts the `.dmg` (read-only, not shown in the Finder) and copies the new `Contents` folder next to the one in use, inside `Omissis.app`;
+- it checks the copy: bundle identifier, version, and that its Python starts on this Mac and loads its libraries;
+- at the next start, or with «Install now», a small shell script waits for the program to close, swaps the two folders and reopens the app;
+- the new version has two minutes to say it has started. If it does not, the script puts the previous version back and reopens it, and the panel says which version failed. A version that failed is not tried again by itself.
+
+Only `Contents` inside the app changes, so nothing is asked of the Applications folder, and the data in `~/Library/Application Support/Omissis` is not touched. The sheet is `{"product", "version", "platform": "mac-arm64", "file", "byte", "sha256", "notes"}` with an Ed25519 signature next to it (`.sig`); it is written and signed on the publisher's computer, where the signing key stays.
+
+**First start.** An app opened from the installation disk, or from the temporary copy macOS makes of an app that was never moved, cannot replace itself. The panel says so, on the first page and in the guided setup, and offers «Move to Applications»: it copies the app there (to `~/Applications` if you cannot write to `/Applications`), closes and reopens from the new place. From its own place, at first start, Omissis adds itself to the programs that start at sign-in (`~/Library/LaunchAgents/eu.omissis.app.plist`, which asks macOS to open the app); the switch is in the guided setup and in the settings, and the entry also shows in System Settings → General → Login Items.
+
+**Removing it.** «Remove Omissis» in the settings removes the start at sign-in, the terminal command, the proxy setting and the certificate Omissis added, and moves the app to the Trash. Your data stays unless you tick «Also delete my data».
+
+**Scans and shortcuts.** Scanned PDFs and photos are read with the text recognition of macOS (Vision), on the Mac itself. Control+Option+M masks the clipboard and Control+Option+R restores it.
+
+**How it was tried.** On 20 November 2026, on a GitHub Mac (macOS 26, Apple silicon), with the app just built and throwaway signing keys that only a test copy accepts (`packaging/mac/update_test.py`, 17 checks out of 17). A new version was found, downloaded, unpacked and checked, and «Install now» had it running 4 seconds later with the user's settings intact. A version broken on purpose passed the checks and did not start: the previous one was put back and reopened by itself, the panel named the version that failed, and it was not tried again at the next start. A version that was ready was installed at the next start. The app opened from its disk image said so and moved itself to an Applications folder (a test one) in 6 seconds. The start-at-sign-in entry was written at first start and switched off and on from the panel, and macOS, running it, did start Omissis. «Remove Omissis» moved the app to the Trash, removed the entry, deleted the data and closed the program. The swap and the way back are also tried at every build with a small stand-in app (`app/e2e_macapp.py`, 12 out of 12, on Linux too). In the same job the scans of `app/e2e_documents.py` were read by Vision and masked, and `packaging/mac/keys_test.py` pressed Control+Option+M and Control+Option+R through System Events: the clipboard was masked and restored (4 out of 4).
+
+**Seen once, not explained.** In one of the five runs of that day the program with the menu bar icon aborted two seconds after starting on the GitHub Mac («Abort trap: 6»). It did not happen again in the 29 starts that followed in other runs, 24 of them in a row, and the cause was not found. `ci_tests.sh` now starts it four times before the tests, and if it falls prints what it wrote and macOS's crash report.
+
+**Not tried on a real Mac.** What macOS says when an app approved with «Open Anyway» is reopened after it replaced its own content; whether macOS asks for the «App Management» permission; how the entry is named in Login Items; moving an app that really came from the Internet (on the GitHub Mac the disk image had no quarantine mark).
 
 ### ChatGPT for Mac
 
@@ -78,16 +105,16 @@ Safari needs its own build of the extension, inside a Mac app. `packaging/mac/bu
 
 ## Italiano
 
-La versione per Mac è pubblicata come **versione di prova** dal 20 novembre 2026 (0.1.5, solo per i Mac con processore Apple): il `.dmg` è nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases). Non è firmata con Apple, quindi la prima volta macOS non la apre: vedi «Come si installa la versione di prova» qui sotto. Il 20 novembre 2026 un Mac di GitHub (macOS 26, Apple Silicon) ha costruito l'app e il `.dmg`, ha avviato l'app e ha passato le prove automatiche. Lì sono stati provati anche il Portachiavi vero, l'icona nella barra dei menu e le app vere di ChatGPT e di Claude. Nessuno l'ha ancora usata su un Mac: un messaggio sostituito dentro un'app, con un account, resta da vedere.
+La versione per Mac è pubblicata come **versione di prova** dal 20 novembre 2026 (ora 0.1.6, solo per i Mac con processore Apple): il `.dmg` è nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases). Non è firmata con Apple, quindi la prima volta macOS non la apre: vedi «Come si installa la versione di prova» qui sotto. Il 20 novembre 2026 un Mac di GitHub (macOS 26, Apple Silicon) ha costruito l'app e il `.dmg`, ha avviato l'app e ha passato le prove automatiche. Lì sono stati provati anche il Portachiavi vero, l'icona nella barra dei menu e le app vere di ChatGPT e di Claude. Nessuno l'ha ancora usata su un Mac: un messaggio sostituito dentro un'app, con un account, resta da vedere.
 
 **Come si installa la versione di prova.** Sono i passi soliti per un'app senza la firma Apple. Con questa versione non sono stati provati su un Mac vero.
 
-1. Scarica `Omissis-0.1.5-mac-arm64.dmg`, aprilo e trascina Omissis in Applicazioni.
+1. Scarica `Omissis-0.1.6-mac-arm64.dmg`, aprilo e trascina Omissis in Applicazioni.
 2. Apri Omissis. macOS dice che non può verificarla: chiudi il messaggio.
 3. Apri Impostazioni di Sistema → Privacy e sicurezza, scorri fino a «Sicurezza» e premi «Apri comunque» accanto a Omissis. macOS chiede la password o il Touch ID.
 4. Se macOS dice che l'app «è danneggiata», è lo stesso rifiuto in un'altra forma: nel Terminale lancia `xattr -dr com.apple.quarantine /Applications/Omissis.app`, poi riaprila.
 
-Rispetto a Windows mancano: scorciatoie da tastiera, lettura delle scansioni, aggiornamenti automatici (quando esce un `.dmg` nuovo lo riscarichi). Se qualcosa non va, apri una segnalazione.
+Dalla 0.1.6 la versione di prova si aggiorna da sola, parte all'accesso, legge le scansioni e ha le scorciatoie sugli appunti (vedi «Che cosa fa il programma al posto dell'installer»). La prima versione di prova, la 0.1.5, non ha nulla di questo e non sa aggiornarsi: chi l'ha installata riscarica il `.dmg` nuovo una volta. Se qualcosa non va, apri una segnalazione.
 
 **Come si costruisce.** Come l'installer per Windows, l'app non viene «congelata». `Omissis.app` contiene:
 
@@ -121,9 +148,24 @@ Il modello si scarica al primo avvio. I comandi sono quelli qui sopra, e il work
   - per darla agli utenti servono un Developer ID di Apple e la notarizzazione. Senza firma, Safari chiede «Consenti estensioni non firmate» a ogni avvio;
   - senza estensione, Safari può passare dal proxy di Omissis, perché usa il proxy e i certificati del sistema. Non è ancora stato provato.
 - **Strumenti da terminale:** il comando `omissis-hook` viene aggiunto a `~/.zprofile`.
-- **Non ancora disponibili:**
-  - le scorciatoie da tastiera;
-  - la lettura delle scansioni;
-  - gli aggiornamenti automatici.
+
+**Che cosa fa il programma al posto dell'installer.** Su Windows un installer mette il programma al suo posto, lo fa partire all'accesso, lo aggiorna e lo toglie. Sul Mac un installer non c'è, quindi queste cose le fa il programma (`app/macapp.py`), dal pannello. C'è dalla versione 0.1.6 (20 novembre 2026); la prima versione di prova, la 0.1.5, non lo ha.
+
+- **Aggiornamenti:** stesse regole di Windows.
+  - Una volta al giorno l'app legge un foglio dalla pagina delle versioni (`update-mac-arm64.json`), lo accetta solo se porta la firma dell'autore, scarica il `.dmg` che il foglio indica e ne controlla dimensione e impronta SHA-256. Un foglio per un altro processore, o che indica un installer di Windows, viene ignorato.
+  - Monta il `.dmg` (in sola lettura, senza farlo comparire nel Finder) e copia la cartella `Contents` nuova accanto a quella in uso, dentro `Omissis.app`.
+  - Controlla la copia: identificativo, versione, e che il suo Python parta su questo Mac e carichi le sue librerie.
+  - Al successivo avvio, o con «Installa ora», un piccolo script aspetta che il programma si chiuda, scambia le due cartelle e riapre l'app.
+  - La versione nuova ha due minuti per dire che è partita. Se non lo fa, lo script rimette quella di prima e la riapre, e il pannello dice quale versione non è partita. Una versione fallita non viene ritentata da sola.
+  - Cambia solo `Contents` dentro l'app: alla cartella Applicazioni non si chiede nulla, e i dati in `~/Library/Application Support/Omissis` non vengono toccati.
+  - Il foglio è `{"product", "version", "platform": "mac-arm64", "file", "byte", "sha256", "notes"}` con accanto la firma Ed25519 (`.sig`). Lo scrive e lo firma chi pubblica, sul suo computer, dove resta la chiave.
+- **Primo avvio:**
+  - un'app aperta dal disco di installazione, o dalla copia temporanea che macOS fa di un'app mai spostata, non può sostituirsi. Il pannello lo dice, nella prima pagina e nella configurazione guidata, e offre «Sposta in Applicazioni»: copia l'app lì (in `~/Applications` se in `/Applications` non puoi scrivere), si chiude e si riapre dal posto nuovo;
+  - dal posto suo, al primo avvio, Omissis si mette tra i programmi che partono all'accesso (`~/Library/LaunchAgents/eu.omissis.app.plist`, che chiede a macOS di aprire l'app). L'interruttore è nella configurazione guidata e nelle impostazioni, e la voce si vede anche in Impostazioni di Sistema → Generali → Elementi login.
+- **Toglierla:** «Togli Omissis» nelle impostazioni toglie l'avvio all'accesso, il comando da terminale, l'impostazione del proxy e il certificato messi da Omissis, e sposta l'app nel Cestino. I dati restano, a meno di spuntare «Elimina anche i miei dati».
+- **Scansioni e scorciatoie:** PDF scansionati e fotografie si leggono con il riconoscimento del testo di macOS (Vision), sul Mac stesso. Control+Option+M maschera gli appunti e Control+Option+R li ripristina. La scorciatoia che sostituisce il testo selezionato sul posto non c'è: macOS lascia premere i tasti al posto tuo solo ai programmi con il permesso «Accessibilità».
+- **Come è stato provato:** il 20 novembre 2026, su un Mac di GitHub (macOS 26, processore Apple), con l'app appena costruita e chiavi di firma usa e getta che solo una copia di prova accetta (`packaging/mac/update_test.py`, 17 controlli su 17). Una versione nuova è stata trovata, scaricata, scompattata e controllata, e con «Installa ora» era accesa 4 secondi dopo, con le impostazioni di prima. Una versione rotta apposta ha passato i controlli e non è partita: è tornata quella di prima, riaperta da sola, il pannello ha detto quale versione non era partita, e al riavvio non è stata ritentata. Una versione pronta è stata installata al successivo avvio. L'app aperta dalla sua immagine disco lo ha detto e si è spostata in una cartella Applicazioni (di prova) in 6 secondi. La voce di avvio all'accesso è stata scritta al primo avvio, spenta e riaccesa dal pannello, e macOS, eseguendola, ha fatto partire Omissis. «Togli Omissis» ha spostato l'app nel Cestino, tolto la voce, cancellato i dati e chiuso il programma. Lo scambio e il ritorno si provano a ogni costruzione anche con una piccola app finta (`app/e2e_macapp.py`, 12 su 12, anche su Linux). Nello stesso lavoro le scansioni di `app/e2e_documents.py` sono state lette da Vision e mascherate, e `packaging/mac/keys_test.py` ha premuto Control+Option+M e Control+Option+R con System Events: gli appunti sono stati mascherati e ripristinati (4 su 4).
+- **Visto una volta, senza spiegazione:** in una delle cinque esecuzioni di quel giorno il programma con l'icona nella barra dei menu è caduto due secondi dopo l'avvio sul Mac di GitHub («Abort trap: 6»). Non è più successo nei 29 avvii fatti dopo in altre esecuzioni, 24 dei quali di fila, e la causa non è stata trovata. `ci_tests.sh` ora lo avvia quattro volte prima delle prove e, se cade, stampa ciò che ha scritto e il rapporto di macOS.
+- **Non provato su un Mac vero:** che cosa dice macOS quando un'app approvata con «Apri comunque» viene riaperta dopo aver sostituito il proprio contenuto; se macOS chiede il permesso «Gestione app»; con che nome compare la voce tra gli elementi di login; lo spostamento di un'app arrivata davvero da Internet (sul Mac di GitHub l'immagine disco non aveva il segno di quarantena).
 
 L'app non è firmata né notarizzata, quindi al primo avvio macOS la blocca. Per aprirla: Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque».

@@ -309,7 +309,7 @@ def share(engine, port, key, cert, private):
 
     class Service(ThreadingHTTPServer):
         daemon_threads = True
-        allow_reuse_address = False
+        allow_reuse_address = os.name != "nt"   # fuori da Windows: per ripartire subito dopo una chiusura (vedi engine.py)
 
         def finish_request(self, request, client_address):
             # la stretta di mano TLS si fa qui, nel filo della singola richiesta: chi apre la porta e tace non blocca gli altri

@@ -85,7 +85,7 @@ Verified **live** means on the real service, with made-up data, checking what ac
 | ⏳ | Codex plugin (needs approval with `/hooks`), MCP inside Claude Desktop | ⏳ to be tested |
 | ⏳ | **Claude** desktop app: protected through the computer's network, with one button in the panel (*Connections → Apps → Protect Claude*; from version 0.1.5, not released for Windows yet) that installs the certificate and sends only the traffic to claude.ai to the Omissis proxy. You use it as always, with your own sign-in. Tried on 20 Nov 2026 with the real app on Windows and on a Mac (6.28899.2), as far as the sign-in window; a message replaced with a real sign-in has not been seen yet | ⏳ to be tried with an account |
 | 🚫 | Copilot inside Teams and Outlook, Cursor and Windsurf chat (documents go through the MCP server, see above), Firefox, Linux | ❌ not covered |
-| 🍎 | **Mac** (Apple silicon): preview build 0.1.5, not signed with Apple. Built and tested automatically on a GitHub Mac; nobody has used it on a real Mac yet. [How to install it](packaging/mac/README.md) | 🧪 preview |
+| 🍎 | **Mac** (Apple silicon): preview build 0.1.6, not signed with Apple. Built and tested automatically on a GitHub Mac; nobody has used it on a real Mac yet. It updates itself, starts at sign-in, reads scans and has the clipboard shortcuts. The first preview, 0.1.5, does not: if you have it, download the new one once. [How to install it](packaging/mac/README.md) | 🧪 preview |
 
 The full, dated list is on [omissis.eu](https://omissis.eu) and, for your own PC, in the panel (*Connections →
 Compatibility*), which also records which program versions each replacement last worked with.
@@ -257,7 +257,8 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 - [x] Claude desktop app: one button in the panel protects it through the computer's network (certificate and PAC file)
 - [ ] Claude desktop app: a message tried with a real sign-in
 - [x] Mac (Apple silicon): preview build, not signed
-- [ ] Mac: Apple signature, keyboard shortcuts, reading scans, automatic updates
+- [x] Mac: automatic updates, start at sign-in, moving to Applications and removing from the panel, reading scans, clipboard shortcuts (in the 0.1.6 preview)
+- [ ] Mac: Apple signature; a person trying it on a real Mac
 - [ ] Microsoft Store, Chrome Web Store and Edge Add-ons: submitted on 18/11/2026, in review
 - [ ] Code signing for the installer (Windows shows the SmartScreen warning today)
 - [ ] Native messaging instead of the local HTTP bridge for the extension

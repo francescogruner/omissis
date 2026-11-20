@@ -75,7 +75,14 @@ def create():
     # --- una scansione: testo disegnato in un'immagine, salvata come PDF senza testo e come immagine
     from PIL import Image, ImageDraw, ImageFont
     sheet = Image.new("RGB", (1654, 2339), "white")
-    pen, font = ImageDraw.Draw(sheet), ImageFont.truetype("arial.ttf", 34)
+    font = None
+    for name in ("arial.ttf", "Arial.ttf", "/System/Library/Fonts/Supplemental/Arial.ttf", "Helvetica.ttc", "DejaVuSans.ttf"):   # Windows, Mac, Linux
+        try:
+            font = ImageFont.truetype(name, 34)
+            break
+        except OSError:
+            continue
+    pen, font = ImageDraw.Draw(sheet), font or ImageFont.load_default(34)
     for i, line in enumerate(["DICHIARAZIONE", "La sottoscritta Giulia Ferraresi, residente a Brescia,", "telefono 347 5551234, email giulia.ferraresi@nevatek.example,",
                               "dichiara di lavorare con Aldo Bruschi presso la Nevatek S.r.l."]):
         pen.text((140, 220 + i * 70), line, fill="black", font=font)

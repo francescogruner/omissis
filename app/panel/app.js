@@ -19,13 +19,21 @@ const readKeystrokes = async () => {
   const s = await api("/api/shortcuts");
   KEYSTROKES = Object.fromEntries(s.entries.map(v => [v.name, v.combo ? v.caption.split("+").map(k => `<kbd>${esc(k)}</kbd>`).join("+") : `<i>${esc(t("shortcuts.off"))}</i>`]));
 };
+// Su un Mac valgono, dove ci sono, le frasi «chiave.mac» (quelle che nominano Windows, i suoi tasti o l'icona vicino
+// all'orologio) e «questo PC», «il PC» diventano «questo Mac», «il Mac». Il pannello risponde solo al computer su cui gira: il sistema del
+// browser è il suo. Il programma fa lo stesso con le frasi che scrive lui (i18n.py).
+const MAC = /^Mac/i.test(navigator.platform || "");
+const phrase = key => {
+  const s = (MAC ? TEXTS[key + ".mac"] : undefined) ?? TEXTS[key] ?? (MAC ? FALLBACK[key + ".mac"] : undefined) ?? FALLBACK[key];
+  return MAC && s ? s.replace(/\b(questo|dal|sul|del|il|this|the) PC\b/gi, "$1 Mac") : s;   // sempre questo computer: «i PC», «un PC» restano
+};
 /** La frase per una chiave, con i valori tra graffe sostituiti. Se manca nella lingua scelta vale l'italiano. */
 function t(key, values) {
-  const s = TEXTS[key] ?? FALLBACK[key] ?? key;
+  const s = phrase(key) ?? key;
   return values ? s.replace(/\{(\w+)\}/g, (m, k) => (k in values ? values[k] : m)) : s;
 }
 /** Come t, ma senza segnalare la chiave se non c'è: restituisce il testo di riserva. Per le voci che arrivano dal programma. */
-const tSe = (key, fallback) => TEXTS[key] ?? FALLBACK[key] ?? fallback;
+const tSe = (key, fallback) => phrase(key) ?? fallback;
 const num = n => new Intl.NumberFormat(LANGUAGE).format(n);
 const megabyte = n => num(Math.round(n / 1e6));
 const dataKind = k => tSe("kind." + k, k);
@@ -119,6 +127,7 @@ const VIEWS = [
 ];
 const DRAW = {}, REFRESH = {};
 let S = null;              // l'ultimo stato letto dal programma
+let POLL = 0;              // la lettura periodica dello stato (si ferma quando Omissis viene tolto dal Mac)
 let view = "simple";    // semplice | avanzata
 let opened = {id: "", card: ""};
 let extension = null;     // ciò che dice di sé l'estensione, se questo browser ce l'ha
@@ -263,19 +272,36 @@ REFRESH.start = s => {
   measures($("#days"));
   bars($("#byService"), st.services, s => tSe("service." + s, s)); bars($("#byKind"), st.kinds, dataKind);
 };
+/** Sul Mac: l'app aperta dal disco di installazione non resta installata e non si aggiorna. Si sposta con un clic. */
+const moveNote = () => `<div class="note warning"><div class="space"><b>${esc(t("mac.move.title"))}</b><div class="small">${esc(t("mac.move.below"))}</div></div>
+  <button class="button primary" data-system="move">${esc(t("mac.move.button"))}</button></div>`;
+function wireMove(root) {
+  $$('button[data-system="move"]', root).forEach(b => { b.onclick = test(async () => {
+    if (!await confirm(t("mac.move.title"), t("mac.move.confirm"), t("mac.move.button"))) return;
+    b.disabled = true;
+    try { await api("/api/system", {action: "move"}); notify(t("mac.move.done")); }
+    catch (e) { b.disabled = false; throw e; }
+  }); });
+}
 let seenNotice = "";
 function updateNotice(a) {
   const el = $("#update");
   if (!a || !el) return;
   const pc = a.total ? Math.min(100, Math.floor(100 * a.completed / a.total)) : 0, v = esc(a.version);
   const notes = a.notes ? `<div class="small">${esc(a.notes)}</div>` : "";
-  const html = a.phase === "ready_now" ? `<div class="note"><div class="space"><b>${esc(t("updates.ready_now", {v}))}</b><div class="small faded">${esc(t("updates.ready_now.below"))}</div>${notes}</div><button class="button primary" data-action="install">${esc(t("updates.install"))}</button></div>`
+  const state = a.phase === "ready_now" ? `<div class="note"><div class="space"><b>${esc(t("updates.ready_now", {v}))}</b><div class="small faded">${esc(t("updates.ready_now.below"))}</div>${notes}</div><button class="button primary" data-action="install">${esc(t("updates.install"))}</button></div>`
     : a.phase === "downloading" ? `<div class="note"><span>${esc(t("updates.downloading", {v, pc}))}</span></div>`
     : a.phase === "available" ? `<div class="note"><div class="space"><b>${esc(t("updates.available", {v}))}</b>${notes}</div>${a.installable
       ? `<button class="button" data-action="download">${esc(t("updates.download"))}</button>`
-      : `<a class="button" href="${esc(a.page)}" target="_blank" rel="noopener">${esc(t("updates.page"))}</a>`}</div>` : "";
+      : `<a class="button" href="${esc(a.page)}" target="_blank" rel="noopener">${esc(t("updates.page"))}</a>`}</div>`
+    : a.phase === "preparing" ? `<div class="note"><span>${esc(t("updates.preparing", {v}))}</span></div>` : "";
+  // sul Mac: l'app aperta dal disco di installazione, e una versione nuova che non è partita (è rimasta quella di prima)
+  const html = (a.reason === "move" ? moveNote() : "")
+    + (a.failed ? `<div class="note warning"><span class="space">${esc(t("updates.failed", {v: a.failed}))}</span><a class="button" href="${esc(a.page)}" target="_blank" rel="noopener">${esc(t("updates.page"))}</a></div>` : "")
+    + state;
   if (html === seenNotice && el.innerHTML) return;   // riscritto solo se cambia: un pulsante non deve sparire sotto il clic
   seenNotice = html; el.innerHTML = html;
+  wireMove(el);
   $$("button[data-action]", el).forEach(b => b.onclick = test(async () => {
     b.disabled = true;
     await api("/api/updates", {action: b.dataset.action});
@@ -607,6 +633,7 @@ const generalSettings = test(async el => {
       ${line(t("updates.installed"), `<span id="aggWhen"></span>`, `<b id="aggVersion">…</b>`)}
       <div id="aggChoice">${line(t("updates.new_ones"), "", `<select id="updates" aria-label="${esc(t("updates.new_ones"))}">${options(["automatic", "notify", "never"].map(v => [v, t(`updates.mode.${v}`)]), i.updates)}</select><button class="button" id="aggCheck">${esc(t("updates.check_now"))}</button>`)}</div>
     </section>
+    <div id="macCard"></div>
     <section class="card only-advanced" aria-labelledby="conTitle">
       <div class="inside"><h2 id="conTitle">${esc(t("console.title"))}</h2><p>${esc(t("console.below"))}</p></div>
       <div id="console"></div>
@@ -627,8 +654,44 @@ const generalSettings = test(async el => {
     } finally { e.target.disabled = false; }
   });
   drawShortcuts();
+  drawMac(i.system);
   if (S) REFRESH.settings(S);
 });
+/** Sul Mac, ciò che su Windows fa l'installer: avvio all'accesso, spostamento in Applicazioni, disinstallazione.
+    Con un programma più vecchio della pagina (o su Windows) la scheda non c'è. */
+function drawMac(sys) {
+  const el = $("#macCard");
+  if (!el) return;
+  if (!sys || !sys.location) { el.innerHTML = ""; return; }
+  const login = sys.login_item || {};
+  el.innerHTML = `<section class="card" aria-labelledby="macTitle">
+      <div class="inside"><h2 id="macTitle">${esc(t("mac.title"))}</h2>${sys.location === "move" ? moveNote() : ""}
+        ${sys.location === "locked" ? `<p class="help">${esc(t("mac.locked"))}</p>` : ""}</div>
+      ${login.supported ? line(t("mac.login"), esc(t("mac.login.below")), toggle("macLogin", t("mac.login"))) : ""}
+      ${sys.uninstall ? line(t("mac.remove"), esc(t("mac.remove.below")), `<label class="line small"><input type="checkbox" id="macData">${esc(t("mac.remove.data"))}</label>
+        <button class="button" id="macRemove">${esc(t("mac.remove.button"))}</button>`) : ""}
+    </section>`;
+  wireMove(el);
+  if ($("#macLogin")) {
+    $("#macLogin").checked = !!login.on;
+    $("#macLogin").onchange = test(async e => {
+      const want = e.target.checked;
+      try {
+        const now = await api("/api/system", {action: want ? "login_on" : "login_off"});
+        notify(t(now.login_item.on ? "mac.login.on" : "mac.login.off"));
+        drawMac(now); $("#macLogin")?.focus();
+      } catch (err) { e.target.checked = !want; throw err; }
+    });
+  }
+  if ($("#macRemove")) $("#macRemove").onclick = test(async () => {
+    const data = $("#macData").checked;
+    if (!await confirm(t("mac.remove.confirm.title"), t(data ? "mac.remove.confirm.data" : "mac.remove.confirm"), t("mac.remove.yes"))) return;
+    const r = await api("/api/system", {action: "uninstall", data});
+    clearInterval(POLL);
+    $("#content").innerHTML = `<header class="head"><h1>Omissis</h1><p id="goodbye">${esc(t("mac.remove.done"))}${r.trashed ? "" : " " + esc(t("mac.remove.done.trash"))}</p></header>`;
+    $("#menu").innerHTML = "";
+  });
+}
 // Le scorciatoie da tastiera: una riga ciascuna, con la lettera da premere insieme a Ctrl+Alt (oppure spenta) e lo stato.
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const drawShortcuts = test(async () => {
@@ -637,8 +700,9 @@ const drawShortcuts = test(async () => {
   const s = await api("/api/shortcuts");
   el.innerHTML = s.entries.map(v => {
     const simple = /^ctrl\+alt\+[a-z]$/.test(v.combo), letter = simple ? v.combo.slice(-1).toUpperCase() : "";
+    if (v.error === "not_here") return line(t(`shortcuts.${v.name}`), t(`shortcuts.${v.name}.below`), label(t("shortcuts.error.not_here")));
     const status = !v.combo ? label(t("shortcuts.off")) : !s.available ? "" : v.active ? label(t("shortcuts.active"), "ok") : label(t(`shortcuts.error.${v.error === "not_valid" ? "not_valid" : "busy"}`), "error");
-    return line(t(`shortcuts.${v.name}`), t(`shortcuts.${v.name}.below`), `${status}<span class="keystrokes" aria-hidden="true"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+</span>
+    return line(t(`shortcuts.${v.name}`), t(`shortcuts.${v.name}.below`), `${status}<span class="keystrokes" aria-hidden="true">${MAC ? "<kbd>Control</kbd>+<kbd>Option</kbd>" : "<kbd>Ctrl</kbd>+<kbd>Alt</kbd>"}+</span>
       <select data-sc="${esc(v.name)}" aria-label="${esc(t("shortcuts.letter_for", {name: t(`shortcuts.${v.name}`)}))}">
         <option value=""${v.combo ? "" : " selected"}>${esc(t("shortcuts.off"))}</option>
         ${v.combo && !simple ? `<option value="${esc(v.combo)}" selected>${esc(v.caption)}</option>` : ""}
@@ -663,7 +727,7 @@ REFRESH.settings = s => {
   $("#aggWhen").textContent = a.channel === "store" ? "" : a.phase === "check" ? t("updates.checking") : a.phase === "error" ? a.error
     : a.last_check ? t("updates.last_check", {when: a.last_check}) + (a.phase === "updated" ? " " + t("updates.latest") : "") : "";
   $("#aggChoice").hidden = a.channel === "store";
-  $("#aggNote").textContent = t(`updates.note.${["store", "source_code"].includes(a.channel) ? a.channel : "installer"}`);
+  $("#aggNote").textContent = t(`updates.note.${["store", "source_code"].includes(a.channel) ? a.channel : ["move", "locked"].includes(a.reason) ? a.reason : "installer"}`);
 };
 const recognitionSettings = test(async el => {
   const [i, l, cat] = await Promise.all([api("/api/settings"), api("/api/lists"), api("/api/categories")]);
@@ -1386,7 +1450,9 @@ async function welcome(from = 0) {
     6: () => `<div class="card"><div class="setting"><span class="name" id="welcomeEveryName">${esc(t("welcome.6.repeat"))}</span><span class="help">${esc(t("welcome.6.repeat.below"))}</span>
         <span class="command"><span class="choice" role="radiogroup" aria-labelledby="welcomeEveryName">${["daily", "weekly", "never"].map(k => `<label><input type="radio" name="welcomeEvery" value="${k}" ${cfg.scan === k ? "checked" : ""} ${lockedKey("scan") ? "disabled" : ""}>${esc(t(`welcome.6.${k}`))}</label>`).join("")}</span></span></div>
       <div class="setting"><span class="name" id="welcomeAskName">${esc(t("welcome.6.ask"))}</span><span class="help">${esc(t("welcome.6.ask.below"))}</span>
-        <span class="command"><span class="toggle"><input type="checkbox" role="switch" id="welcomeAsk" aria-labelledby="welcomeAskName" ${cfg.ask_apps ? "checked" : ""} ${lockedKey("ask_apps") ? "disabled" : ""}><span></span></span></span></div></div>`,
+        <span class="command"><span class="toggle"><input type="checkbox" role="switch" id="welcomeAsk" aria-labelledby="welcomeAskName" ${cfg.ask_apps ? "checked" : ""} ${lockedKey("ask_apps") ? "disabled" : ""}><span></span></span></span></div>
+      ${cfg.system && cfg.system.login_item && cfg.system.login_item.supported ? `<div class="setting"><span class="name" id="welcomeLoginName">${esc(t("mac.login"))}</span><span class="help">${esc(t("mac.login.below"))}</span>
+        <span class="command"><span class="toggle"><input type="checkbox" role="switch" id="welcomeLogin" aria-labelledby="welcomeLoginName" ${cfg.system.login_item.on ? "checked" : ""}><span></span></span></span></div>` : ""}</div>`,
     7: () => `<div class="picks" role="radiogroup" aria-labelledby="welcomeTitle">${["one", "many"].map(k => `<label class="pick"><input type="radio" name="welcomeOthers" value="${k}" ${st.others === k ? "checked" : ""}>
         <span><b>${esc(t(`welcome.7.${k}`))}</b><span class="help">${esc(t(`welcome.7.${k}.below`))}</span></span></label>`).join("")}</div>
       ${st.others === "many" ? `<div class="acts">${["kit", "share", "console"].map(k => `<div class="act"><b>${esc(t(`welcome.7.${k}`))}</b><p class="help">${esc(t(`welcome.7.${k}.below`))}</p>
@@ -1492,6 +1558,7 @@ async function welcome(from = 0) {
     if (st.step === 6) {
       $$('#welcome input[name="welcomeEvery"]').forEach(r => { r.onchange = test(() => save({scan: r.value})); });
       $("#welcomeAsk").onchange = test(e => save({ask_apps: e.target.checked}));
+      if ($("#welcomeLogin")) $("#welcomeLogin").onchange = test(async e => { cfg.system = await api("/api/system", {action: e.target.checked ? "login_on" : "login_off"}); });
     }
     if (st.step === 7) {
       $$('#welcome input[name="welcomeOthers"]').forEach(r => { r.onchange = () => { st.others = r.value; keep(); draw(); $(`#welcome input[value="${r.value}"]`).focus(); }; });
@@ -1511,11 +1578,13 @@ async function welcome(from = 0) {
     d.innerHTML = `<div class="inside">
         <div class="line"><span class="faded small" id="welcomeCount">${esc(t("welcome.step", {n: i + 1, total: all.length}))}</span><span class="space"></span><button class="button small" id="welcomeExit">${esc(t("welcome.exit"))}</button></div>
         <div class="bar" aria-hidden="true">${all.map((s, k) => `<i class="${k <= i ? "on" : ""}"></i>`).join("")}</div>
-        <h2 id="welcomeTitle">${esc(t(`welcome.${st.step}.title`))}</h2><p class="faded">${esc(t(`welcome.${st.step}.below`))}</p>${BODY[st.step]()}</div>
+        <h2 id="welcomeTitle">${esc(t(`welcome.${st.step}.title`))}</h2><p class="faded">${esc(t(`welcome.${st.step}.below`))}</p>
+        ${st.step === 1 && cfg && cfg.system && cfg.system.location === "move" ? moveNote() : ""}${BODY[st.step]()}</div>
       <div class="footer">${i ? `<button class="button" id="welcomeBack">${esc(t("welcome.back"))}</button>` : ""}<span class="space"></span>
         ${last ? "" : `<button class="button plain" id="welcomeSkip">${esc(t("welcome.skip"))}</button>`}
         <button class="button${st.step !== 1 || st.tried ? " primary" : ""}" id="welcomeNext" ${waiting ? "disabled" : ""}>${esc(last ? t("welcome.finish") : t("welcome.next"))}</button></div>`;
     bind();
+    wireMove(d);
     refresh();
   };
   guide = {refresh};
@@ -1630,6 +1699,6 @@ async function launch() {
   if (i.first_run || again) welcome(again ? 1 : 0);
   window.postMessage({omissis: "ping"}, location.origin);
   await readStatus();
-  setInterval(() => { readStatus(); if (opened.id === "start") channels(); appListingQuiet(); }, 3000);
+  POLL = setInterval(() => { readStatus(); if (opened.id === "start") channels(); appListingQuiet(); }, 3000);
 }
 launch().catch(e => { $("#content").textContent = "Omissis: " + e.message; });

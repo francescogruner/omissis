@@ -16,3 +16,5 @@ zstandard>=0.22
 # solo Mac: processi delle app (psutil) e chiave dell'archivio nel Portachiavi (keyring); pystray porta pyobjc da solo
 psutil>=6
 keyring>=25
+# lettura delle scansioni con il riconoscimento del testo di macOS (app/ocr.py)
+pyobjc-framework-Vision>=10; sys_platform == "darwin"
