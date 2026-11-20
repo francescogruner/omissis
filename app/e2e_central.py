@@ -122,7 +122,8 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
     check("le scelte imposte vincono su quelle dell'utente", cfg["updates"] == "never" and cfg["groups_off"] == [] and cfg["restore"] is False,
           f"{cfg['updates']} {cfg['groups_off']} {cfg['restore']}")
     check("regole: imposto solo il servizio scritto, gli altri restano dell'utente", cfg["policies"] == {"deepseek": "block", "chatgpt": "record"}, str(cfg["policies"]))
-    check("PC con impostazioni imposte: la configurazione guidata non viene proposta", not settings.first_run())
+    # dalla 0.1.4 la guida si propone anche ai PC gestiti (salta i passi gia' decisi); la toglie solo onboarded imposto
+    check("PC con impostazioni imposte: la configurazione guidata viene proposta, se onboarded non è imposto", settings.first_run())
     check("un valore scritto male o un nome sconosciuto non impone nulla",
           settings.locked() == {"keys": ["groups_off", "restore", "updates"], "policies": ["deepseek"], "console": []}, str(settings.locked()))
     after = settings.write({**settings.read(), "updates": "automatic", "groups_off": ["payments"], "policies": {**cfg["policies"], "deepseek": "ignore", "chatgpt": "block"},

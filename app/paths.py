@@ -20,6 +20,8 @@ import os
 import sys
 from pathlib import Path
 
+import sistema
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 DEFAULT_MODEL = "omissis-small"
@@ -42,7 +44,7 @@ def _data():
     if os.environ.get("OMISSIS_DATA"):
         return Path(os.environ["OMISSIS_DATA"])
     if INSTALLED is not None:
-        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "Omissis"
+        return sistema.user_data()   # Windows: %LOCALAPPDATA%\Omissis; Mac: ~/Library/Application Support/Omissis
     return HERE / "data"
 
 
@@ -86,7 +88,9 @@ def mitmdump():
 def test_browser():
     """Il Chromium scaricato da Playwright per le prove (None se non c'e')."""
     base = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or HERE / ".playwright")
-    return next(base.glob("chromium-*/chrome-win64/chrome.exe"), None)
+    patterns = {"windows": "chromium-*/chrome-win64/chrome.exe", "linux": "chromium-*/chrome-linux*/chrome",
+                "mac": "chromium-*/chrome-mac*/Chromium.app/Contents/MacOS/Chromium"}
+    return next(base.glob(patterns[sistema.NAME]), None)
 
 
 def model(name):

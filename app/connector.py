@@ -44,6 +44,7 @@ import catalog
 import activity
 import i18n
 import paths
+import sistema
 
 HERE = Path(__file__).resolve().parent
 DATA, EST = paths.DATA, HERE / "extension"
@@ -65,7 +66,13 @@ _STORE = r"%LOCALAPPDATA%\Microsoft\WindowsApps" "\\"
 #                Vuol dire rifare l'accesso la prima volta; la copia normale dell'app puo' restare aperta, e NON e' protetta.
 APP = {
     "claude": {"name": "Claude", "commands": [_STORE + "claude-desktop.exe", _STORE + "claude-desktop-msstore.exe"],
-               "process": ("claude.exe", r"\\app\\claude\.exe$"), "port": 9551, "site": "claude.ai", "service": "claude"},
+               "process": ("claude.exe", r"\\app\\claude\.exe$"), "port": 9551, "site": "claude.ai", "service": "claude",
+               # provato il 20/11/2026 su Mac (5.11492.5 e 6.28899.2) e su Windows (6.28899.2): avviata con la porta di debug
+               # esce subito, codice 1, e scrive «Claude: refusing to start — a debugging or network-override switch is
+               # present on the command line». La ammette solo con un permesso firmato da Anthropic (CLAUDE_CDP_AUTH).
+               # Usa pero' il proxy e i certificati del sistema, come nelle reti aziendali (provato lo stesso giorno, Windows
+               # e Mac, 6.28899.2): la si protegge da li', con un file PAC e il certificato del proxy di Omissis.
+               "refuses": True, "proxy": True},
     "chatgpt": {"name": "ChatGPT / Codex", "commands": [_STORE + "chatgpt-desktop.exe"],
                 "process": ("chatgpt.exe", r"\\app\\chatgpt\.exe$"), "port": 9552, "site": "chatgpt.com", "service": "chatgpt"},
     "kimi": {"name": "Kimi", "commands": [r"%LOCALAPPDATA%\Programs\Kimi\Kimi.exe"],
@@ -86,6 +93,23 @@ APP = {
                    "process": ("perplexity.exe", r"\\perplexityai\.perplexityapp_[^\\]+\\app\\perplexity\.exe$"), "port": 9555,
                    "site": "www.perplexity.ai", "service": "perplexity", "internals": ["http://perplexity.localhost"]},
 }
+# Sul Mac: solo le app fatte con Chromium/Electron accettano la porta di debug.
+# ChatGPT: dal 9/7/2026 l'app per Mac e' la stessa di Windows (Electron, com.openai.codex, programma «ChatGPT» dentro
+# /Applications/ChatGPT.app; letto il 19/11/2026 in seanthegeek/doubleagent#121, prova su un Mac del 15/10/2026). L'app
+# nativa di prima si chiama «ChatGPT Classic»: niente porta e certificati fissati, quindi resta fuori.
+# Perplexity e Copilot per Mac sono app native: fuori anche loro.
+# Provato il 20/11/2026 su un Mac di GitHub (macOS 26): ChatGPT (26.1111.21308 e 26.1117.31558) accetta la porta e il codice entra nella
+# finestra (app://-/index.html); percorsi e nomi dei processi sono giusti. Claude rifiuta la porta, come su Windows.
+APP_MAC = {
+    "claude": {"commands": ["/Applications/Claude.app/Contents/MacOS/Claude", "~/Applications/Claude.app/Contents/MacOS/Claude"],
+               "process": ("claude", r"/Claude\.app/Contents/MacOS/Claude$")},
+    "chatgpt": {"commands": ["/Applications/ChatGPT.app/Contents/MacOS/ChatGPT", "~/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"],
+                "process": ("chatgpt", r"/ChatGPT\.app/Contents/MacOS/ChatGPT$")},
+    "kimi": {"commands": ["/Applications/Kimi.app/Contents/MacOS/Kimi", "~/Applications/Kimi.app/Contents/MacOS/Kimi"],
+             "process": ("kimi", r"/Kimi\.app/Contents/MacOS/Kimi$")},
+}
+if not sistema.WINDOWS:
+    APP = {key: {**APP[key], **APP_MAC[key]} for key in APP_MAC} if sistema.MAC else {}
 
 
 class Error(Exception):
@@ -111,20 +135,33 @@ class _Entry(ctypes.Structure):
                 ("szExeFile", ctypes.c_wchar * 260)]
 
 
-_k32, _u32 = ctypes.WinDLL("kernel32", use_last_error=True), ctypes.WinDLL("user32", use_last_error=True)
-_k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-_k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
-_k32.Process32FirstW.argtypes = _k32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_Entry)]
-_k32.OpenProcess.restype = wintypes.HANDLE
-_k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-_k32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
-_k32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
-_k32.CloseHandle.argtypes = [wintypes.HANDLE]
-_WINDOWS = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-_u32.EnumWindows.argtypes = [_WINDOWS, wintypes.LPARAM]
-_u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
-_u32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-_u32.IsWindowVisible.argtypes = [wintypes.HWND]
+if sistema.WINDOWS:
+    _k32, _u32 = ctypes.WinDLL("kernel32", use_last_error=True), ctypes.WinDLL("user32", use_last_error=True)
+    _k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    _k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    _k32.Process32FirstW.argtypes = _k32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_Entry)]
+    _k32.OpenProcess.restype = wintypes.HANDLE
+    _k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    _k32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    _k32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    _k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+    _k32.CloseHandle.argtypes = [wintypes.HANDLE]
+    _WINDOWS = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    _u32.EnumWindows.argtypes = [_WINDOWS, wintypes.LPARAM]
+    _u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    _u32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    _u32.IsWindowVisible.argtypes = [wintypes.HWND]
+
+
+def _kill(pid):
+    """Ferma subito un processo (uno nostro)."""
+    if not sistema.WINDOWS:
+        sistema.terminate([pid], grace=2)
+        return
+    h = _k32.OpenProcess(0x0001, False, pid)   # PROCESS_TERMINATE
+    if h:
+        _k32.TerminateProcess(h, 0)
+        _k32.CloseHandle(h)
 
 
 def processes(process):
@@ -134,6 +171,8 @@ def processes(process):
     if not process:
         return []
     names, path = set(process[0].lower().split("|")), re.compile(process[1], re.I)
+    if not sistema.WINDOWS:
+        return sistema.processes(names, path)
     snapshot = _k32.CreateToolhelp32Snapshot(0x2, 0)
     if snapshot in (None, wintypes.HANDLE(-1).value):
         return []
@@ -185,13 +224,34 @@ public static class OmissisActivate { public static uint Open(string id, string 
 """
 
 
+def started(process):
+    """Da quando gira l'app (secondi dall'epoca): il piu' vecchio dei suoi processi; 0 se e' chiusa. Serve per le app che
+    leggono le impostazioni di rete solo alla partenza: dice se sono partite prima o dopo un cambio."""
+    pids = processes(process)
+    if not pids:
+        return 0.0
+    if not sistema.WINDOWS:
+        return sistema.started(pids)
+    times = []
+    for pid in pids:
+        h = _k32.OpenProcess(0x1000, False, pid)   # solo il diritto di leggerne i dati di base
+        if h:
+            try:
+                made, ended, kernel, user = wintypes.FILETIME(), wintypes.FILETIME(), wintypes.FILETIME(), wintypes.FILETIME()
+                if _k32.GetProcessTimes(h, ctypes.byref(made), ctypes.byref(ended), ctypes.byref(kernel), ctypes.byref(user)):
+                    times.append(((made.dwHighDateTime << 32) + made.dwLowDateTime) / 1e7 - 11644473600)   # da FILETIME (dal 1601)
+            finally:
+                _k32.CloseHandle(h)
+    return min(times) if times else 0.0
+
+
 def find_command(app):
     if app.get("package"):
         full = _package(app["package"][0])
         # l'id con cui Windows apre l'app: famiglia del pacchetto (nome e firma dell'editore, senza versione) e id dell'app
         return f"package:{full.split('_')[0]}_{full.split('_')[-1]}!{app['package'][1]}" if full else None
     for c in app.get("commands", []):
-        c = os.path.expandvars(c)
+        c = os.path.expanduser(os.path.expandvars(c))
         if Path(c).exists():
             return c
     return None
@@ -215,6 +275,8 @@ def close_process(process, grace=8):
     mine = set(processes(process))
     if not mine:
         return True
+    if not sistema.WINDOWS:
+        return sistema.terminate(mine, grace)
 
     def ask(window, _):
         pid = wintypes.DWORD()
@@ -242,6 +304,8 @@ def close_process(process, grace=8):
 
 def _profile_owners(folder):
     """I processi che tengono aperto il profilo che diamo a un'app con profilo suo (li abbiamo avviati noi)."""
+    if not sistema.WINDOWS:
+        return sistema.command_line_pids(str(folder))
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
                               "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*' + $env:OMISSIS_PROFILE + '*' } | "
@@ -667,6 +731,25 @@ def attach(key):
     return _connect(app)
 
 
+def reopen_app(key):
+    """Chiude l'app e la riapre com'e', senza porta di collegamento: per un'app protetta dal proxy del sistema, che deve
+    solo rileggere le impostazioni di rete. Va chiamata solo quando chi usa il computer lo ha chiesto."""
+    app = APP[key]
+    command = find_command(app)
+    if command is None:
+        raise Error(i18n.t("connector.error.not_installed", name=app["name"]))
+    if processes(app.get("process")):
+        if not close_app(key, grace=20):   # con calma: l'app deve salvare cio' che ha aperto
+            raise Error(i18n.t("connector.error.not_closed", name=app["name"]))
+        time.sleep(1)   # il tempo che l'app lasci andare i suoi file
+    if command.startswith("package:"):
+        env = {**os.environ, "OMISSIS_AUMID": command[len("package:"):], "OMISSIS_ARGS": ""}
+        subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _ACTIVATE], env=env,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    else:
+        subprocess.Popen([command, *app.get("arguments", [])], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **sistema.detached())
+
+
 def launch_app(key, timeout=40, close_first=False):
     """Avvia l'app con la porta di debug e ci si collega. Se l'app e' gia' aperta senza porta non la tocca e lo dice
     (AlreadyOpen), a meno che close_first non dica che chi la usa ha chiesto di chiuderla e riaprirla."""
@@ -685,10 +768,7 @@ def launch_app(key, timeout=40, close_first=False):
         # una copia rimasta accesa in sottofondo con questo profilo (senza porta) prenderebbe lei la finestra nuova,
         # che sarebbe senza protezione: e' roba nostra, la fermiamo prima
         for pid in _profile_owners(folder):
-            h = _k32.OpenProcess(0x0001, False, pid)
-            if h:
-                _k32.TerminateProcess(h, 0)
-                _k32.CloseHandle(h)
+            _kill(pid)
         arguments.append(f"--user-data-dir={folder}")
     elif processes(app.get("process")):
         # avviarla ora porterebbe solo in primo piano la finestra che c'e' gia', senza protezione
@@ -702,7 +782,8 @@ def launch_app(key, timeout=40, close_first=False):
         started = subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _ACTIVATE], env=env,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     else:
-        started = subprocess.Popen([command, *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        started = subprocess.Popen([command, *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   **({} if sistema.WINDOWS else {"start_new_session": True}))
     for i in range(timeout * 2):
         if opened_port(app["port"]):
             for _ in range(20):   # la porta risponde un attimo prima del servizio di debug

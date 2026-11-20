@@ -1,0 +1,116 @@
+# Costruisce Omissis per Mac (Apple Silicon) su un Mac di GitHub e lo prova. Parte a mano (Actions > Run workflow)
+# o con un tag di versione. Il .dmg resta come allegato dell'esecuzione: la pubblicazione nella pagina delle versioni
+# si fa a mano, dopo averlo provato su un Mac vero.
+name: App per Mac
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versione (per esempio 0.1.5)"
+        required: true
+      only:
+        description: "Solo una parte: app, safari oppure desktop (vuoto = app e safari)"
+        required: false
+        default: ""
+      apps:
+        description: "Per desktop: quali app (vuoto = claude chatgpt)"
+        required: false
+        default: ""
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  mac:
+    if: inputs.only != 'safari' && inputs.only != 'desktop'
+    runs-on: macos-latest   # Apple Silicon
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Costruisce Omissis.app e il .dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version || github.ref_name }}
+        run: python3 packaging/mac/build_mac.py --version "${VERSION#v}" --arch arm64 --smoke-test
+
+      # L'app non ha la firma Apple: qui si annota come la giudica macOS quando arriva da Internet. Non ferma il lavoro.
+      - name: Come la giudica macOS se arriva da Internet (solo per sapere)
+        continue-on-error: true
+        run: |
+          set +e
+          cp -R dist/Omissis.app "$RUNNER_TEMP/Omissis.app"
+          xattr -w com.apple.quarantine "0083;$(printf '%x' "$(date +%s)");Safari;" "$RUNNER_TEMP/Omissis.app"
+          echo "--- firma"; codesign -dv "$RUNNER_TEMP/Omissis.app" 2>&1 | sed -n 1,4p
+          echo "--- giudizio di Gatekeeper"; spctl --assess --type execute -vv "$RUNNER_TEMP/Omissis.app" 2>&1 | sed -n 1,5p
+          echo "--- programmi dentro l'app senza firma"; find "$RUNNER_TEMP/Omissis.app" -type f -perm +111 -name "python3*" -exec codesign -dv {} \; 2>&1 | grep -c "not signed"
+
+      - name: Prove automatiche (senza browser)
+        run: bash packaging/mac/ci_tests.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Omissis-mac-arm64
+          path: dist/*.dmg
+          retention-days: 14
+
+  # Prova dell'estensione per Safari: la converte e la compila, senza firma Apple. È una prova a parte: se fallisce
+  # non ferma l'app. Il registro della conversione dice quali voci del manifest Safari non conosce.
+  safari:
+    if: github.event_name == 'workflow_dispatch' && inputs.only != 'app' && inputs.only != 'desktop'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Converte e compila l'estensione per Safari
+        run: bash packaging/mac/build_safari.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Omissis-safari-prova
+          path: |
+            dist/safari/conversione.log
+            dist/safari/Omissis-Safari-prova.zip
+          retention-days: 14
+
+  # Prova con le app vere di Claude e di ChatGPT: le installa sul Mac di GitHub e le fa avviare da Omissis con la porta
+  # di debug. In più: Portachiavi vero, icona e notifica. Parte solo se chiesta (only = desktop), perché scarica le app
+  # dai loro produttori. Non entra in nessun account.
+  desktop:
+    if: github.event_name == 'workflow_dispatch' && inputs.only == 'desktop'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Costruisce Omissis.app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: python3 packaging/mac/build_mac.py --version "${VERSION#v}" --arch arm64
+
+      - name: App vere di Claude e di ChatGPT, Portachiavi, icona
+        env:
+          OMISSIS_DESKTOP_APPS: ${{ inputs.apps }}
+        run: bash packaging/mac/desktop_apps_test.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Omissis-desktop-prova
+          path: dist/desktop/
+          retention-days: 14

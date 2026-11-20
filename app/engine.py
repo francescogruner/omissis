@@ -38,6 +38,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 import paths   # noqa: E402
+import sistema   # noqa: E402
 import remote   # noqa: E402
 import settings   # noqa: E402
 
@@ -52,12 +53,20 @@ EDGES = " `'\"()[]{}<>.,;:"   # cio' che puo' stare attaccato a un valore senza 
 class Seal:
     """Cifratura dei valori dell'archivio con la protezione dei dati di Windows (DPAPI): solo l'utente di Windows
     che ha creato l'archivio puo' rileggerlo, anche se il file viene copiato altrove. Non richiede password.
-    Fuori da Windows non cifra (e lo dichiara: attivo = False)."""
+    Sul Mac: AES-GCM con una chiave tenuta nel Portachiavi dell'utente (stesso effetto: il file copiato altrove non
+    si legge). Altrove non cifra (e lo dichiara: attivo = False)."""
     PREFIX = "dp1:"
+    MAC_PREFIX = "kc1:"
 
     def __init__(self, folder):
         self.is_active = sys.platform == "win32"
-        if self.is_active:
+        self._aes = None
+        if not self.is_active:   # fuori da Windows: il Portachiavi del Mac (None dove non c'e')
+            master = sistema.keychain_secret("vault")
+            if master:
+                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+                self._aes, self.is_active, self.PREFIX = AESGCM(master), True, self.MAC_PREFIX
+        if self.is_active and self._aes is None:
             import ctypes
             from ctypes import wintypes
 
@@ -69,7 +78,15 @@ class Seal:
         # chiave per l'indice: serve a ritrovare un valore gia' visto senza tenerlo in chiaro nel file
         f_key = Path(folder) / "vault_key.bin"
         if f_key.exists():
-            self.key = self._open_up(f_key.read_bytes()) if self.is_active else f_key.read_bytes()
+            raw = f_key.read_bytes()
+            if not self.is_active:
+                self.key = raw
+            elif self._aes is not None and len(raw) == 32:
+                # chiave scritta in chiaro quando il Portachiavi non c'era (o da una versione senza cifratura): ora si sigilla
+                self.key = raw
+                f_key.write_bytes(self._close(raw))
+            else:
+                self.key = self._open_up(raw)
         else:
             self.key = secrets.token_bytes(32)
             f_key.write_bytes(self._close(self.key) if self.is_active else self.key)
@@ -87,9 +104,14 @@ class Seal:
             self._kernel.LocalFree(exits.data)
 
     def _close(self, data):
+        if self._aes is not None:
+            nonce = secrets.token_bytes(12)
+            return nonce + self._aes.encrypt(nonce, data, None)
         return self._dpapi(data, True)
 
     def _open_up(self, data):
+        if self._aes is not None:
+            return self._aes.decrypt(data[:12], data[12:], None)
         return self._dpapi(data, False)
 
     def encrypt(self, value):
@@ -135,7 +157,7 @@ class Vault:
         """Un archivio scritto in chiaro da una versione precedente viene cifrato alla prima apertura."""
         if not self.seal.is_active:
             return 0
-        lines = self.db.execute("SELECT label, n, value FROM entries WHERE value NOT LIKE ?", (Seal.PREFIX + "%",)).fetchall()
+        lines = self.db.execute("SELECT label, n, value FROM entries WHERE value NOT LIKE ?", (self.seal.PREFIX + "%",)).fetchall()
         if not lines:
             return 0
         with self.db:   # tutto o niente

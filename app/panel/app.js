@@ -784,6 +784,27 @@ const copyable = c => `<code>${esc(c)}</code><button class="button copy" data-co
 const wireCopy = el => $$("button[data-copy]", el).forEach(b => b.onclick = async () => {
   try { await navigator.clipboard.writeText(b.dataset.copy); notify(t("hooks.copied")); } catch (e) { /* il comando resta leggibile nella pagina */ }
 });
+/** Che cosa non va, per un'app protetta dal proxy del sistema ("" = niente). */
+const proxyProblem = px => !px.active ? "paused" : px.foreign ? "foreign" : !px.certificate ? "certificate" : !px.network ? "network" : "";
+const proxyStatus = (px, a) => {
+  if (!px.on) return px.open ? label(t("app.status.open_unprotected"), "error") : label(t("app.proxy.status.off"));
+  const problem = proxyProblem(px);
+  if (problem) return problem === "paused" ? label(t("app.proxy.status.paused", {name: a.name}), "warning") : label(t("app.proxy.status.broken"), "error");
+  // l'app legge le impostazioni di rete solo quando parte: aperta da prima, esce senza protezione finche' non la si riapre
+  if (px.state === "reopen") return label(t("app.proxy.status.reopen"), "error");
+  if (px.state === "waiting") return label(t("app.proxy.status.waiting"), "warning");
+  if (px.state === "closed") return label(t("app.proxy.status.ready", {name: a.name}));
+  return px.to_recheck ? label(t("app.proxy.status.recheck"), "warning") : label(t(px.messages ? "app.proxy.status.works" : "app.proxy.status.connected"), "ok");
+};
+const proxyButtons = (px, a) => {
+  const b = (action, text, primary) => `<button class="button${primary ? " primary" : ""}" data-app="${esc(a.id)}" data-name="${esc(a.name)}" data-action="${action}">${esc(text)}</button>`;
+  if (!px.on) return b("proxy_on", t("app.proxy.on", {name: a.name}), true);
+  const problem = proxyProblem(px);
+  return (problem && problem !== "paused" ? b("proxy_on", t("app.proxy.repair"), true) : "")
+    + (!problem && px.state === "reopen" ? b("reopen", t("app.proxy.reopen", {name: a.name}), true) : "") + b("proxy_off", t("app.proxy.off"));
+};
+// le azioni che chiedono conferma prima di partire: quale gruppo di frasi usare
+const PROXY_ASK = {proxy_on: "confirm", proxy_off: "remove", reopen: "reopen"};
 function drawApp(listing, even_if_same = true) {
   const el = $("#appListing");
   if (!el) return;
@@ -794,33 +815,42 @@ function drawApp(listing, even_if_same = true) {
   el.innerHTML = listing.map(a => {
     const c = a.counts;
     const pl = a.plugin;
+    const px = a.proxy && a.proxy.available ? a.proxy : null;   // l'app si protegge dal proxy del sistema
     const status = !a.installed ? label(t("app.status.not_installed"))
+      : px ? proxyStatus(px, a)
       : pl ? (pl.installed ? label(t("app.plugin.status.yes"), "ok") : label(t("app.plugin.status.no")))
       : !a.connected ? (a.open_unprotected ? label(t("app.status.open_unprotected"), "error") : label(t("app.status.not_connected")))
       : a.outcome === "yes" ? label(t("app.status.yes"), "ok") : a.outcome === "waiting" ? label(t("app.status.waiting"), "warning") : label(t("app.status.no"), "error");
-    const numbers = c ? `<span class="help">${esc(t("app.numbers", {pages: c.pages, messages: c.messages, checked_count: c.checked_count, replacements: c.replacements, blocked: c.blocked}))}</span>` : "";
-    const button = !a.installed ? "" : pl ? `<button class="button${pl.ready ? "" : " primary"}" data-app="${esc(a.id)}" data-action="plugin">${esc(t(pl.ready ? "app.plugin.update" : "app.plugin.prepare"))}</button>`
+    const numbers = c ? `<span class="help">${esc(t("app.numbers", {pages: c.pages, messages: c.messages, checked_count: c.checked_count, replacements: c.replacements, blocked: c.blocked}))}</span>`
+      : px && px.on && px.messages ? `<span class="help" data-app-note="proxy-numbers">${esc(t("app.proxy.numbers", {messages: px.messages, last: day(px.last_ok)}))}</span>` : "";
+    const button = !a.installed ? "" : px ? proxyButtons(px, a) : pl ? `<button class="button${pl.ready ? "" : " primary"}" data-app="${esc(a.id)}" data-action="plugin">${esc(t(pl.ready ? "app.plugin.update" : "app.plugin.prepare"))}</button>`
       : a.refuses ? "" : a.connected ? `<button class="button" data-app="${esc(a.id)}" data-action="detach">${esc(t("app.detach"))}</button>`
       : a.open_unprotected ? `<button class="button primary" data-app="${esc(a.id)}" data-name="${esc(a.name)}" data-action="relaunch">${esc(t("app.relaunch"))}</button>`
       : `<button class="button primary" data-app="${esc(a.id)}" data-action="launch">${esc(t("app.launch"))}</button>`;
     // sotto il nome, una riga sola che dice come si protegge quell'app; poi, solo se servono, l'avviso e i passi
     const about = !a.installed ? "" : pl ? `<span class="help" data-app-note="plugin">${esc(t("app.plugin.note", {name: a.name}))}</span>`
+      : px ? `<span class="help" data-app-note="proxy">${esc(t(px.on ? "app.proxy.note.on" : "app.proxy.note", {name: a.name}))}</span>`
+      : a.proxy && a.proxy.store ? `<span class="help" data-app-note="proxy-store">${esc(t("app.proxy.note.store", {name: a.name}))}</span>`
       : a.refuses ? `<span class="help" data-app-note="refuses">${esc(t("app.note.refuses", {name: a.name}))}</span>`
       : a.own_profile ? `<span class="help" data-app-note="profile">${esc(t("app.note.own_profile", {name: a.name}))}</span>` : "";
-    const policy = a.installed && a.policy !== "protect" && !a.refuses
+    const policy = a.installed && a.policy !== "protect" && (!a.refuses || px)
       ? policyNote(t(pl ? "app.plugin.policy" : "app.note.policy", {service: a.service, policy: t(`services.policy.${a.policy}`)}), a.service_id, a.service, "app") : "";
     const steps = a.installed && pl && pl.ready && !pl.installed ? `<details class="steps" data-app-note="plugin-steps" open><summary>${esc(t("app.plugin.steps"))}</summary><ol class="listing"><li>${esc(t("app.plugin.step.1", {name: a.name}))}<br><code id="pluginSentence">${esc(pl.sentence)}</code><button class="button copy" id="pluginCopy">${esc(t("app.plugin.copy"))}</button></li><li>${esc(t("app.plugin.step.2"))}</li><li>${esc(t("app.plugin.step.3"))}</li></ol><span class="help">${esc(t("app.plugin.folder", {folder: pl.folder}))}</span></details>` : "";
     const errors = (a.errors || []).map(e => `<div class="hint error"><span class="dot" aria-hidden="true"></span><span>${esc(e)}</span></div>`).join("");
-    const extra = policy + steps + errors;
+    const trouble = px && px.on && proxyProblem(px) ? `<div class="hint error" data-app-note="proxy-problem"><span class="dot" aria-hidden="true"></span><span>${esc(t(`app.proxy.problem.${proxyProblem(px)}`, {name: a.name, what: px.foreign}))}</span></div>` : "";
+    const extra = policy + steps + trouble + errors;
     return `<div class="setting app" data-app-line="${esc(a.id)}" data-outcome="${esc(a.connected ? a.outcome || "no" : "")}" data-open="${a.open_unprotected ? "unprotected" : ""}"><span class="name">${esc(a.name)} ${status}</span>${about}${numbers}<span class="command">${button}</span>${extra ? `<div class="app-extra">${extra}</div>` : ""}</div>`;
   }).join("");
   wireProtect(el, async () => drawApp(await api("/api/app")));
   if ($("#pluginCopy", el)) $("#pluginCopy", el).onclick = async () => { try { await navigator.clipboard.writeText($("#pluginSentence", el).textContent); notify(t("app.plugin.copied")); } catch (e) { /* la frase resta leggibile nella pagina */ } };
   $$("button[data-app]", el).forEach(b => b.onclick = test(async () => {
     if (b.dataset.action === "relaunch" && !await confirm(t("app.relaunch.title", {name: b.dataset.name}), t("app.relaunch.text", {name: b.dataset.name}), t("app.relaunch"))) return;
+    const ask = PROXY_ASK[b.dataset.action], name = b.dataset.name;
+    if (ask && !await confirm(t(`app.proxy.${ask}.title`, {name}), t(`app.proxy.${ask}.text`, {name}), t(`app.proxy.${ask}.yes`))) return;
     b.disabled = true;
-    b.textContent = b.dataset.action === "launch" ? t("app.startup_pending") : "…";
+    b.textContent = b.dataset.action === "launch" ? t("app.startup_pending") : b.dataset.action === "proxy_on" ? t("app.proxy.pending") : "…";
     try { drawApp(await api("/api/app", {id: b.dataset.app, action: b.dataset.action})); } catch (e) { appListing(); throw e; }
+    if (b.dataset.action === "proxy_on") notify(t("app.proxy.done", {name}));
   }));
 }
 const appListing = test(async () => drawApp(await api("/api/app")));
@@ -1275,6 +1305,10 @@ async function welcome(from = 0) {
       todo: a.open_unprotected ? t("welcome.4.app.todo") : a.own_profile ? t("welcome.4.app.profile") : t("welcome.4.app.closed"), done: a.connected,
       acts: [["app", a.open_unprotected ? t("welcome.4.reopen") : t("welcome.4.open"), true], ["later", t("welcome.4.later")]], ok: t("welcome.4.app.done"),
       todo_text: t("welcome.todo.app", {name: a.name})}));
+    apps.filter(a => a.installed && a.proxy && a.proxy.available && chosen.some(r => r.id === a.service_id)).forEach(a => out.push({key: `proxy-${a.id}`, app: a, title: a.name,
+      todo: t("welcome.4.proxy.todo"), done: a.proxy.on && a.proxy.network && a.proxy.certificate,
+      acts: [["proxy", t("app.proxy.on", {name: a.name}), true], ["later", t("welcome.4.later")]], ok: t("welcome.4.proxy.done"),
+      todo_text: t("welcome.todo.proxy", {name: a.name})}));
     if (chosen.some(r => r.id === "anthropic-api" && r.how === "plugin"))
       out.push({key: "cc", title: "Claude Code", todo: t("welcome.4.cc.todo"), acts: [["cc", t("welcome.4.cc.button"), true], ["later", t("welcome.4.later")]],
         ok: t("welcome.4.cc.done"), todo_text: t("welcome.todo.cc")});
@@ -1423,6 +1457,7 @@ async function welcome(from = 0) {
         try {
           if (v === "later") st.conn[key] = "later";
           else if (v === "app") { const a = apps.find(x => `app-${x.id}` === key); apps = await api("/api/app", {id: a.id, action: a.open_unprotected ? "relaunch" : "launch"}); st.conn[key] = "done"; }
+          else if (v === "proxy") { const a = apps.find(x => `proxy-${x.id}` === key); apps = await api("/api/app", {id: a.id, action: "proxy_on"}); st.conn[key] = "done"; }
           else if (v === "cc") { hooks = await api("/api/hook", {action: "claude_plugin"}); st.conn[key] = "done"; }
           else if (v === "ag") { const x = await api("/api/hook", {action: "antigravity_relaunch"}); hooks = x; st.conn[key] = x.relaunched ? "done" : "linked"; }
           else if (v === "copy") { await copy(connections().find(c => c.key === key).code); st.conn[key] = "done"; }

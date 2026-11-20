@@ -216,7 +216,8 @@ def main():
                     unnamed += pag.evaluate(WITHOUT_NAME)
                     pag.click("#welcomeNext")
                     wait_until(lambda: call(code, "/api/settings")["onboarded"] is True)
-                    closed = not pag.evaluate("document.getElementById('welcome').open") and pag.evaluate("location.hash") == "#/start"
+                    # la pagina cambia indirizzo un attimo dopo che l'impostazione e' salvata: la si aspetta, non la si coglie al volo
+                    closed = wait(pag, "() => !document.getElementById('welcome').open && location.hash === '#/start'", timeout=5)
                     # saltata con Esc vale come vista; e dalla Guida la si puo' rivedere
                     call(code, "/api/settings", {"onboarded": False})
                     pag.goto(PANEL + "/#/guide")
@@ -371,6 +372,104 @@ def main():
                          f"altri pulsanti {before} · passi {steps} · cartella {made} · riconosciuto {there} · {sentence[:60]}")
                 except Exception as ex:   # noqa: BLE001
                     mark(f"{language}: Kimi protetta con il plugin", False, str(ex)[:160])
+
+                # --- l'app di Claude: rifiuta la porta di collegamento, quindi si protegge dal proxy del sistema (certificato e
+                # file PAC). Le impostazioni del computer qui sono finte: le fa un file (OMISSIS_FAKE_SYSTEM), quelle vere non si toccano
+                fake = os.environ.get("OMISSIS_FAKE_SYSTEM")
+                if not fake:
+                    print("SALTATO app protetta dal proxy: senza OMISSIS_FAKE_SYSTEM toccherebbe le impostazioni vere del PC")
+                else:
+                    try:
+                        def system(change=None):   # che cosa c'e' nel «sistema»; con change lo si riscrive
+                            if change is not None:
+                                Path(fake).write_text(json.dumps(change), encoding="utf-8")
+                            return json.loads(Path(fake).read_text(encoding="utf-8")) if Path(fake).exists() else {}
+
+                        def refusal(action):   # la frase con cui il pannello rifiuta, oppure "" se accetta
+                            try:
+                                call(code, "/api/app", {"id": "claude", "action": action})
+                                return ""
+                            except urllib.error.HTTPError as ex:
+                                return json.loads(ex.read().decode("utf-8")).get("error", "?")
+                        refusal("proxy_off")
+                        system({})
+                        pag.reload()
+                        pag.wait_for_selector("[data-app-line=claude] button[data-action=proxy_on]", timeout=15000)
+                        about = pag.inner_text("[data-app-line=claude] [data-app-note=proxy]")
+                        launch = pag.evaluate("document.querySelectorAll('[data-app-line=claude] button[data-action=launch], [data-app-line=claude] button[data-action=relaunch]').length")
+                        mark(f"{language}: app di Claude: niente «Avvia protetta», ma un solo pulsante «Proteggi» e la spiegazione",
+                             launch == 0 and len(about) > 60 and "app.proxy" not in about, about[:70])
+                        # un altro proxy gia' impostato sul computer: non lo si tocca, e lo si dice con il suo indirizzo
+                        system({"proxy": "10.1.2.3:3128"})
+                        said = refusal("proxy_on")
+                        mark(f"{language}: app di Claude: un proxy già impostato non viene toccato", "10.1.2.3:3128" in said and not system().get("pac")
+                             and "claude" not in call(code, "/api/settings")["app_proxy"], said[:90])
+                        # chi usa il computer dice no alla domanda sul certificato: ci si ferma, niente resta a metà
+                        system({"refuse_certificate": True})
+                        said = refusal("proxy_on")
+                        mark(f"{language}: app di Claude: senza il sì al certificato non cambia nulla", bool(said) and not system().get("pac")
+                             and not system().get("certificate") and "claude" not in call(code, "/api/settings")["app_proxy"], said[:90])
+                        # tutto a posto: un clic e una conferma, e il sistema ha certificato e file PAC
+                        system({})
+                        pag.reload()
+                        pag.wait_for_selector("[data-app-line=claude] button[data-action=proxy_on]", timeout=15000)
+                        pag.click("[data-app-line=claude] button[data-action=proxy_on]")
+                        pag.wait_for_selector("#confirm[open]", timeout=5000)
+                        asked = pag.inner_text("#confirmText")
+                        pag.click("#confirmYes")
+                        on = wait(pag, "() => !!document.querySelector('[data-app-line=claude] button[data-action=proxy_off]')", timeout=20)
+                        now, port = system(), call(code, "/api/settings")["port"]
+                        with urllib.request.urlopen(now.get("pac") or PANEL + "/nessuno", timeout=10) as r:
+                            pac, kind = r.read().decode("utf-8"), r.headers.get("Content-Type", "")
+                        status = pag.inner_text("[data-app-line=claude] .label")
+                        mark(f"{language}: app di Claude: un clic e una conferma mettono certificato e file PAC",
+                             on and len(asked) > 100 and now.get("certificate") is True and now.get("pac", "").startswith(PANEL + "/proxy.pac?v=")
+                             and call(code, "/api/settings")["app_proxy"] == ["claude"], f"{now.get('pac', '')[:60]} · stato «{status}»")
+                        mark(f"{language}: app di Claude: il file PAC manda al proxy solo claude.ai", '"claude.ai"' in pac and f"PROXY 127.0.0.1:{port}" in pac
+                             and "chatgpt" not in pac and 'return "DIRECT"' in pac and "ns-proxy-autoconfig" in kind, kind)
+                        # l'app era gia' aperta quando la protezione e' stata accesa: legge le impostazioni di rete solo alla partenza,
+                        # quindi esce senza protezione. Il pannello lo dice e offre di riaprirla (qui l'app «aperta» la fa il sistema finto)
+                        system({**now, "app_started": time.time() - 600, "grace": 0})
+                        stale = wait(pag, "() => !!document.querySelector('[data-app-line=claude] .label.error') && !!document.querySelector('[data-app-line=claude] button[data-action=reopen]')", timeout=20)
+                        said = pag.inner_text("[data-app-line=claude] .label") if stale else ""
+                        mark(f"{language}: app di Claude: aperta da prima, il pannello dice che è senza protezione e offre di riaprirla", stale and "app.proxy" not in said, said)
+                        # riaperta, passa dal proxy e manda un messaggio con dati inventati: il pannello dice che funziona
+                        system({**now, "app_started": time.time() - 1, "grace": 90})
+                        try:
+                            body = json.dumps({"prompt": TEXT, "attachments": [], "rendering_mode": "messages"}, ensure_ascii=False).encode("utf-8")
+                            via = urllib.request.build_opener(urllib.request.ProxyHandler({"http": f"http://127.0.0.1:{port}"}))
+                            req = urllib.request.Request("http://127.0.0.1:9911/api/organizations/o1/chat_conversations/c1/completion", data=body, headers={
+                                "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Claude/9.9.9 Chrome/156.0 Electron/45.3 Safari/537.36"})
+                            answer = via.open(req, timeout=120).read().decode("utf-8")
+                            works = wait(pag, "() => !!document.querySelector('[data-app-line=claude] .label.ok') && !!document.querySelector('[data-app-note=proxy-numbers]')", timeout=20)
+                            mark(f"{language}: app di Claude: quando passa dal proxy e manda un messaggio, il pannello dice che funziona",
+                                 works and len(answer) > 20, pag.inner_text("[data-app-line=claude] .label"))
+                        except OSError as ex:
+                            print(f"SALTATO app di Claude vista dal proxy: serve mock_service.py 9911 ({type(ex).__name__})")
+                        # qualcuno toglie il certificato o cambia la rete: il pannello lo dice e offre «Sistema»
+                        system({**now, "certificate": False})
+                        broken = wait(pag, "() => !!document.querySelector('[data-app-note=proxy-problem]') && !!document.querySelector('[data-app-line=claude] button[data-action=proxy_on]')", timeout=20)
+                        problem = pag.inner_text("[data-app-note=proxy-problem]") if broken else ""
+                        mark(f"{language}: app di Claude: se il certificato sparisce il pannello lo dice e offre di sistemare", broken and "app.proxy" not in problem and len(problem) > 30, problem[:70])
+                        pag.click("[data-app-line=claude] button[data-action=proxy_on]")
+                        pag.wait_for_selector("#confirm[open]", timeout=5000)
+                        pag.click("#confirmYes")
+                        fixed = wait(pag, "() => !document.querySelector('[data-app-note=proxy-problem]')", timeout=20) and system().get("certificate") is True
+                        # si toglie: il sistema torna com'era
+                        pag.click("[data-app-line=claude] button[data-action=proxy_off]")
+                        pag.wait_for_selector("#confirm[open]", timeout=5000)
+                        pag.click("#confirmYes")
+                        off = wait(pag, "() => !!document.querySelector('[data-app-line=claude] button[data-action=proxy_on]') && !document.querySelector('[data-app-line=claude] button[data-action=proxy_off]')", timeout=20)
+                        mark(f"{language}: app di Claude: «Sistema» rimette a posto e «Togli la protezione» lascia il sistema com'era",
+                             fixed and off and not system().get("pac") and call(code, "/api/settings")["app_proxy"] == [], f"sistemato {fixed} · tolto {off}")
+                    except Exception as ex:   # noqa: BLE001
+                        mark(f"{language}: app di Claude protetta dal proxy del sistema", False, f"{type(ex).__name__}: {ex}"[:200])
+                    finally:
+                        try:
+                            call(code, "/api/app", {"id": "claude", "action": "proxy_off"})
+                        except Exception:   # noqa: BLE001
+                            pass
+                        Path(fake).write_text("{}", encoding="utf-8")
 
                 # --- il comando per i plugin delle app AI: si installa e si toglie dal pannello (nelle prove il PATH vero non viene toccato)
                 try:

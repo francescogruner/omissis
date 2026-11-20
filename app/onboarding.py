@@ -25,8 +25,9 @@ import i18n
 import inventory
 import scan
 import settings
+import sistema
 
-NO_WINDOW = 0x08000000
+NO_WINDOW = sistema.NO_WINDOW
 SOURCES = ("programs", "processes", "browser", "editor", "commands", "local", "network")
 # i comandi da terminale e il servizio la cui regola li riguarda (None: si mostrano soltanto)
 COMMANDS = {"claude": "anthropic-api", "codex": "chatgpt", "gemini": "gemini-api", "agy": "antigravity", "antigravity": "antigravity",
@@ -177,6 +178,11 @@ OTHERS = {"antigravity": ("antigravity.exe", r"\\programs\\antigravity\\antigrav
           "cursor": ("cursor.exe", r"\\cursor\\cursor\.exe$"),
           "windsurf": ("windsurf.exe", r"\\windsurf\\windsurf\.exe$"),
           "deepl": ("deepl.exe", r"\\deepl\.exe$")}
+if sistema.MAC:   # sul Mac i programmi stanno dentro le app: /Applications/Cursor.app/Contents/MacOS/Cursor
+    OTHERS = {"antigravity": ("antigravity|electron", r"/Antigravity\.app/Contents/MacOS/"),
+              "cursor": ("cursor", r"/Cursor\.app/Contents/MacOS/Cursor$"),
+              "windsurf": ("windsurf|electron", r"/Windsurf\.app/Contents/MacOS/"),
+              "deepl": ("deepl", r"/DeepL\.app/Contents/MacOS/DeepL$")}
 
 
 def watched():
@@ -192,6 +198,10 @@ def running():
 
 
 def antigravity_exe():
+    if sistema.MAC:   # il programma vero dentro l'app: lanciato cosi' riceve CLOUD_CODE_URL (con «open» non arriverebbe)
+        app = sistema.mac_app("Antigravity")
+        found = sorted((app / "Contents" / "MacOS").glob("*")) if app else []
+        return found[0] if found else Path("/Applications/Antigravity.app/Contents/MacOS/Antigravity")
     return Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "antigravity" / "Antigravity.exe"
 
 
@@ -206,7 +216,7 @@ def antigravity_relaunch(port):
     env = {**os.environ, "CLOUD_CODE_URL": f"http://127.0.0.1:{port}/antigravity"}
     # staccata da Omissis: chiudere o aggiornare Omissis non deve chiudere anche l'app
     subprocess.Popen([str(exe)], env=env, cwd=str(exe.parent), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     creationflags=0x00000008 | 0x00000200)   # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+                     **sistema.detached())
 
 
 def claude_plugin(repository, test=False):
@@ -214,7 +224,7 @@ def claude_plugin(repository, test=False):
     hook_command.install()
     if test:   # nelle prove non si tocca il Claude Code di questo PC
         return
-    exe = shutil.which("claude")
+    exe = sistema.which("claude")
     if exe is None:
         raise connector.Error(i18n.t("welcome.cc.no_claude"))
     # aggiungere il catalogo una seconda volta da' errore: conta solo l'installazione del plugin

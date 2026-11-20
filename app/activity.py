@@ -35,6 +35,8 @@ def clean_path(path):
 
 COMPATIBILITY = ("CREATE TABLE IF NOT EXISTS compatibility (service TEXT, via TEXT, client TEXT, method TEXT, outcome TEXT, "
                  "n INTEGER, first TEXT, last TEXT, PRIMARY KEY (service, via, client, method, outcome))")
+CLIENTS = ("CREATE TABLE IF NOT EXISTS clients (service TEXT, via TEXT, client TEXT, first TEXT, last TEXT, "
+           "PRIMARY KEY (service, via, client))")
 # prodotti che compaiono nell'intestazione User-Agent di qualunque browser: non dicono quale programma e'
 GENERIC = {"mozilla", "applewebkit", "khtml", "gecko", "safari", "chrome", "chromium", "electron", "edg", "version", "mobile"}
 
@@ -69,6 +71,20 @@ def signal_of(entry):
     via = entry.get("via") or "proxy"
     method = entry.get("method") if entry.get("method") in ("box", "attachment") else {"gateway": "api", "proxy": "proxy", "websocket": "proxy"}.get(via, "network")
     return str(service), "proxy" if via == "websocket" else via, str(entry.get("client") or "")[:60], method, outcome
+
+
+def clients():
+    """I programmi che si sono fatti vedere, per servizio e strada, con la prima e l'ultima volta. Sola lettura."""
+    f = DATA / "contacts.sqlite"
+    if not f.exists():
+        return []
+    try:
+        db = sqlite3.connect(f"file:{f.as_posix()}?mode=ro", uri=True)
+        rows = db.execute("SELECT service, via, client, first, last FROM clients").fetchall()
+        db.close()
+    except sqlite3.Error:
+        return []
+    return [dict(zip(("service", "via", "client", "first", "last"), r)) for r in rows]
 
 
 def compatibility():
@@ -110,7 +126,9 @@ class Log:
         self.db.execute("CREATE TABLE IF NOT EXISTS contacts (day TEXT, service TEXT, host TEXT, outcome TEXT, "
                         "n INTEGER, last TEXT, PRIMARY KEY (day, service, host, outcome))")
         self.db.execute(COMPATIBILITY)
+        self.db.execute(CLIENTS)
         self.sightings = {}         # (servizio, host, esito) -> ultimo salvataggio: un contatto al minuto basta
+        self.seen_at = {}           # (servizio, strada, programma) -> ultimo salvataggio
         self.lock = threading.Lock()
 
     def write(self, **entry):
@@ -127,6 +145,24 @@ class Log:
                 except sqlite3.Error:
                     pass
         return entry
+
+    def seen(self, service, client, via="proxy"):
+        """Un programma si e' fatto vedere su questa strada, anche senza mandare messaggi: dice al pannello che l'app sta
+        davvero passando da qui. Una riga ogni venti secondi basta."""
+        if not service or not client:
+            return
+        key, stamp = (service, via, client[:60]), time.time()
+        with self.lock:
+            if stamp - self.seen_at.get(key, 0) < 20:
+                return
+            self.seen_at[key] = stamp
+            now = time.strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                self.db.execute("INSERT INTO clients VALUES (?, ?, ?, ?, ?) ON CONFLICT (service, via, client) "
+                                "DO UPDATE SET last = excluded.last", (*key, now, now))
+                self.db.commit()
+            except sqlite3.Error:
+                pass
 
     def contact(self, service, host, outcome):
         key, stamp = (service, host, outcome), time.time()

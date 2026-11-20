@@ -50,6 +50,7 @@ import paths
 import remote
 import restore
 import scan
+import sistema
 from version import VERSION
 
 HERE = Path(__file__).resolve().parent
@@ -57,7 +58,7 @@ DATA = paths.DATA
 PY_MODEL = paths.python_model()
 LISTS = paths.lists()
 PANEL_PORT, ENGINE_PORT = paths.PANEL_PORT, paths.ENGINE_PORT
-NO_WINDOW = 0x08000000
+NO_WINDOW = sistema.NO_WINDOW   # niente finestra nera per i programmi avviati (solo Windows)
 CODE = secrets.token_urlsafe(24)
 PAGE = HERE / "panel"   # i file della pagina: index.html, style.css, app.js, icon.svg, locales\<codice>.json
 STATIC = {"/style.css": "text/css; charset=utf-8", "/app.js": "text/javascript; charset=utf-8", "/icon.svg": "image/svg+xml",
@@ -199,6 +200,8 @@ class Supervisor:
                        "-p", str(cfg["port"]), "--set", f"confdir={DATA / 'ca'}"]
             for h in catalog.expressions_host(settings.guarded(cfg)):
                 command += ["--allow-hosts", h]
+            if self.test and os.environ.get("OMISSIS_TEST_ADDON"):   # solo nelle prove: un addon in piu', che annota che cosa passa
+                command += ["-s", os.environ["OMISSIS_TEST_ADDON"]]
             self.proxy = subprocess.Popen(command, env=env, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                           creationflags=NO_WINDOW)
             for _ in range(40):
@@ -214,6 +217,7 @@ class Supervisor:
                 except OSError:
                     self.gateway_error = i18n.t("program.gateway_port", port=paths.GATEWAY_PORT)
             self.phase = "active"
+            threading.Thread(target=pac_apply, daemon=True).start()   # le app protette dal proxy del sistema
         except weights.Cancelled:
             self.phase = "stop"
         except Exception as ex:   # noqa: BLE001
@@ -305,6 +309,7 @@ def turn_off(after=1.5):
         try:
             for c in list(CONNECTORS.values()):
                 c.close()
+            pac_apply(leaving=True)
             SUP.stop()
             if ICON is not None:
                 ICON.stop()
@@ -342,6 +347,7 @@ def watch_apps():
         time.sleep(10)
         try:
             reattach()
+            check_proxy_apps()
         except Exception:   # noqa: BLE001
             pass
 
@@ -401,13 +407,8 @@ def watch_new_apps(every=15):
 
 
 def open_window(address):
-    """Una finestrella del pannello senza barra degli indirizzi (Edge come app), per rispondere all'avviso."""
-    for base in (os.environ.get("ProgramFiles(x86)", ""), os.environ.get("ProgramFiles", "")):
-        edge = Path(base) / "Microsoft" / "Edge" / "Application" / "msedge.exe"
-        if base and edge.exists():
-            subprocess.Popen([str(edge), f"--app={address}", "--window-size=520,720"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return
-    webbrowser.open(address)
+    """Una finestrella del pannello senza barra degli indirizzi (Edge o Chrome come app), per rispondere all'avviso."""
+    sistema.app_window(address, (520, 720))
 
 
 def balloon_click():
@@ -504,6 +505,194 @@ def hook_state():
         {"id": "gemini", "name": "Gemini CLI", "commands": [f"gemini extensions install {link}"]}]}
 
 
+# ------------------------------------------------------------------ app protette dal proxy del sistema (file PAC)
+# Un'app che rifiuta la porta di collegamento (Claude) si protegge dalla rete: il sistema manda al proxy di Omissis il
+# traffico verso il suo sito, con un file PAC servito da questo pannello, e si fida del certificato del proxy.
+
+PAC = f"http://127.0.0.1:{PANEL_PORT}/proxy.pac"
+STARTED = int(time.time())   # nell'indirizzo del file PAC: a ogni avvio cambia, cosi' le app gia' aperte lo rileggono
+_SYSTEM = {"until": 0.0, "proxy": {"supported": False, "pac": "", "proxy": ""}, "certificate": False}
+_SYSTEM_LOCK = threading.Lock()
+
+
+def system_allowed():
+    """Nelle prove le impostazioni vere del computer non si toccano: o c'e' il file che fa da sistema (OMISSIS_FAKE_SYSTEM),
+    o chi lancia la prova ha detto che la macchina e' di prova (OMISSIS_REAL_SYSTEM=1)."""
+    return not SUP.test or bool(sistema.FAKE_SYSTEM) or os.environ.get("OMISSIS_REAL_SYSTEM") == "1"
+
+
+def pac_apps():
+    """Le app scelte per passare dal proxy del sistema: chiavi di connector.APP."""
+    return [k for k in settings.read().get("app_proxy") or [] if connector.APP.get(k, {}).get("proxy")]
+
+
+def pac_text():
+    """Il file PAC: al proxy di Omissis vanno solo i siti delle app scelte, tutto il resto esce come prima. Per quei siti
+    non c'e' «oppure diretto»: se la protezione e' ferma non si collegano, invece di uscire in chiaro."""
+    domains = sorted({d for k in pac_apps() for d in (catalog.PER_ID.get(connector.APP[k].get("service", "")) or {}).get("domains", [])})
+    return ("function FindProxyForURL(url, host) {\n  host = host.toLowerCase();\n  var d = " + json.dumps(domains) + ";\n"
+            "  for (var i = 0; i < d.length; i++) {\n"
+            "    if (host == d[i] || dnsDomainIs(host, \".\" + d[i])) return \"PROXY 127.0.0.1:" + str(settings.read()["port"]) + "\";\n"
+            "  }\n  return \"DIRECT\";\n}\n")
+
+
+def pac_address():
+    """L'indirizzo da dare al sistema: cambia con il contenuto (e a ogni avvio), cosi' chi lo aveva gia' letto lo rilegge."""
+    return f"{PAC}?v={hashlib.sha256(pac_text().encode('utf-8')).hexdigest()[:8]}&s={STARTED}"
+
+
+def system_now():
+    """Che cosa c'e' adesso nel sistema: il proxy impostato e se il certificato e' tra quelli fidati. Vale per qualche
+    secondo, perche' la pagina lo chiede spesso."""
+    with _SYSTEM_LOCK:
+        if _SYSTEM["until"] < time.time():
+            proxy = sistema.system_proxy() if system_allowed() else {"supported": False, "pac": "", "proxy": ""}
+            _SYSTEM.update(until=time.time() + 5, proxy=proxy, certificate=certificate()["installed"])
+        return _SYSTEM["proxy"], _SYSTEM["certificate"]
+
+
+def real_machine():
+    """Si puo' guardare che cosa e' aperto su questo computer? Nelle prove no (pagina e schermate non devono dipendere
+    da questo PC), a meno che la macchina sia tutta di prova."""
+    return not SUP.test or os.environ.get("OMISSIS_REAL_SYSTEM") == "1"
+
+
+def _proxy_marks(**change):
+    """I momenti che servono a giudicare un'app sotto il proxy (secondi dall'epoca): quando e' stata scelta (la sua
+    chiave) e quando il file PAC e' entrato nel sistema l'ultima volta («_applied»). None toglie la voce."""
+    f = DATA / "app_proxy.json"
+    try:
+        data = {k: float(v) for k, v in json.loads(f.read_text(encoding="utf-8")).items()}
+    except (OSError, ValueError, TypeError, AttributeError):
+        data = {}
+    if change:
+        for k, v in change.items():
+            if v is None:
+                data.pop(k, None)
+            else:
+                data[k] = float(v)
+        f.write_text(json.dumps(data), encoding="utf-8")
+    return data
+
+
+def pac_apply(leaving=False, ask=False):
+    """Mette nel sistema il file PAC se ci sono app scelte; lo toglie se non ce ne sono piu' o se il programma si chiude.
+    Un proxy che non e' il nostro non si tocca mai. True se alla fine il sistema e' come lo vogliamo."""
+    if not system_allowed():
+        return False
+    try:
+        now = sistema.system_proxy()
+        if not now["supported"]:
+            return False
+        ours = now["pac"].startswith(PAC)
+        want = "" if leaving or not pac_apps() else pac_address()
+        if not want:
+            done = not ours or sistema.system_pac("", ask=ask)
+        elif now["proxy"] or (now["pac"] and not ours):
+            done = False
+        elif now["pac"] == want:
+            done = True
+        else:
+            done = sistema.system_pac(want, ask=ask)
+            if done:   # da adesso: un'app partita prima non lo ha letto, e va riaperta
+                _proxy_marks(_applied=time.time())
+        _SYSTEM["until"] = 0
+        return done
+    except Exception:   # noqa: BLE001
+        return False
+
+
+def app_started(a):
+    """Da quando gira l'app aperta adesso (secondi dall'epoca), 0 se e' chiusa. Nelle prove lo dice il sistema finto."""
+    if sistema.FAKE_SYSTEM:
+        return float(sistema.fake_value("app_started") or 0)
+    return connector.started(a.get("process")) if real_machine() else 0.0
+
+
+def _epoch(stamp):
+    try:
+        return time.mktime(time.strptime(stamp, "%Y-%m-%d %H:%M:%S"))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def proxy_state(key):
+    """Come sta, per un'app, la strada del proxy del sistema. L'app legge le impostazioni di rete solo quando parte: conta
+    quindi se quella aperta adesso e' partita dopo che il file PAC e' entrato nel sistema, e se da allora la si e' vista
+    passare dal proxy. «state»: off | problem | closed | waiting | reopen | protected."""
+    a = connector.APP[key]
+    now, cert = system_now()
+    on, ours = key in pac_apps(), now["pac"].startswith(PAC)
+    service, client = a.get("service", ""), a["name"] + " "
+    mine = lambda g: g["service"] == service and g["via"] == "proxy" and g["client"].startswith(client)   # noqa: E731
+    seen = max((_epoch(c["last"]) for c in activity.clients() if mine(c)), default=0.0)
+    groups = [g for g in activity.compatibility() if mine(g)]
+    marks, started = _proxy_marks(), app_started(a)
+    store = updates.channel() == "store"   # la copia dello Store non puo' cambiare le impostazioni del PC
+    foreign = now["proxy"] or ("" if ours else now["pac"])
+    problem = "" if not on else "paused" if SUP.phase != "active" else "foreign" if foreign else "certificate" if not cert else "network" if not ours else ""
+    # da quando l'app puo' aver letto il file PAC: da quando e' partita, se e' partita dopo; altrimenti non lo ha letto affatto
+    since = max(marks.get("_applied", 0.0), marks.get(key, 0.0), started)
+    passing = bool(started) and seen >= since - 1
+    grace = float(sistema.fake_value("grace", 90)) if sistema.FAKE_SYSTEM else 90.0   # il tempo che l'app ha per farsi vedere
+    state = ("off" if not on else "problem" if problem else "closed" if not started else "protected" if passing
+             else "waiting" if time.time() - since <= grace else "reopen")
+    return {"available": now["supported"] and not store, "store": store, "on": on, "network": ours, "certificate": cert,
+            "foreign": foreign[:80], "active": SUP.phase == "active", "problem": problem, "state": state, "open": bool(started),
+            "seen": passing, "messages": sum(g["ok"] for g in groups), "last_ok": max((g["last_ok"] for g in groups), default=""),
+            "to_recheck": any(g["status"] == "to_recheck" for g in groups)}
+
+
+NOTIFIED_REOPEN = set()   # (app, da quando gira): l'avviso «va riaperta» si da' una volta sola per ogni apertura dell'app
+
+
+def check_proxy_apps():
+    """Un'app protetta dal proxy ma aperta prima che la protezione fosse pronta esce senza protezione: lo si dice con una
+    notifica, una volta, cosi' chi usa il computer la riapre."""
+    if NOTIFY is None or SUP.test:
+        return
+    for key in pac_apps():
+        a = connector.APP[key]
+        if proxy_state(key)["state"] == "reopen":
+            mark = (key, int(app_started(a)))
+            if mark not in NOTIFIED_REOPEN:
+                NOTIFIED_REOPEN.add(mark)
+                NOTIFY(i18n.t("app.proxy.notify.reopen", name=a["name"]))
+
+
+def app_proxy(key, on):
+    """«Proteggi» e «Togli la protezione» per un'app che passa dal proxy del sistema: fa tutto da solo, e dice che cosa manca."""
+    a = connector.APP[key]
+    if not a.get("proxy"):
+        raise Refusal(i18n.t("program.app_unknown"))
+    if not system_allowed():
+        raise Refusal(i18n.t("app.proxy.error.test"))
+    chosen = set(pac_apps())
+    if not on:
+        settings.write({**settings.read(), "app_proxy": sorted(chosen - {key})})
+        _proxy_marks(**{key: None})
+        pac_apply(ask=True)   # se il sistema non lascia togliere il file PAC, resta li' ma manda tutto diretto
+        return
+    if updates.channel() == "store":
+        raise Refusal(i18n.t("app.proxy.error.store"))
+    if SUP.phase != "active":
+        raise Refusal(i18n.t("program.app_needs_protection"))
+    now = sistema.system_proxy()
+    if not now["supported"]:
+        raise Refusal(i18n.t("app.proxy.error.unsupported"))
+    foreign = now["proxy"] or ("" if now["pac"].startswith(PAC) else now["pac"])
+    if foreign:   # un proxy messo da chi usa il computer, o dalla sua azienda: non lo si tocca
+        raise Refusal(i18n.t("app.proxy.error.foreign", what=foreign[:80]))
+    if not certificate("install")["installed"]:   # il sistema chiede conferma a chi usa il computer: senza il suo si' ci si ferma
+        raise Refusal(i18n.t("app.proxy.error.certificate"))
+    settings.write({**settings.read(), "app_proxy": sorted(chosen | {key})})
+    _proxy_marks(**{key: time.time()})
+    if not pac_apply(ask=True):
+        settings.write({**settings.read(), "app_proxy": sorted(chosen)})
+        _proxy_marks(**{key: None})
+        raise Refusal(i18n.t("app.proxy.error.network"))
+
+
 def app_desktop():
     out = []
     for key, a in connector.APP.items():
@@ -512,14 +701,19 @@ def app_desktop():
             CONNECTORS.pop(key, None)
             c = None
         service = catalog.PER_ID.get(a.get("service", ""))
+        px = proxy_state(key) if a.get("proxy") else None   # l'app si protegge dal proxy del sistema
         # nelle prove l'app che si protegge con un plugin risulta installata comunque: la pagina non deve dipendere da questo PC
-        out.append({"id": key, "name": a["name"], "installed": connector.find_command(a) is not None or bool(SUP.test and a.get("plugin")),
+        out.append({"id": key, "name": a["name"],
+                    "installed": connector.find_command(a) is not None or bool(SUP.test and (a.get("plugin") or a.get("proxy"))),
                     "connected": c is not None, "outcome": c.outcome if c else None, "counts": dict(c.counts) if c else None,
                     "errors": (c.notices + c.errors)[-3:] if c else [],
                     # aperta ma non da qui: dentro non c'e' nessuna protezione
                     # (nelle prove no: pagina e schermate non devono dipendere da cio' che e' aperto su questo PC)
-                    "open_unprotected": c is None and not SUP.test and connector.open_unprotected(key),
+                    "open_unprotected": (px["open"] and px["state"] in ("off", "problem", "reopen")) if px and px["available"]
+                    else c is None and not SUP.test and connector.open_unprotected(key),
                     "own_profile": bool(a.get("own_profile")), "refuses": bool(a.get("refuses")),
+                    # l'app si protegge dal proxy del sistema: se la strada e' accesa e come sta
+                    "proxy": px,
                     # l'app si protegge con un suo plugin: se la cartella e' pronta, dove sta, e se in Kimi risulta installato
                     "plugin": kimi_plugin.state() if a.get("plugin") else None,
                     # la politica del servizio decide se i messaggi vengono mascherati: con «registra» l'app si collega e basta
@@ -718,16 +912,14 @@ def extension_folder():
 
 def certificate(action=None):
     cer = DATA / "ca" / "mitmproxy-ca-cert.cer"
+    if action in ("install", "remove") and not system_allowed():
+        raise Refusal(i18n.t("app.proxy.error.test"))
     if action == "install" and updates.channel() == "store":
         # un programma arrivato dallo Store scrive in una copia privata delle impostazioni di Windows: il certificato
         # risulterebbe installato solo per Omissis stesso, e nessun altro programma si fiderebbe del proxy
         raise Refusal(i18n.t("proxy.certificate.store"))
-    if action == "install" and cer.exists():
-        subprocess.run(["certutil", "-user", "-addstore", "Root", str(cer)], capture_output=True, timeout=120, creationflags=NO_WINDOW)
-    elif action == "remove":
-        subprocess.run(["certutil", "-user", "-delstore", "Root", "mitmproxy"], capture_output=True, timeout=120, creationflags=NO_WINDOW)
-    r = subprocess.run(["certutil", "-user", "-store", "Root", "mitmproxy"], capture_output=True, timeout=30, creationflags=NO_WINDOW)
-    return {"exists": cer.exists(), "installed": r.returncode == 0 and b"mitmproxy" in r.stdout}
+    _SYSTEM["until"] = 0
+    return {"exists": cer.exists(), "installed": sistema.certificate(cer, action if action in ("install", "remove") else None)}
 
 
 # ------------------------------------------------------------------ servizio web locale
@@ -775,6 +967,8 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/":
                 page = (PAGE / "index.html").read_text(encoding="utf-8").replace("__CODICE__", CODE).replace("__LINGUA__", i18n.active())
                 self._respond(200, page.encode("utf-8"), "text/html; charset=utf-8")
+            elif u.path == "/proxy.pac":   # lo leggono il sistema e le app, non la pagina: dentro non c'e' nessun dato
+                self._respond(200, pac_text().encode("utf-8"), "application/x-ns-proxy-autoconfig")
             elif u.path in STATIC or RX_LANGUAGE.fullmatch(u.path):
                 self._respond(200, (PAGE / u.path.lstrip("/")).read_bytes(), STATIC.get(u.path, "application/json; charset=utf-8"))
             elif u.path == "/api/compatibility":
@@ -880,7 +1074,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, SUP.status())
             elif p == "/api/settings":
                 # la console e il server di inferenza hanno le loro chiamate: qui non si toccano. always_on si puo' solo imporre
-                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith(("console_", "engine_", "serve")) and k not in ("always_on", "profile")}
+                changes = {k: v for k, v in data.items() if k in settings.DEFAULTS and not k.startswith(("console_", "engine_", "serve")) and k not in ("always_on", "profile", "app_proxy")}
                 # un profilo, per chi usa il PC, e' un modo rapido di scegliere gruppi e categorie tutti insieme
                 if data.get("profile") in settings.PROFILES:
                     changes.update({k: list(v) for k, v in settings.PROFILES[data["profile"]].items()})
@@ -1039,6 +1233,17 @@ class Handler(BaseHTTPRequestHandler):
                     if not connector.APP[key].get("plugin"):
                         raise Refusal(i18n.t("program.app_unknown"))
                     kimi_plugin.write()
+                    self._respond(200, app_desktop())
+                    return
+                if action in ("proxy_on", "proxy_off"):   # l'app si protegge dal proxy del sistema: certificato e file PAC
+                    app_proxy(key, action == "proxy_on")
+                    self._respond(200, app_desktop())
+                    return
+                if action == "reopen":   # chi usa il PC ha chiesto di chiudere l'app e riaprirla com'e', per farle rileggere la rete
+                    # nelle prove le app vere di questo PC non si chiudono (sulle macchine di prova si': lo dice chi lancia la prova)
+                    if SUP.test and key != "test" and os.environ.get("OMISSIS_REAL_SYSTEM") != "1":
+                        raise Refusal(i18n.t("app.proxy.error.test"))
+                    connector.reopen_app(key)
                     self._respond(200, app_desktop())
                     return
                 if action in ("launch", "relaunch") and SUP.phase != "active":
@@ -1232,9 +1437,15 @@ def icon(server):
         if stays_on():
             notify(i18n.t("managed.always_on"))
             return
+        pac_apply(leaving=True)
         SUP.stop()
         ic.stop()
         threading.Thread(target=server.shutdown, daemon=True).start()
+
+    def answer_asks(*_):   # la prima app AI nuova ancora senza risposta: si apre la finestrella per decidere
+        waiting = list(ASK["pending"])
+        if waiting:
+            open_window(f"http://127.0.0.1:{PANEL_PORT}/#/ask/{waiting[0]}")
 
     def with_keystrokes(name):   # «Maschera gli appunti  (Ctrl+Alt+M)»: la combinazione compare solo se e' attiva
         entry = (SHORTCUTS.status if SHORTCUTS else {}).get(name, {})
@@ -1251,6 +1462,7 @@ def icon(server):
     ic = pystray.Icon("omissis", drawing(False), "Omissis", menu=pystray.Menu(
         # i testi sono funzioni: il menu segue la lingua scelta nelle Impostazioni senza riavviare il programma
         pystray.MenuItem(lambda _: i18n.t("icon.open_up"), open_up, default=True),
+        pystray.MenuItem(lambda _: i18n.t("icon.ask", n=len(ASK["pending"])), answer_asks, visible=lambda _: bool(ASK["pending"])),
         pystray.MenuItem(lambda _: with_keystrokes("mask"), on_clipboard("mask")),
         pystray.MenuItem(lambda _: with_keystrokes("restore"), on_clipboard("restore")),
         pystray.Menu.SEPARATOR,
@@ -1259,8 +1471,14 @@ def icon(server):
         pystray.MenuItem(lambda _: i18n.t("icon.exit_app"), exit_app, enabled=lambda _: not stays_on())))
 
     def refresh():
-        latest, notified = None, ""
+        latest, notified, waiting = None, "", 0
         while ic.visible or latest is None:
+            if len(ASK["pending"]) != waiting:   # compare o sparisce la voce per le app AI nuove
+                waiting = len(ASK["pending"])
+                try:
+                    ic.update_menu()
+                except Exception:   # noqa: BLE001
+                    pass
             if SUP.phase != latest:
                 latest = SUP.phase
                 ic.icon = drawing(latest == "active")
@@ -1290,6 +1508,8 @@ def icon(server):
 
     def notify(message):   # esito delle scorciatoie sugli appunti e avvisi, come notifica di Windows
         ASK["last"] = ""   # il clic su questa notifica apre il pannello (l'avviso per un'app nuova lo rimette dopo)
+        if sistema.notify(message):   # sul Mac la notifica la fa il sistema: l'icona di pystray non le sa fare
+            return
         try:
             ic.notify(message, "Omissis")
         except Exception:   # noqa: BLE001
@@ -1370,6 +1590,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        pac_apply(leaving=True)
         SUP.stop()
 
 

@@ -81,9 +81,11 @@ Verified **live** means on the real service, with made-up data, checking what ac
 | 🖥️ | Desktop apps: **ChatGPT**, **Perplexity**, **Microsoft Copilot** (connector), **Antigravity** (gateway, or its own hooks) | ✅ live |
 | ⌨️ | Terminal: **Claude Code** (gateway and plugin), **Codex** (gateway), **Antigravity CLI** (gateway and hooks) | ✅ live |
 | 📄 | Documents inside AI apps (MCP server) with Claude Code; keyboard shortcuts on the clipboard | ✅ live |
-| 🧪 | Kimi (plugin), opencode, aider and OpenAI/Anthropic-compatible tools (gateway), Gemini CLI (plugin; API key or Vertex AI only: since 17 Nov 2026 Google refuses sign-in with a personal account), MCP server in Cursor and Windsurf | 🧪 automated tests |
-| ⏳ | Claude desktop app, Codex plugin (needs approval with `/hooks`), MCP inside Claude Desktop | ⏳ to be tested |
-| 🚫 | Copilot inside Teams and Outlook, Cursor and Windsurf chat (documents go through the MCP server, see above), Firefox, macOS, Linux | ❌ not covered |
+| 🧪 | Kimi (plugin), opencode, aider and OpenAI/Anthropic-compatible tools (gateway), Gemini CLI (plugin; Google retired it for personal accounts, it is left with an API key or Vertex AI only: Antigravity CLI, covered above, takes its place), MCP server in Cursor and Windsurf | 🧪 automated tests |
+| ⏳ | Codex plugin (needs approval with `/hooks`), MCP inside Claude Desktop | ⏳ to be tested |
+| ⏳ | **Claude** desktop app: protected through the computer's network, with one button in the panel (*Connections → Apps → Protect Claude*; from version 0.1.5, not released for Windows yet) that installs the certificate and sends only the traffic to claude.ai to the Omissis proxy. You use it as always, with your own sign-in. Tried on 20 Nov 2026 with the real app on Windows and on a Mac (6.28899.2), as far as the sign-in window; a message replaced with a real sign-in has not been seen yet | ⏳ to be tried with an account |
+| 🚫 | Copilot inside Teams and Outlook, Cursor and Windsurf chat (documents go through the MCP server, see above), Firefox, Linux | ❌ not covered |
+| 🍎 | **Mac** (Apple silicon): preview build 0.1.5, not signed with Apple. Built and tested automatically on a GitHub Mac; nobody has used it on a real Mac yet. [How to install it](packaging/mac/README.md) | 🧪 preview |
 
 The full, dated list is on [omissis.eu](https://omissis.eu) and, for your own PC, in the panel (*Connections →
 Compatibility*), which also records which program versions each replacement last worked with.
@@ -108,11 +110,11 @@ If the engine does not answer, protected requests are **blocked**, never forward
 | **Model** (`model/`) | Italian-first PII detector: a token classifier on [mmBERT](https://huggingface.co/jhu-clsp/mmBERT-base) with 41 labels (28 identifiers always masked, 13 more on request), plus checksum rules (tax code, VAT number, IBAN, cards) and allow/deny lists |
 | **Engine** (`app/engine.py`) | Local service on `127.0.0.1`: masks text and keeps a stable vault *placeholder ↔ value* in SQLite, encrypted with Windows DPAPI |
 | **Browser extension** (`app/extension/`) | Chrome / Edge / Brave, Manifest V3. Works inside the page, before the request is encrypted: no proxy, no certificate. Masks the composer, the requests and the attachments; logs visits to AI services and can block them |
-| **Desktop-app connector** (`app/connector.py`) | Brings the same extension code into Chromium-based desktop apps (ChatGPT, Perplexity, Claude, Copilot) through the debugging port. If the app is already open without protection it says so and, on request, reopens it protected |
+| **Desktop-app connector** (`app/connector.py`) | Brings the same extension code into Chromium-based desktop apps (ChatGPT, Perplexity, Copilot) through the debugging port. If the app is already open without protection it says so and, on request, reopens it protected. The Claude app refuses the debugging port: the panel says so and leaves the app alone |
 | **Plugins and hooks** (`app/ai_hook.py`) | For apps with a hook system of their own (Claude Code, Codex, Kimi, Gemini CLI, Antigravity): every message is checked before it is sent, and one with personal data is stopped, with the protected version on the clipboard. The plugins are in [`plugins/`](plugins/README.md), in this same repository |
 | **Terminal gateway** (`app/gateway.py`) | For Claude Code, Codex, Antigravity (CLI and app), opencode, aider and any tool with a configurable base URL: point it at `http://127.0.0.1:8767/<service>`. Masks prompts, tool results and past tool calls, restores text and new tool arguments. Works with subscription sign-ins and can sit in front of a gateway you already have |
 | **MCP server** (`app/mcp_server.py`) | For Claude Desktop, Claude Code, Codex, Cursor, Windsurf, Antigravity and the other apps that speak MCP: the assistant has Omissis read your documents and only receives the text with placeholders; restoring writes on the PC and never returns the real values |
-| **Proxy** (`app/addon.py`) | A [mitmproxy](https://mitmproxy.org) addon for clients that speak the provider APIs or honour a proxy with a locally trusted certificate |
+| **Proxy** (`app/addon.py`) | A [mitmproxy](https://mitmproxy.org) addon for clients that speak the provider APIs or honour a proxy with a locally trusted certificate. The Claude desktop app is one of them: you use it as always, with your own subscription |
 | **Manual tools** | Mask / restore pasted text and correct the result by hand; clipboard shortcuts registered as Windows hotkeys (the program never sees other keystrokes); anonymise and restore Word, Excel, PowerPoint, text files and whole folders; scanned PDFs and images are read with the OCR built into Windows |
 | **Panel** (`app/panel.py`) | Local web page + tray icon, in Italian and English. A *simple* mode for everyday use and an *advanced* mode for whoever manages it: activity log (counts only, never text), per-service policy, vault, Shadow AI inventory of the PC |
 | **AI tool inventory** (`app/scan.py`, `app/inventory.py`) | Installed AI apps, browser and editor extensions, CLI tools, local models, services contacted: every scan is saved and compared with the previous one, with a review per item and CSV export. Names, versions and dates only, all local |
@@ -237,7 +239,12 @@ Be clear about the limits before relying on it:
 - **The vault is encrypted with Windows DPAPI**, tied to your Windows user: a copied file cannot be opened
   elsewhere. It does not protect against malware already running under your own account.
 - **The desktop-app connector** relies on the app's debugging port, which the vendor may restrict at any time and
-  which any local program can use while the app is open.
+  which any local program can use while the app is open. The Claude app has done so: started with the debugging
+  port it exits by itself, and Omissis cannot get inside it.
+- **The Claude app, protected through the computer's network,** reads the network settings only when it starts: open
+  it after Omissis. If it was already open, or if Omissis is off, it goes out unprotected: the panel says so and
+  reopens it in one click. Files attached in the app are not replaced (they can be blocked). The installed
+  certificate lets the Omissis proxy, on that computer, read the traffic to claude.ai: that is how it replaces data.
 
 See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 
@@ -247,7 +254,10 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a problem.
 - [x] Desktop apps: ChatGPT, Perplexity, Microsoft Copilot, Antigravity
 - [x] Terminal: Claude Code, Codex, Antigravity CLI
 - [x] Antigravity (CLI and app) through the gateway, with a subscription: data is replaced instead of the message being stopped
-- [ ] Live validation of the Claude desktop app
+- [x] Claude desktop app: one button in the panel protects it through the computer's network (certificate and PAC file)
+- [ ] Claude desktop app: a message tried with a real sign-in
+- [x] Mac (Apple silicon): preview build, not signed
+- [ ] Mac: Apple signature, keyboard shortcuts, reading scans, automatic updates
 - [ ] Microsoft Store, Chrome Web Store and Edge Add-ons: submitted on 18/11/2026, in review
 - [ ] Code signing for the installer (Windows shows the SmartScreen warning today)
 - [ ] Native messaging instead of the local HTTP bridge for the extension

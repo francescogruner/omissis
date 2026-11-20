@@ -1,0 +1,18 @@
+# Le librerie che viaggiano dentro Omissis.app: le stesse dell'installer per Windows, senza quelle solo di Windows
+# (winrt, per leggere le scansioni) e con quelle che sul Mac fanno cio' che su Windows fanno le API del sistema.
+onnxruntime>=1.20
+tokenizers>=0.20
+numpy>=1.26
+python-docx>=1.2
+openpyxl>=3.1
+python-pptx>=1.0
+mitmproxy>=12.3
+pystray>=0.19
+pillow>=11
+lxml>=6
+pypdf>=7
+websocket-client>=1.9
+zstandard>=0.22
+# solo Mac: processi delle app (psutil) e chiave dell'archivio nel Portachiavi (keyring); pystray porta pyobjc da solo
+psutil>=6
+keyring>=25

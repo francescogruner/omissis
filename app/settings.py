@@ -48,6 +48,9 @@ DEFAULTS = {
     # quando si apre un'app AI che non ha ancora una regola scelta, Omissis chiede che cosa fare (una volta per app)
     "ask_apps": True,
     "ask_never": [],              # le app per cui chi usa il PC ha risposto «Non chiederlo piu'» (id del servizio)
+    # le app protette dal proxy del sistema, con un file PAC (l'app di Claude): chiavi di connector.APP. Si cambia solo dal
+    # pulsante dell'app, che mette anche il certificato e l'impostazione di rete
+    "app_proxy": [],
     # server di inferenza in rete (facoltativo, vedi remote.py). Un PC o presta il suo modello o lo chiede a un altro
     "engine_url": "",             # indirizzo https del server: il modello lo ha lui, questo PC gli chiede il riconoscimento
     "engine_key": "",             # la chiave che il server da' ai PC dell'organizzazione
@@ -280,6 +283,8 @@ def _clean(data):
     clean["onboarded"] = clean["onboarded"] is True
     clean["ask_apps"] = clean["ask_apps"] is not False
     clean["ask_never"] = sorted({str(x) for x in (clean["ask_never"] if isinstance(clean["ask_never"], list) else []) if str(x) in catalog.PER_ID})
+    clean["app_proxy"] = sorted({str(x) for x in (clean["app_proxy"] if isinstance(clean["app_proxy"], list) else [])
+                                 if re.fullmatch(r"[a-z0-9-]{1,30}", str(x))})
     clean["always_on"] = clean["always_on"] is True
     clean["profile"] = clean["profile"] if clean["profile"] in PROFILES else ""
     date = clean["shortcuts"] if isinstance(clean["shortcuts"], dict) else {}

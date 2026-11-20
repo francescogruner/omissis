@@ -228,8 +228,11 @@ def main():
         fresh_cfg = folder / "nuovo" / "claude_desktop_config.json"
         fresh_cfg.parent.mkdir()
         s = mcp_server.snippets()
-        mark("configurazione che non esiste ancora: creata; testi da incollare per le altre app", mcp_server.claude_desktop_install(fresh_cfg)
-             and json.loads(fresh_cfg.read_text(encoding="utf-8"))["mcpServers"]["omissis"]["command"].lower().endswith("python.exe")
+        installed = mcp_server.claude_desktop_install(fresh_cfg)
+        command = json.loads(fresh_cfg.read_text(encoding="utf-8"))["mcpServers"]["omissis"]["command"] if installed else ""
+        # su Windows l'interprete con la finestra di testo (python.exe, non pythonw.exe); altrove python o python3
+        right_python = command.lower().endswith("python.exe") if os.name == "nt" else os.path.basename(command).startswith("python")
+        mark("configurazione che non esiste ancora: creata; testi da incollare per le altre app", installed and right_python
              and json.loads(s["json"])["mcpServers"]["omissis"]["args"] and "claude mcp add" in s["claude_code"] and "[mcp_servers.omissis]" in s["codex"])
     print(f"\n{'TUTTO OK' if all(outcomes) else 'ERRORI'}: {sum(outcomes)}/{len(outcomes)} controlli")
     sys.exit(0 if all(outcomes) else 1)

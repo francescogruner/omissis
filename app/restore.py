@@ -186,6 +186,8 @@ class Claude(Adapter):
     """claude.ai nel browser e in Claude Desktop (stessa API privata)."""
     name = "claude"
     FIELDS = {"prompt", "message_content", "extracted_content"}
+    # richieste del sito che non sono messaggi (misure d'uso, controlli): non vanno contate come «formato non letto»
+    QUIET = re.compile(r"/event_logging/|/browser-reports|/cdn-cgi/|/client-health/")
 
     def fields(self, path, body):
         return _keys(body, self.FIELDS, [])

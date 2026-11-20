@@ -14,6 +14,9 @@ Tutti e due chiamano ai_hook.py con il Python di Omissis, dicendogli dove sono i
 Il PATH toccato e' solo quello dell'utente (HKCU\\Environment), mai quello del sistema, e solo quando chi usa il PC lo
 chiede dal pannello. Le app gia' aperte lo vedono dopo essere state chiuse e riaperte. Nelle prove (OMISSIS_TEST) il
 registro di Windows non viene toccato: al suo posto c'e' un file tra i dati di prova.
+
+Sul Mac il PATH dell'utente sta nei file di avvio della shell: Omissis aggiunge una riga sua, riconoscibile dal commento,
+a ~/.zprofile (e a ~/.bash_profile, se c'e'), e la toglie quando glielo si chiede.
 """
 import ctypes
 import json
@@ -23,9 +26,11 @@ from pathlib import Path
 
 import i18n
 import paths
+import sistema
 
 HOOK = paths.HERE / "ai_hook.py"
 NAME = "omissis-hook"
+PROFILE_MARK = "# omissis-hook, aggiunto da Omissis"
 
 
 def folder():
@@ -53,6 +58,8 @@ def write():
     folder().mkdir(parents=True, exist_ok=True)
     for name, content in _files().items():
         (folder() / name).write_bytes(content)
+        if not sistema.WINDOWS and not name.endswith(".cmd"):
+            (folder() / name).chmod(0o755)
 
 
 def ready():
@@ -85,6 +92,33 @@ def _write_path(value, kind):
     ctypes.windll.user32.SendMessageTimeoutW(0xFFFF, 0x001A, 0, "Environment", 0x0002, 3000, None)
 
 
+def _profiles():
+    """I file di avvio della shell del Mac da toccare: ~/.zprofile sempre (zsh e' la shell del Mac), ~/.bash_profile se c'e'."""
+    home = Path.home()
+    return [home / ".zprofile"] + [f for f in (home / ".bash_profile",) if f.exists()]
+
+
+def _profile_line():
+    return f'export PATH="{folder()}:$PATH"   {PROFILE_MARK}'
+
+
+def _profile_on():
+    try:
+        return (Path.home() / ".zprofile").read_text(encoding="utf-8").count(_profile_line()) > 0
+    except OSError:
+        return False
+
+
+def _profile_write(add):
+    for f in _profiles():
+        try:
+            lines = f.read_text(encoding="utf-8").splitlines() if f.exists() else []
+        except OSError:
+            continue
+        kept = [x for x in lines if PROFILE_MARK not in x]
+        f.write_text("\n".join(kept + ([_profile_line()] if add else [])) + "\n", encoding="utf-8")
+
+
 def _same(a, b):
     return os.path.normcase(os.path.normpath(os.path.expandvars(a.strip().strip('"')))) == os.path.normcase(os.path.normpath(str(b)))
 
@@ -92,6 +126,8 @@ def _same(a, b):
 def on_path():
     if os.environ.get("OMISSIS_TEST") == "1":
         return _test_note().exists()
+    if sistema.MAC:
+        return _profile_on()
     if os.name != "nt":
         return False
     try:
@@ -105,6 +141,8 @@ def install():
     write()
     if os.environ.get("OMISSIS_TEST") == "1":
         _test_note().write_text(str(folder()), encoding="utf-8")
+    elif sistema.MAC and not on_path():
+        _profile_write(True)
     elif os.name == "nt" and not on_path():
         value, kind = _read_path()
         _write_path(";".join([p for p in value.split(";") if p.strip()] + [str(folder())]), kind)
@@ -115,6 +153,8 @@ def remove():
     """Toglie la cartella dal PATH dell'utente e cancella i due file: i plugin, da quel momento, non fanno piu' nulla."""
     if os.environ.get("OMISSIS_TEST") == "1":
         _test_note().unlink(missing_ok=True)
+    elif sistema.MAC:
+        _profile_write(False)
     elif os.name == "nt" and on_path():
         value, kind = _read_path()
         _write_path(";".join(p for p in value.split(";") if p.strip() and not _same(p, folder())), kind)
@@ -148,8 +188,9 @@ def antigravity_present():
     if os.environ.get("OMISSIS_TEST") == "1":
         return True
     home, local = Path.home() / ".gemini", Path(os.environ.get("LOCALAPPDATA", ""))
-    return any(p.exists() for p in (home / "antigravity", home / "antigravity-cli", home / "antigravity-ide",
-                                     local / "Programs" / "antigravity", local / "agy" / "bin" / "agy.exe"))
+    return sistema.mac_app("Antigravity") is not None or any(
+        p.exists() for p in (home / "antigravity", home / "antigravity-cli", home / "antigravity-ide",
+                             local / "Programs" / "antigravity", local / "agy" / "bin" / "agy.exe"))
 
 
 def _antigravity_read():

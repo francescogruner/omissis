@@ -85,6 +85,8 @@ def homes():
     if os.environ.get("OMISSIS_TEST") == "1":
         return [paths.DATA / "kimi-home"]
     roaming = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    if sys.platform == "darwin":   # dove le app Electron tengono i dati sul Mac (da verificare con Kimi per Mac)
+        roaming = Path.home() / "Library" / "Application Support"
     return [roaming / "kimi-desktop" / "daimon-share" / "daimon" / "runtime" / "kimi-code" / "home", Path.home() / ".kimi-code"]
 
 

@@ -10,13 +10,16 @@ Windows consegna al programma solo quelle combinazioni, gli altri tasti premuti 
 Solo testo: file e immagini copiati negli appunti non vengono toccati.
 """
 import ctypes
+import os
 import re
+import subprocess
 import threading
 import time
 from ctypes import wintypes
 
 import i18n
 import restore as R
+import sistema
 
 MAX_TEXT = 200_000     # oltre, il testo non viene elaborato (mai tagliato in silenzio)
 DEFAULTS = {"replace": "ctrl+alt+s", "mask": "ctrl+alt+m", "restore": "ctrl+alt+r"}
@@ -28,21 +31,34 @@ WM_HOTKEY, WM_APP, WM_QUIT = 0x0312, 0x8000, 0x0012
 TERMINALS = {"ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS", "mintty", "PuTTY", "VirtualConsoleClass", "Alacritty",
              "org.wezfurlong.wezterm", "kitty", "TMobaXtermForm"}
 
-u32, k32 = ctypes.WinDLL("user32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
-u32.OpenClipboard.argtypes, u32.OpenClipboard.restype = [wintypes.HWND], wintypes.BOOL
-u32.GetClipboardData.argtypes, u32.GetClipboardData.restype = [wintypes.UINT], ctypes.c_void_p
-u32.SetClipboardData.argtypes, u32.SetClipboardData.restype = [wintypes.UINT, ctypes.c_void_p], ctypes.c_void_p
-u32.GetForegroundWindow.restype = wintypes.HWND
-u32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-u32.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
-u32.UnregisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int]
-u32.PostThreadMessageW.argtypes = [wintypes.DWORD, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-k32.GlobalAlloc.argtypes, k32.GlobalAlloc.restype = [wintypes.UINT, ctypes.c_size_t], ctypes.c_void_p
-k32.GlobalLock.argtypes, k32.GlobalLock.restype = [ctypes.c_void_p], ctypes.c_void_p
-k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+if sistema.WINDOWS:
+    u32, k32 = ctypes.WinDLL("user32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
+    u32.OpenClipboard.argtypes, u32.OpenClipboard.restype = [wintypes.HWND], wintypes.BOOL
+    u32.GetClipboardData.argtypes, u32.GetClipboardData.restype = [wintypes.UINT], ctypes.c_void_p
+    u32.SetClipboardData.argtypes, u32.SetClipboardData.restype = [wintypes.UINT, ctypes.c_void_p], ctypes.c_void_p
+    u32.GetForegroundWindow.restype = wintypes.HWND
+    u32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    u32.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
+    u32.UnregisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int]
+    u32.PostThreadMessageW.argtypes = [wintypes.DWORD, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    k32.GlobalAlloc.argtypes, k32.GlobalAlloc.restype = [wintypes.UINT, ctypes.c_size_t], ctypes.c_void_p
+    k32.GlobalLock.argtypes, k32.GlobalLock.restype = [ctypes.c_void_p], ctypes.c_void_p
+    k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
 
 
 # ------------------------------------------------------------------ appunti
+
+def _pasteboard(text=None):
+    """Appunti del Mac con pbpaste e pbcopy (testo in UTF-8). Senza testo li legge; con il testo li scrive."""
+    env = {**os.environ, "LANG": "en_US.UTF-8"}
+    try:
+        if text is None:
+            r = subprocess.run(["pbpaste"], capture_output=True, timeout=10, env=env)
+            return r.stdout.decode("utf-8", errors="replace") if r.returncode == 0 else None
+        return subprocess.run(["pbcopy"], input=text.encode("utf-8"), timeout=10, env=env).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return None if text is None else False
+
 
 def _open_up():
     for _ in range(10):   # un altro programma puo' averli aperti in questo istante
@@ -53,6 +69,8 @@ def _open_up():
 
 
 def read():
+    if not sistema.WINDOWS:
+        return _pasteboard() if sistema.MAC else None
     if not _open_up():
         return None
     try:
@@ -69,6 +87,8 @@ def read():
 
 
 def write(text):
+    if not sistema.WINDOWS:
+        return _pasteboard(text) if sistema.MAC else False
     data = ctypes.create_unicode_buffer(text)
     if not _open_up():
         return False
@@ -244,6 +264,9 @@ class Shortcuts:
     def configure(self, wanted):
         """Registra queste combinazioni al posto di quelle di prima e restituisce lo stato."""
         self.wanted = dict(wanted)
+        if not sistema.WINDOWS:   # le scorciatoie di sistema ci sono solo su Windows: altrove restano le voci dell'icona
+            self.status = {n: {"combo": self.wanted.get(n, ""), "active": False, "error": ""} for n in self.actions}
+            return self.status
         self.recorded.clear()
         if self.thread is None:
             threading.Thread(target=self._loop, daemon=True).start()

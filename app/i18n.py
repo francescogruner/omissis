@@ -46,16 +46,10 @@ def available():
 
 
 def di_windows():
-    """Il codice della lingua in cui l'utente usa Windows (es. "it"), o None."""
-    if sys.platform != "win32":
-        return None
-    try:
-        import ctypes
-        import locale
-        name = locale.windows_locale.get(ctypes.windll.kernel32.GetUserDefaultUILanguage())
-        return name.split("_")[0].lower() if name else None
-    except Exception:   # noqa: BLE001
-        return None
+    """Il codice della lingua in cui l'utente usa il sistema (es. "it"), o None. Il nome e' rimasto quello di quando
+    c'era solo Windows."""
+    import sistema
+    return sistema.language()
 
 
 def choice():

@@ -11,11 +11,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 import paths   # noqa: E402
+import settings   # noqa: E402
 sys.stdout.reconfigure(encoding="utf-8")
 
 
 def through_proxy(host, context):
-    c = http.client.HTTPSConnection("127.0.0.1", 8080, timeout=60, context=context)
+    # la porta scelta nelle impostazioni (di serie 8080; la copia di prova ne usa un'altra)
+    c = http.client.HTTPSConnection("127.0.0.1", int(settings.read()["port"]), timeout=60, context=context)
     c.set_tunnel(host, 443)
     return c
 

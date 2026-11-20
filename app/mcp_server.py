@@ -432,6 +432,9 @@ def snippets():
 
 def claude_desktop_file():
     """Dove Claude Desktop tiene la configurazione: nella copia arrivata dallo Store sta dentro la cartella del pacchetto."""
+    if sys.platform == "darwin":
+        folder = Path.home() / "Library" / "Application Support" / "Claude"
+        return folder / "claude_desktop_config.json" if folder.is_dir() else None
     local, roaming = Path(os.environ.get("LOCALAPPDATA") or ""), Path(os.environ.get("APPDATA") or "")
     packaged = sorted(local.glob("Packages/*Claude_*/LocalCache/Roaming/Claude")) if str(local) not in ("", ".") else []
     # Una copia di Omissis arrivata dal Microsoft Store scrive nelle cartelle dei dati dell'utente solo in una copia

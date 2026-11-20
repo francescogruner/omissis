@@ -18,15 +18,19 @@ import socket
 import subprocess
 import sys
 import time
-import winreg
 from pathlib import Path
 
 import catalog
 import settings
 import i18n
+import sistema
+
+if sistema.WINDOWS:
+    import winreg
 
 HOME = Path.home()
 LOCALE, ROAMING = Path(os.environ.get("LOCALAPPDATA", "")), Path(os.environ.get("APPDATA", ""))
+MAC_SUPPORT = HOME / "Library" / "Application Support"   # sul Mac i profili dei browser stanno tutti qui
 
 
 def _ps(command):
@@ -34,7 +38,7 @@ def _ps(command):
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
                             "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " + command + " | ConvertTo-Json -Compress -Depth 3"],
-                           capture_output=True, timeout=40, creationflags=0x08000000)
+                           capture_output=True, timeout=40, creationflags=sistema.NO_WINDOW)
         data = json.loads(r.stdout.decode("utf-8", errors="replace") or "[]")
         return data if isinstance(data, list) else [data]
     except Exception:   # noqa: BLE001
@@ -55,6 +59,12 @@ def _recognize(name):
 
 def programs():
     found_items = {}
+    if not sistema.WINDOWS:   # sul Mac le app in /Applications; su Linux (solo prove) niente
+        for name, version in sistema.mac_applications():
+            r = _recognize(name)
+            if r:
+                found_items[name] = {"name": name, "version": version, "origin": i18n.t("detected.origin.program"), "service": r}
+        return sorted(found_items.values(), key=lambda x: x["name"].lower())
     keys = [(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
               (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
               (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")]
@@ -86,6 +96,12 @@ def programs():
 
 def processes():
     sightings = {}
+    if not sistema.WINDOWS:
+        for name, _ in sistema.running_names():
+            r = _recognize(name)
+            if r:
+                sightings.setdefault(name, {"name": name, "instances": 0, "service": r})["instances"] += 1
+        return sorted(sightings.values(), key=lambda x: x["name"].lower())
     try:
         out = subprocess.run(["tasklist", "/fo", "csv", "/nh"], capture_output=True, timeout=20, creationflags=0x08000000).stdout
     except Exception:   # noqa: BLE001
@@ -120,6 +136,10 @@ def browser_extensions():
     browser = {"Chrome": LOCALE / "Google/Chrome/User Data", "Edge": LOCALE / "Microsoft/Edge/User Data",
                "Brave": LOCALE / "BraveSoftware/Brave-Browser/User Data", "Vivaldi": LOCALE / "Vivaldi/User Data",
                "Opera": ROAMING / "Opera Software/Opera Stable"}
+    if sistema.MAC:
+        browser = {"Chrome": MAC_SUPPORT / "Google/Chrome", "Edge": MAC_SUPPORT / "Microsoft Edge",
+                   "Brave": MAC_SUPPORT / "BraveSoftware/Brave-Browser", "Vivaldi": MAC_SUPPORT / "Vivaldi",
+                   "Arc": MAC_SUPPORT / "Arc/User Data", "Opera": MAC_SUPPORT / "com.operasoftware.Opera"}
     for name_b, base in browser.items():
         if not base.exists():
             continue
@@ -138,7 +158,7 @@ def browser_extensions():
                             "all_sites_access": any(x in ("<all_urls>", "*://*/*", "https://*/*", "http://*/*")
                                                            for x in (man.get("host_permissions") or []) + (man.get("permissions") or [])
                                                            if isinstance(x, str))})
-    for prof in (ROAMING / "Mozilla/Firefox/Profiles").glob("*/extensions.json"):
+    for prof in ((MAC_SUPPORT / "Firefox/Profiles") if sistema.MAC else (ROAMING / "Mozilla/Firefox/Profiles")).glob("*/extensions.json"):
         try:
             for a in json.loads(prof.read_text(encoding="utf-8")).get("addons", []):
                 name = str((a.get("defaultLocale") or {}).get("name", ""))
@@ -169,7 +189,7 @@ def editor_extensions():
 
 
 def commands():
-    return [{"command": c, "path": p} for c in catalog.RX_CLI if (p := shutil.which(c))]
+    return [{"command": c, "path": p} for c in catalog.RX_CLI if (p := sistema.which(c))]
 
 
 def _opened_port(port):
@@ -218,6 +238,8 @@ def pc():
 def network():
     """Servizi AI nella cache DNS e connessioni aperte adesso, con il programma che le ha aperte."""
     dns, ip_service = {}, {}
+    if not sistema.WINDOWS:   # la cache DNS e le connessioni con il programma si leggono cosi' solo su Windows
+        return {"when": time.strftime("%Y-%m-%d %H:%M:%S"), "dns_cache_empty": True, "dns": [], "links": [], "connected_programs": []}
     for v in _ps("Get-DnsClientCache | Select-Object Entry, Data"):
         host = str(v.get("Entry") or "")
         s = catalog.find(host)

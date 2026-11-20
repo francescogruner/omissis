@@ -13,6 +13,8 @@ import threading
 import uuid
 from ctypes import wintypes
 
+import sistema
+
 _one_at_a_time = threading.Lock()
 CLSID_WINDOW = "{DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7}"    # FileOpenDialog
 IID_WINDOW = "{D57C7288-D4AD-4768-BE02-9D969532D960}"      # IFileOpenDialog
@@ -42,6 +44,11 @@ def choose(title, initial="", front=True):
     cosi' non resta nascosta dietro. Una finestra per volta: se ce n'e' gia' una aperta restituisce None."""
     if not _one_at_a_time.acquire(blocking=False):
         return None
+    if not sistema.WINDOWS:   # sul Mac la finestra «Scegli la cartella» del sistema, chiesta ad AppleScript
+        try:
+            return sistema.choose_folder(title) or ""
+        finally:
+            _one_at_a_time.release()
     ole32, shell32, user32 = ctypes.OleDLL("ole32"), ctypes.WinDLL("shell32"), ctypes.WinDLL("user32")
     user32.GetForegroundWindow.restype = wintypes.HWND
     ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
@@ -84,5 +91,5 @@ def open_up(path):
     """Apre la cartella in Esplora file. Solo cartelle che esistono."""
     if not os.path.isdir(path):
         return False
-    os.startfile(path)   # noqa: S606  (una cartella, non un programma)
+    sistema.open_path(path)
     return True

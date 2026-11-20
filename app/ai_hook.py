@@ -35,6 +35,7 @@ import argparse
 import ctypes
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.error
@@ -105,6 +106,12 @@ def to_clipboard(text):
     if target:
         Path(target).write_text(text, encoding="utf-8")
         return True
+    if sys.platform == "darwin":   # appunti del Mac
+        try:
+            return subprocess.run(["pbcopy"], input=text.encode("utf-8"), timeout=10,
+                                  env={**os.environ, "LANG": "en_US.UTF-8"}).returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            return False
     if os.name != "nt":
         return False
     user, kernel = ctypes.windll.user32, ctypes.windll.kernel32

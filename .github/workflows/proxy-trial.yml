@@ -1,0 +1,73 @@
+# Prova: l'app vera di Claude dietro il proxy di Omissis, su una macchina di GitHub (Windows e Mac).
+# L'app di Claude rifiuta la porta di debug; qui si prova l'altra strada: proxy del sistema e certificato di cui il
+# sistema si fida, senza passare nessuna opzione all'app. Parte solo a mano. Scarica l'app dal suo produttore e non
+# entra in nessun account: si vede la finestra d'ingresso, non un messaggio sostituito.
+name: Prova del proxy con l'app di Claude
+
+on:
+  workflow_dispatch:
+    inputs:
+      system:
+        description: "Dove: windows, mac oppure both"
+        required: false
+        default: "both"
+      all:
+        description: "1 = prova anche il proxy fisso quando il file PAC basta"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    if: inputs.system != 'mac'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Librerie di Omissis
+        run: python -m pip install -q -r app/requirements.txt -r model/requirements-light.txt
+
+      - name: L'app di Claude dietro il proxy di Omissis
+        env:
+          OMISSIS_TRIAL_ALL: ${{ inputs.all }}
+        run: python packaging/ci/proxy_app_trial.py dist/proxy-trial
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Omissis-proxy-prova-windows
+          path: dist/proxy-trial/
+          retention-days: 14
+
+  mac:
+    if: inputs.system != 'windows'
+    runs-on: macos-latest   # Apple Silicon
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Librerie di Omissis
+        run: python3 -m pip install -q -r packaging/mac/requirements-mac.txt
+
+      - name: L'app di Claude dietro il proxy di Omissis
+        env:
+          OMISSIS_TRIAL_ALL: ${{ inputs.all }}
+        run: python3 packaging/ci/proxy_app_trial.py dist/proxy-trial
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Omissis-proxy-prova-mac
+          path: dist/proxy-trial/
+          retention-days: 14

@@ -19,3 +19,6 @@ model/backbone/
 model/data/
 *.safetensors
 *.jsonl
+
+# costruzione dell'app per Mac (packaging/mac/build_mac.py)
+dist/

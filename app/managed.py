@@ -69,6 +69,12 @@ def from_registry(hive=None, key=KEY):
     return out
 
 
+def _from_mac_profile():
+    """Sul Mac le impostazioni imposte arrivano con un profilo di configurazione (MDM), dominio eu.omissis."""
+    import sistema
+    return sistema.mac_profile("eu.omissis") if sistema.MAC else {}
+
+
 def _from_file():
     path = os.environ.get("OMISSIS_MANAGED_FILE")
     if not path:
@@ -86,7 +92,7 @@ def read(fresh=False):
     minuto: il motore le chiede a ogni richiesta."""
     now = time.monotonic()
     if fresh or now >= _cache["until"]:
-        data = {**_from_file(), **from_registry()}
+        data = {**_from_file(), **from_registry(), **_from_mac_profile()}
         if data != _cache["data"]:
             _cache["data"] = data   # un oggetto nuovo solo se e' cambiato qualcosa: chi lo usa se ne accorge da questo
         _cache["until"] = now + (2 if os.environ.get("OMISSIS_TEST") else 30)

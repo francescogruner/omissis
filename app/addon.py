@@ -128,6 +128,8 @@ class MspPii:
         flow.metadata["msp"], flow.metadata["msp_service"] = ad, service
         cfg = settings.read()
         rq = flow.request
+        # chi sta passando da qui (per esempio l'app di Claude dietro il proxy del sistema): il pannello lo mostra
+        self.reg.seen(service, activity.client_from_ua(rq.headers.get("User-Agent", "")))
         if rq.method not in ("POST", "PUT", "PATCH") or not rq.raw_content:
             return
         kind = rq.headers.get("content-type", "")
@@ -170,6 +172,11 @@ class MspPii:
         if outside:
             entry["VALUES_IN_CLEAR"] = outside
             entry.setdefault("structure", shape(body))
+        # misure d'uso e controlli del sito non sono messaggi: nel registro direbbero «formato non letto». Restano fuori,
+        # a meno che dentro non ci sia un valore in chiaro
+        quiet = getattr(ad, "QUIET", None)
+        if entry.get("event") == "no_text_field" and not outside and quiet is not None and quiet.search(rq.path):
+            return
         self.write(**entry)
 
     # ---------------------------------------------------------------- risposta
