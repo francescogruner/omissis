@@ -7,6 +7,8 @@ modelli.
                     (c'e' se Windows e' in italiano)
   Mac               il riconoscimento del testo di macOS (Vision), lo stesso di «Testo attivo»; le pagine dei PDF le
                     disegna Quartz. Serve il pacchetto pyobjc-framework-Vision, che viaggia dentro l'app
+  Linux             Tesseract, se è installato con la lingua italiana (pacchetti tesseract-ocr e tesseract-ocr-ita); le
+                    pagine dei PDF le disegna pdftoppm (pacchetto poppler-utils, di serie in quasi tutti i desktop)
 
   pdf(dati)        -> testo di ogni pagina di un PDF fatto di immagini
   immagine(dati)   -> testo di un'immagine (png, jpg, tif, bmp)
@@ -18,6 +20,8 @@ import sys
 
 SIDE = 2600   # lato lungo, in punti immagine, a cui si porta una pagina prima di leggerla
 MAC = sys.platform == "darwin"
+LINUX = sys.platform.startswith("linux")
+TESSERACT = ["ita", "eng", "fra", "deu", "spa"]   # su Linux: quelle installate tra queste
 LANGUAGES = ["it-IT", "en-US", "fr-FR", "de-DE", "es-ES"]   # sul Mac: quelle che Vision conosce tra queste, in quest'ordine
 
 
@@ -148,9 +152,64 @@ def _mac_pdf(data):
     return pages
 
 
+# ------------------------------------------------------------------ Linux (Tesseract e pdftoppm)
+
+def _tesseract():
+    """Il comando di Tesseract e le lingue da usare, o Unavailable se manca qualcosa."""
+    import shutil
+    import subprocess
+    exe = shutil.which("tesseract")
+    if not exe:
+        raise Unavailable("la lettura delle scansioni su Linux usa Tesseract, che qui non è installato (pacchetti tesseract-ocr e tesseract-ocr-ita)")
+    try:
+        r = subprocess.run([exe, "--list-langs"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as ex:
+        raise Unavailable("Tesseract non risponde") from ex
+    known = set((r.stdout + r.stderr).split())
+    wanted = [code for code in TESSERACT if code in known]
+    if not wanted:
+        raise Unavailable("a Tesseract manca la lingua per leggere i caratteri (pacchetto tesseract-ocr-ita)")
+    return exe, "+".join(wanted)
+
+
+def _linux_read(exe, languages, source, data=None):
+    import subprocess
+    r = subprocess.run([exe, source, "stdout", "-l", languages], input=data, capture_output=True, timeout=600)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.decode("utf-8", errors="replace").strip()[-200:] or "tesseract")
+    return r.stdout.decode("utf-8", errors="replace").strip()
+
+
+def _linux_image(data):
+    exe, languages = _tesseract()
+    return _linux_read(exe, languages, "stdin", data)
+
+
+def _linux_pdf(data):
+    """Ogni pagina diventa un'immagine in una cartella temporanea (leggibile solo da chi usa il computer, cancellata
+    subito dopo) e Tesseract la legge."""
+    import re
+    import shutil
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    exe, languages = _tesseract()
+    draw = shutil.which("pdftoppm")
+    if not draw:
+        raise Unavailable("per leggere i PDF fatti di immagini su Linux serve pdftoppm (pacchetto poppler-utils)")
+    with tempfile.TemporaryDirectory(prefix="omissis-ocr-") as folder:
+        source = Path(folder) / "in.pdf"
+        source.write_bytes(data)
+        r = subprocess.run([draw, "-png", "-scale-to", str(SIDE), str(source), str(Path(folder) / "p")], capture_output=True, timeout=900)
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr.decode("utf-8", errors="replace").strip()[-200:] or "pdftoppm")
+        pages = sorted(Path(folder).glob("p-*.png"), key=lambda p: int(re.search(r"(\d+)\.png$", p.name).group(1)))
+        return [_linux_read(exe, languages, str(p)) for p in pages]
+
+
 def pdf(data):
-    return _mac_pdf(data) if MAC else asyncio.run(_pdf(data))
+    return _mac_pdf(data) if MAC else _linux_pdf(data) if LINUX else asyncio.run(_pdf(data))
 
 
 def image(data):
-    return _mac_image(data) if MAC else asyncio.run(_image(data))
+    return _mac_image(data) if MAC else _linux_image(data) if LINUX else asyncio.run(_image(data))

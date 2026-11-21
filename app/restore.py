@@ -140,6 +140,38 @@ def _blocks(content, container, key, out):
                     _blocks(b.get("content"), b, "content", out)
 
 
+class Unpack:
+    """Apre a pezzi una risposta compressa che arriva a pezzi (gzip, deflate, br, zstd) e passa il testo a «then», lo stream
+    che rimette le etichette. ValueError se la compressione non e' tra quelle note: chi chiama lascia passare la risposta
+    com'e'."""
+
+    def __init__(self, coding, then):
+        import zlib
+        self.then = then
+        try:
+            if coding in ("gzip", "x-gzip"):
+                self._feed = zlib.decompressobj(wbits=31).decompress
+            elif coding == "deflate":
+                self._feed = zlib.decompressobj().decompress
+            elif coding == "br":
+                import brotli
+                d = brotli.Decompressor()
+                self._feed = getattr(d, "process", None) or d.decompress
+            elif coding == "zstd":
+                import zstandard
+                self._feed = zstandard.ZstdDecompressor().decompressobj().decompress
+            else:
+                raise ValueError(coding)
+        except ImportError as ex:
+            raise ValueError(coding) from ex
+
+    def __call__(self, data):
+        if not data:
+            return self.then(b"")
+        clear = self._feed(data)
+        return self.then(clear) if clear else b""
+
+
 class Adapter:
     name = "?"
 
@@ -187,7 +219,8 @@ class Claude(Adapter):
     name = "claude"
     FIELDS = {"prompt", "message_content", "extracted_content"}
     # richieste del sito che non sono messaggi (misure d'uso, controlli): non vanno contate come «formato non letto»
-    QUIET = re.compile(r"/event_logging/|/browser-reports|/cdn-cgi/|/client-health/")
+    # (dal 21/11/2026 anche quelle di servizio dell'app desktop: dispositivi, connettori, stato dei rami del codice)
+    QUIET = re.compile(r"/event_logging/|/browser-reports|/cdn-cgi/|/client-health/|/cowork/|/remote_devices|/v1/toolbox/|/v1/code/")
 
     def fields(self, path, body):
         return _keys(body, self.FIELDS, [])

@@ -16,8 +16,11 @@ ogni Mac (hdiutil, ditto, xattr, launchd, /bin/sh).
 L'aggiornamento cambia solo la cartella Contents dentro Omissis.app: basta poter scrivere nell'app, non nella cartella
 Applicazioni. I dati di chi usa il Mac stanno in ~/Library/Application Support/Omissis e non vengono toccati.
 
-Fuori dal Mac (Linux, solo per le prove automatiche) le stesse funzioni lavorano su una cartella fatta come l'app, e il
-pacchetto e' un archivio tar invece di un'immagine disco.
+Su Linux le stesse funzioni lavorano su una cartella fatta come l'app (Omissis.app, messa dall'installatore in
+~/.local/lib/omissis) e il pacchetto e' un archivio tar invece di un'immagine disco. In piu', li':
+  linux_entries(action)  la voce nel menu delle applicazioni, l'icona e il comando «omissis»
+  login_item(action)     l'avvio all'accesso e' un file in ~/.config/autostart
+  trash(path)            il cestino e' quello dei desktop Linux (~/.local/share/Trash)
 """
 import json
 import os
@@ -177,9 +180,35 @@ def relaunch(b, arguments, folder):
 
 # ------------------------------------------------------------------ spostarla in Applicazioni
 
+def _linux_trash(path):
+    """Il cestino dei desktop Linux: il file va in Trash/files e accanto, in Trash/info, c'e' scritto da dove viene e
+    quando, cosi' dal cestino lo si puo' rimettere al suo posto. True se e' andata."""
+    from urllib.parse import quote
+    base = _xdg("XDG_DATA_HOME", ".local", "share") / "Trash"
+    try:
+        (base / "files").mkdir(parents=True, exist_ok=True)
+        (base / "info").mkdir(parents=True, exist_ok=True)
+        name, n = path.name, 1
+        while (base / "files" / name).exists() or (base / "info" / f"{name}.trashinfo").exists():
+            n += 1
+            name = f"{path.stem} {n}{path.suffix}"
+        (base / "info" / f"{name}.trashinfo").write_text(
+            f"[Trash Info]\nPath={quote(str(path.resolve()))}\nDeletionDate={time.strftime('%Y-%m-%dT%H:%M:%S')}\n", encoding="utf-8", newline="\n")
+        try:
+            shutil.move(str(path), str(base / "files" / name))
+        except OSError:
+            (base / "info" / f"{name}.trashinfo").unlink(missing_ok=True)
+            raise
+        return True
+    except OSError:
+        return False
+
+
 def trash(path):
     """Sposta nel Cestino (non cancella). True se e' andata."""
     path = Path(path)
+    if sistema.LINUX:
+        return _linux_trash(path)
     if sistema.MAC:
         try:
             from Foundation import NSURL, NSFileManager
@@ -228,6 +257,107 @@ def move(arguments, folder):
     return destination
 
 
+# ------------------------------------------------------------------ Linux: menu delle applicazioni, comando, avvio all'accesso
+
+LINUX_ENTRY = "omissis.desktop"
+LINUX_MARK = "X-Omissis=1"   # le voci scritte da Omissis: solo quelle vengono corrette o tolte
+
+
+def _xdg(variable, *default):
+    return Path(os.environ.get(variable) or Path.home().joinpath(*default))
+
+
+def linux_places():
+    """Dove Omissis mette le sue cose nel profilo di chi usa Linux, senza diritti di amministratore: la voce nel menu
+    delle applicazioni, l'icona, il comando «omissis» e la voce di avvio all'accesso (lo standard dei desktop Linux)."""
+    share, config = _xdg("XDG_DATA_HOME", ".local", "share"), _xdg("XDG_CONFIG_HOME", ".config")
+    return {"menu": share / "applications" / LINUX_ENTRY, "icon": share / "icons" / "hicolor" / "256x256" / "apps" / "omissis.png",
+            "command": Path.home() / ".local" / "bin" / "omissis", "login": config / "autostart" / LINUX_ENTRY}
+
+
+def _desktop_quote(text):
+    """Un argomento per la riga Exec di un file .desktop."""
+    text = str(text)
+    for char in ("\\", '"', "`", "$"):
+        text = text.replace(char, "\\" + char)
+    return '"' + text.replace("%", "%%") + '"'
+
+
+def _desktop_text(b, arguments=(), login=False):
+    icon = linux_places()["icon"]
+    lines = ["[Desktop Entry]", "Type=Application", "Name=Omissis",
+             "Comment=Replaces personal data before it reaches AI services", "Comment[it]=Sostituisce i dati personali prima che arrivino ai servizi AI",
+             "Exec=" + " ".join([_desktop_quote(b / "Contents" / "MacOS" / "Omissis"), *arguments]),
+             f"Icon={icon if icon.exists() else b / 'Contents' / 'Resources' / 'omissis.png'}", "Terminal=false", "StartupNotify=false"]
+    lines += ["X-GNOME-Autostart-enabled=true"] if login else ["Categories=Utility;Security;"]
+    return "\n".join([*lines, LINUX_MARK]) + "\n"
+
+
+def _ours(path):
+    try:
+        return LINUX_MARK in path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+
+
+def linux_entries(action=True):
+    """Su Linux: la voce nel menu delle applicazioni, l'icona e il comando «omissis» (in ~/.local/bin). Con action True li
+    scrive, o li corregge se l'app è stata spostata; con False toglie quelli scritti da Omissis. Un file con quel nome
+    messo da qualcun altro non viene toccato. Restituisce i nomi di ciò che ha scritto o tolto."""
+    b = bundle()
+    if not sistema.LINUX or (action and (b is None or location() != "ok")):
+        return []
+    places, done = linux_places(), []
+    command = "#!/bin/sh\n# Omissis: apre il programma (se è già acceso, il suo pannello). " + LINUX_MARK + "\n" \
+              + (f"exec {_q(b / 'Contents' / 'MacOS' / 'Omissis')} \"$@\"\n" if b else "")
+    try:
+        if not action:
+            for name in ("menu", "command"):
+                if _ours(places[name]):
+                    places[name].unlink()
+                    done.append(name)
+            if places["icon"].exists() and "menu" in done:
+                places["icon"].unlink()
+                done.append("icon")
+            return done
+        source = b / "Contents" / "Resources" / "omissis.png"
+        if source.exists() and (not places["icon"].exists() or places["icon"].read_bytes() != source.read_bytes()):
+            places["icon"].parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, places["icon"])
+            done.append("icon")
+        for name, text, mode in (("menu", _desktop_text(b), 0o644), ("command", command, 0o755)):
+            f = places[name]
+            if f.exists() and not _ours(f):
+                continue
+            if not f.exists() or f.read_text(encoding="utf-8", errors="replace") != text:
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text(text, encoding="utf-8", newline="\n")
+                f.chmod(mode)
+                done.append(name)
+    except OSError:
+        pass
+    return done
+
+
+def _linux_login(b, action):
+    """L'avvio all'accesso su Linux: un file in ~/.config/autostart, che GNOME, KDE, Xfce e gli altri desktop leggono.
+    Si vede e si spegne anche dalle impostazioni del desktop («Applicazioni d'avvio»): se lì è stato spento, per Omissis
+    è spento."""
+    f, wanted = linux_places()["login"], _desktop_text(b, ["--no-browser"], login=True)
+    try:
+        if action is True:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(wanted, encoding="utf-8", newline="\n")
+        elif action is False and (not f.exists() or _ours(f)):
+            f.unlink(missing_ok=True)
+    except OSError:
+        pass
+    try:
+        return {"supported": True, "on": f.read_text(encoding="utf-8") == wanted}
+    except OSError:
+        return {"supported": True, "on": False}
+
+
 # ------------------------------------------------------------------ avvio all'accesso
 
 def _agent(b):
@@ -246,8 +376,10 @@ def login_item(action=None):
             sistema._fake_system({"login_item": bool(action)})
         return {"supported": bool(sistema.fake_value("mac_location")), "on": bool(sistema.fake_value("login_item"))}
     b = bundle()
-    if not sistema.MAC or b is None or location() != "ok":
+    if sistema.WINDOWS or b is None or location() != "ok":
         return {"supported": False, "on": False}
+    if sistema.LINUX:
+        return _linux_login(b, action)
     wanted = _agent(b)
     try:
         if action is True:
@@ -275,7 +407,17 @@ def login_item_follow():
     """Se l'app e' stata spostata, la voce di avvio all'accesso indica ancora il posto di prima: la si corregge.
     Non la accende se era spenta."""
     b = bundle()
-    if not sistema.MAC or sistema.FAKE_SYSTEM or b is None or location() != "ok":
+    if sistema.WINDOWS or sistema.FAKE_SYSTEM or b is None or location() != "ok":
+        return
+    if sistema.LINUX:   # stessa cosa: se la voce e' di Omissis e accesa ma indica un altro posto, la si riscrive
+        f = linux_places()["login"]
+        try:
+            text = f.read_text(encoding="utf-8")
+        except OSError:
+            return
+        off = "Hidden=true" in text or "X-GNOME-Autostart-enabled=false" in text
+        if LINUX_MARK in text and not off and text != _desktop_text(b, ["--no-browser"], login=True):
+            login_item(True)
         return
     now = _agent_now()
     if now.get("Label") == IDENT and now.get("ProgramArguments") != _agent(b)["ProgramArguments"]:
@@ -451,6 +593,7 @@ def uninstall(data=None):
     certificato, proxy, comando da terminale): sposta l'app nel Cestino e, se chi usa il Mac lo ha chiesto, cancella
     la cartella dei dati appena il programma e' uscito. Restituisce {"trashed": bool}."""
     b = bundle()
+    linux_entries(False)   # solo su Linux: voce di menu, icona e comando messi da Omissis
     trashed = bool(b) and location() != "move" and trash(b)
     if data is not None:
         folder = Path(tempfile.mkdtemp(prefix="omissis-via-"))

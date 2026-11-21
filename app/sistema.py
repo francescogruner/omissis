@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Ciò che cambia da un sistema operativo all'altro: Windows, macOS e, per le prove, Linux.
+"""Ciò che cambia da un sistema operativo all'altro: Windows, macOS e Linux.
 
 Il resto del programma chiede qui invece di chiamare direttamente le API di un sistema. Su Windows queste funzioni
 fanno esattamente quello che il programma faceva già; dove un sistema non ha una cosa lo dicono (False, None o un
@@ -16,6 +16,7 @@ import webbrowser
 from pathlib import Path
 
 WINDOWS, MAC = sys.platform == "win32", sys.platform == "darwin"
+LINUX = not WINDOWS and not MAC
 NAME = "windows" if WINDOWS else "mac" if MAC else "linux"
 NO_WINDOW = 0x08000000 if WINDOWS else 0   # CREATE_NO_WINDOW; fuori da Windows creationflags deve restare 0
 KEYCHAIN = Path.home() / "Library" / "Keychains" / "login.keychain-db"
@@ -53,23 +54,41 @@ def _quoted(text):
 
 
 def notify(message, title="Omissis"):
-    """Notifica del Mac (su Windows la fa l'icona vicino all'orologio). True se è partita."""
-    if not MAC:
+    """Notifica del sistema: sul Mac con AppleScript, su Linux con notify-send, se c'è (su Windows la fa l'icona
+    vicino all'orologio). True se è partita."""
+    if WINDOWS:
         return False
     try:
-        subprocess.Popen(["osascript", "-e", f"display notification {_quoted(message)} with title {_quoted(title)}"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if MAC:
+            command = ["osascript", "-e", f"display notification {_quoted(message)} with title {_quoted(title)}"]
+        else:
+            tool = shutil.which("notify-send")
+            if not tool:
+                return False
+            command = [tool, "--app-name=Omissis", "--icon=omissis", str(title), str(message)]
+        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except OSError:
         return False
 
 
 def choose_folder(title):
-    """Finestra del Mac per scegliere una cartella: il percorso, o None se si annulla."""
-    if not MAC:
+    """Finestra del sistema per scegliere una cartella: il percorso, o None se si annulla. Sul Mac la apre AppleScript;
+    su Linux zenity (GNOME e simili) o kdialog (KDE), se uno dei due c'è."""
+    if WINDOWS:
         return None
-    r = subprocess.run(["osascript", "-e", f"POSIX path of (choose folder with prompt {_quoted(title)})"],
-                       capture_output=True, text=True, timeout=600)
+    if MAC:
+        command = ["osascript", "-e", f"POSIX path of (choose folder with prompt {_quoted(title)})"]
+    elif shutil.which("zenity"):
+        command = ["zenity", "--file-selection", "--directory", f"--title={title}"]
+    elif shutil.which("kdialog"):
+        command = ["kdialog", "--title", str(title), "--getexistingdirectory", str(Path.home())]
+    else:
+        return None
+    try:
+        r = subprocess.run(command, capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
     return r.stdout.strip() or None if r.returncode == 0 else None
 
 
@@ -86,6 +105,21 @@ def _mac_browser():
     return None
 
 
+def _linux_browser():
+    """Un browser Chromium installato su Linux (Chrome, Edge, Brave, Chromium, anche da Snap): il suo comando, o None."""
+    for name in ("google-chrome", "google-chrome-stable", "microsoft-edge", "microsoft-edge-stable", "brave-browser", "brave",
+                 "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return Path(found)
+    return None
+
+
+def chromium_browser():
+    """Un browser Chromium installato su questo computer, fuori da Windows: il suo eseguibile, o None."""
+    return _mac_browser() if MAC else _linux_browser() if LINUX else None
+
+
 def app_window(address, size=(520, 720)):
     """Apre l'indirizzo in una finestra piccola senza barra degli indirizzi (Edge o Chrome come app); se non ce n'è
     uno, nel browser predefinito."""
@@ -96,8 +130,8 @@ def app_window(address, size=(520, 720)):
             if base and edge.exists():
                 exe = edge
                 break
-    elif MAC:
-        exe = _mac_browser()
+    else:
+        exe = chromium_browser()
     if exe:
         subprocess.Popen([str(exe), f"--app={address}", f"--window-size={size[0]},{size[1]}"], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, **({} if WINDOWS else {"start_new_session": True}))
@@ -210,6 +244,30 @@ def mac_applications():
     return out
 
 
+def linux_applications():
+    """[(nome, versione)] dei programmi con una voce nel menu delle applicazioni di Linux (file .desktop): pacchetti del
+    sistema, Flatpak, Snap e voci dell'utente. La versione lì non c'è: resta vuota."""
+    share = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    folders = [Path("/usr/share/applications"), Path("/usr/local/share/applications"), Path("/var/lib/flatpak/exports/share/applications"),
+               Path("/var/lib/snapd/desktop/applications"), share / "applications", share / "flatpak" / "exports" / "share" / "applications"]
+    names = set()
+    for folder in folders:
+        try:
+            files = sorted(folder.glob("*.desktop"))
+        except OSError:
+            continue
+        for f in files:
+            try:
+                text = f.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            entry = text.split("[Desktop Entry]", 1)[-1].split("\n[", 1)[0]   # solo la voce principale, non le sue azioni
+            name = re.search(r"^Name=(.+)$", entry, re.M)
+            if name and re.search(r"^Type=Application\s*$", entry, re.M) and not re.search(r"^Hidden=true\s*$", entry, re.M):
+                names.add(name.group(1).strip())
+    return [(name, "") for name in sorted(names, key=str.lower)]
+
+
 def mac_app(name):
     """Il percorso di un'app del Mac («Claude» → /Applications/Claude.app), o None."""
     for base in (Path("/Applications"), Path.home() / "Applications"):
@@ -241,8 +299,10 @@ def language():
 # ------------------------------------------------------------------ segreti e certificato
 
 def keychain_secret(account):
-    """Un segreto di 32 byte nel Portachiavi del Mac (servizio «Omissis»), creato al primo uso. None dove non c'è.
-    OMISSIS_FAKE_KEYCHAIN (solo per le prove fuori dal Mac) indica un file che fa da Portachiavi."""
+    """Un segreto di 32 byte nel portachiavi dell'utente (servizio «Omissis»), creato al primo uso. None dove non c'è.
+    Sul Mac è il Portachiavi; su Linux il «Secret Service» del desktop (GNOME Keyring, KWallet, KeePassXC), che la
+    libreria keyring raggiunge senza altri programmi. Se è chiuso a chiave lo fa aprire lui, con la sua finestra.
+    OMISSIS_FAKE_KEYCHAIN (solo per le prove) indica un file che fa da portachiavi."""
     fake = os.environ.get("OMISSIS_FAKE_KEYCHAIN")
     if fake and not WINDOWS:
         import json
@@ -252,7 +312,7 @@ def keychain_secret(account):
             data[account] = secrets.token_hex(32)
             f.write_text(json.dumps(data), encoding="utf-8")
         return bytes.fromhex(data[account])
-    if not MAC:
+    if WINDOWS:
         return None
     try:
         import keyring
@@ -276,7 +336,7 @@ def keychain_forget(account):
             data = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
             if data.pop(account, None) is not None:
                 f.write_text(json.dumps(data), encoding="utf-8")
-        elif MAC:
+        elif not WINDOWS:
             import keyring
             keyring.delete_password("Omissis", account)
     except Exception:   # noqa: BLE001  (non c'era, o il Portachiavi non risponde: non c'e' altro da fare)

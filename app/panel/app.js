@@ -23,8 +23,10 @@ const readKeystrokes = async () => {
 // all'orologio) e «questo PC», «il PC» diventano «questo Mac», «il Mac». Il pannello risponde solo al computer su cui gira: il sistema del
 // browser è il suo. Il programma fa lo stesso con le frasi che scrive lui (i18n.py).
 const MAC = /^Mac/i.test(navigator.platform || "");
+// Su Linux, allo stesso modo, valgono le frasi «chiave.linux» dove ci sono.
+const VARIANT = MAC ? ".mac" : /Linux/i.test(navigator.platform || "") ? ".linux" : "";
 const phrase = key => {
-  const s = (MAC ? TEXTS[key + ".mac"] : undefined) ?? TEXTS[key] ?? (MAC ? FALLBACK[key + ".mac"] : undefined) ?? FALLBACK[key];
+  const s = (VARIANT ? TEXTS[key + VARIANT] : undefined) ?? TEXTS[key] ?? (VARIANT ? FALLBACK[key + VARIANT] : undefined) ?? FALLBACK[key];
   return MAC && s ? s.replace(/\b(questo|dal|sul|del|il|this|the) PC\b/gi, "$1 Mac") : s;   // sempre questo computer: «i PC», «un PC» restano
 };
 /** La frase per una chiave, con i valori tra graffe sostituiti. Se manca nella lingua scelta vale l'italiano. */
@@ -670,6 +672,7 @@ function drawMac(sys) {
       ${login.supported ? line(t("mac.login"), esc(t("mac.login.below")), toggle("macLogin", t("mac.login"))) : ""}
       ${sys.uninstall ? line(t("mac.remove"), esc(t("mac.remove.below")), `<label class="line small"><input type="checkbox" id="macData">${esc(t("mac.remove.data"))}</label>
         <button class="button" id="macRemove">${esc(t("mac.remove.button"))}</button>`) : ""}
+      ${sys.quit ? line(t("mac.quit"), esc(t("mac.quit.below")), `<button class="button" id="macQuit">${esc(t("mac.quit.button"))}</button>`) : ""}
     </section>`;
   wireMove(el);
   if ($("#macLogin")) {
@@ -683,6 +686,13 @@ function drawMac(sys) {
       } catch (err) { e.target.checked = !want; throw err; }
     });
   }
+  // Su Linux l'icona con «Esci» può non esserci: il programma si chiude anche da qui.
+  if ($("#macQuit")) $("#macQuit").onclick = test(async () => {
+    await api("/api/system", {action: "quit"});
+    clearInterval(POLL);
+    $("#content").innerHTML = `<header class="head"><h1>Omissis</h1><p id="goodbye">${esc(t("mac.quit.done"))}</p></header>`;
+    $("#menu").innerHTML = "";
+  });
   if ($("#macRemove")) $("#macRemove").onclick = test(async () => {
     const data = $("#macData").checked;
     if (!await confirm(t("mac.remove.confirm.title"), t(data ? "mac.remove.confirm.data" : "mac.remove.confirm"), t("mac.remove.yes"))) return;
@@ -913,8 +923,16 @@ function drawApp(listing, even_if_same = true) {
     if (ask && !await confirm(t(`app.proxy.${ask}.title`, {name}), t(`app.proxy.${ask}.text`, {name}), t(`app.proxy.${ask}.yes`))) return;
     b.disabled = true;
     b.textContent = b.dataset.action === "launch" ? t("app.startup_pending") : b.dataset.action === "proxy_on" ? t("app.proxy.pending") : "…";
-    try { drawApp(await api("/api/app", {id: b.dataset.app, action: b.dataset.action})); } catch (e) { appListing(); throw e; }
-    if (b.dataset.action === "proxy_on") notify(t("app.proxy.done", {name}));
+    let listing;
+    try { listing = await api("/api/app", {id: b.dataset.app, action: b.dataset.action}); drawApp(listing); } catch (e) { appListing(); throw e; }
+    if (b.dataset.action !== "proxy_on") return;
+    // un clic solo: se l'app era aperta la chiudiamo e la riapriamo noi (la conferma lo ha detto), cosi' rilegge subito la rete.
+    // Se non ci si riesce resta il pulsante «Chiudi e riapri», con la frase che dice di farlo a mano
+    const px = (listing.find(a => a.id === b.dataset.app) || {}).proxy;
+    if (px && px.on && px.open && !proxyProblem(px)) {
+      try { drawApp(await api("/api/app", {id: b.dataset.app, action: "reopen"})); notify(t("app.proxy.done.reopened", {name})); return; } catch (e) { /* resta il pulsante */ }
+    }
+    notify(t("app.proxy.done", {name}));
   }));
 }
 const appListing = test(async () => drawApp(await api("/api/app")));

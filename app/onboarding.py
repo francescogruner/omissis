@@ -183,6 +183,10 @@ if sistema.MAC:   # sul Mac i programmi stanno dentro le app: /Applications/Curs
               "cursor": ("cursor", r"/Cursor\.app/Contents/MacOS/Cursor$"),
               "windsurf": ("windsurf|electron", r"/Windsurf\.app/Contents/MacOS/"),
               "deepl": ("deepl", r"/DeepL\.app/Contents/MacOS/DeepL$")}
+elif sistema.LINUX:   # su Linux il programma si chiama come l'app, ovunque sia stato messo (pacchetto, archivio scompattato, AppImage)
+    OTHERS = {"antigravity": ("antigravity", r"/antigravity$"),
+              "cursor": ("cursor", r"/cursor$"),
+              "windsurf": ("windsurf", r"/windsurf$")}
 
 
 def watched():
@@ -202,6 +206,22 @@ def antigravity_exe():
         app = sistema.mac_app("Antigravity")
         found = sorted((app / "Contents" / "MacOS").glob("*")) if app else []
         return found[0] if found else Path("/Applications/Antigravity.app/Contents/MacOS/Antigravity")
+    if sistema.LINUX:
+        # Antigravity per Linux arriva come archivio da scompattare dove si vuole (la versione 1 anche come pacchetto,
+        # con il comando in /usr/bin): vale quello aperto adesso, poi il comando nel PATH, poi i posti piu' comuni
+        import psutil
+        for pid in connector.processes(OTHERS["antigravity"]):
+            try:
+                return Path(psutil.Process(pid).exe())
+            except psutil.Error:
+                continue
+        command = sistema.which("antigravity")
+        if command:
+            return Path(command).resolve()
+        home = Path.home()
+        places = [home / "Antigravity", home / "antigravity", home / ".local" / "share" / "antigravity", home / "Applications" / "Antigravity",
+                  Path("/opt/Antigravity"), Path("/opt/antigravity"), Path("/usr/share/antigravity")]
+        return next((p / "antigravity" for p in places if (p / "antigravity").is_file()), places[0] / "antigravity")
     return Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "antigravity" / "Antigravity.exe"
 
 

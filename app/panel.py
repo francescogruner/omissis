@@ -17,6 +17,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import socket
 import sqlite3
 import subprocess
@@ -929,9 +930,11 @@ def system_card():
     """Cio' che la pagina deve sapere del sistema su cui gira. Sul Mac: dove sta l'app (da li' dipende se si aggiorna da
     sola), se parte all'accesso, se dal pannello si puo' togliere. Su Windows queste cose le fa l'installer."""
     where = macapp.location()
-    return {"name": "mac" if where else sistema.NAME, "location": where,
+    return {"name": sistema.NAME if sistema.LINUX or not where else "mac", "location": where,
             "login_item": macapp.login_item() if where else {"supported": False, "on": False},
-            "uninstall": where in ("ok", "move"), "applications": str(macapp.applications()) if where == "move" else ""}
+            "uninstall": where in ("ok", "move"), "applications": str(macapp.applications()) if where == "move" else "",
+            # su Linux l'icona c'e' solo dove il desktop la mostra: la chiusura del programma si offre anche dal pannello
+            "quit": bool(where) and sistema.LINUX and not settings.read()["always_on"]}
 
 
 def move_app():
@@ -978,6 +981,7 @@ def first_login_item(test):
     la voce viene corretta."""
     if macapp.location() != "ok" or (test and os.environ.get("OMISSIS_REAL_SYSTEM") != "1"):
         return
+    macapp.linux_entries()   # solo su Linux: voce nel menu delle applicazioni, icona e comando «omissis»
     macapp.login_item_follow()
     note = DATA / "login_item.txt"
     if not note.exists():
@@ -1338,8 +1342,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._respond(200, updates.status())
             elif p == "/api/system":   # sul Mac, cio' che su Windows fa l'installer
                 action = data.get("action")
-                if action not in ("login_on", "login_off", "move", "uninstall") or not macapp.location():
+                if action not in ("login_on", "login_off", "move", "uninstall", "quit") or not macapp.location():
                     raise Refusal(i18n.t("program.not_found"))
+                if action == "quit":   # solo su Linux, dove l'icona con «Esci» puo' non esserci
+                    if not sistema.LINUX:
+                        raise Refusal(i18n.t("program.not_found"))
+                    if settings.read()["always_on"]:
+                        raise Refusal(i18n.t("managed.always_on"))
+                    self._respond(200, {"quit": True})
+                    turn_off()
+                    return
                 if not system_allowed():
                     raise Refusal(i18n.t("app.proxy.error.test"))
                 if action in ("login_on", "login_off"):
@@ -1481,12 +1493,49 @@ class Handler(BaseHTTPRequestHandler):
             self._respond(500, {"error": f"{type(ex).__name__}: {ex}"})
 
 
+def linux_tray():
+    """Su Linux l'icona si puo' mostrare solo dove il desktop ha un'area per le icone dei programmi raggiungibile da X11
+    (KDE, Xfce, Cinnamon, MATE; GNOME solo con un'estensione; in una sessione solo Wayland no). Si guarda prima, per
+    non lasciare un'icona che non compare e riempie il registro di errori."""
+    try:
+        import Xlib.X
+        import Xlib.display
+        display = Xlib.display.Display()
+        try:
+            atom = display.intern_atom(f"_NET_SYSTEM_TRAY_S{display.get_default_screen()}")
+            return display.get_selection_owner(atom) != Xlib.X.NONE
+        finally:
+            display.close()
+    except Exception:   # noqa: BLE001  (niente X11, o libreria assente)
+        return False
+
+
+def notify_only():
+    """Senza icona (Linux, dove il desktop non la mostra) gli avvisi arrivano lo stesso, come notifiche del sistema, se
+    c'e' notify-send. Il pannello si riapre dal menu delle applicazioni o con il comando «omissis»."""
+    global NOTIFY
+    if shutil.which("notify-send"):
+        def notify(message):
+            ASK["last"] = ""
+            sistema.notify(message)
+        NOTIFY = notify
+
+
 def icon(server):
     """Icona vicino all'orologio. Se le librerie mancano il programma funziona lo stesso dalla pagina."""
+    if sistema.LINUX:
+        # avviato all'accesso, il desktop puo' non avere ancora pronta l'area delle icone: la si aspetta per un po'
+        for _ in range(20 if "--no-browser" in sys.argv and not SUP.test else 1):
+            if linux_tray():
+                break
+            time.sleep(1)
+        else:
+            notify_only()
+            return None
     try:
         import pystray
         from PIL import Image, ImageDraw
-    except ImportError:
+    except (Exception if sistema.LINUX else ImportError):   # noqa: BLE001  (su Linux pystray, senza un desktop, si rompe in altri modi)
         return None
 
     def drawing(active):
@@ -1608,6 +1657,30 @@ def icon(server):
     return ic
 
 
+def quit_running():
+    """«omissis --quit» (Linux): chiede alla copia accesa di chiudersi. Dove e' stabilito che la protezione resti sempre
+    accesa non lo fa. Restituisce il codice di uscita."""
+    if settings.read()["always_on"]:
+        print(i18n.t("managed.always_on"), flush=True)
+        return 1
+    try:
+        pid = int((DATA / "omissis.pid").read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        pid = 0
+    ours = [p for p in sistema.command_line_pids("panel.py") if p == pid]
+    if not ours or not opened_port(PANEL_PORT):
+        print("Omissis non è acceso", flush=True)
+        return 0
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(100):
+        if not opened_port(PANEL_PORT):
+            print("Omissis è stato chiuso", flush=True)
+            return 0
+        time.sleep(0.2)
+    print("Omissis non si è chiuso", flush=True)
+    return 1
+
+
 def main():
     global SUP
     ap = argparse.ArgumentParser()
@@ -1615,8 +1688,16 @@ def main():
     ap.add_argument("--no-browser", dest="without_browser", action="store_true")
     ap.add_argument("--no-start", dest="do_not_launch", action="store_true", help="apre il pannello senza avviare la protezione")
     ap.add_argument("--test", dest="test", action="store_true", help="accetta anche il servizio finto in locale")
+    ap.add_argument("--quit", dest="quit", action="store_true", help="su Linux: chiude la copia accesa (la protezione si ferma)")
     a = ap.parse_args()
     DATA.mkdir(parents=True, exist_ok=True)
+    if sistema.LINUX:
+        try:
+            os.chmod(DATA, 0o700)   # archivio, registro e impostazioni: solo di chi usa il computer, anche su un PC con piu' utenti
+        except OSError:
+            pass
+        if a.quit:
+            sys.exit(quit_running())
     if opened_port(PANEL_PORT):   # gia' acceso: si apre solo il pannello
         print(f"Omissis è già acceso: apro il pannello su http://127.0.0.1:{PANEL_PORT}/", flush=True)
         if not a.without_browser:
@@ -1651,6 +1732,11 @@ def main():
             webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
         return
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    if sistema.LINUX:
+        # alla chiusura della sessione (o con «omissis --quit») il programma riceve SIGTERM: deve fermare motore e proxy,
+        # non lasciarli accesi senza pannello. Il numero del processo sta in un file, per «omissis --quit»
+        signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+        (DATA / "omissis.pid").write_text(str(os.getpid()), encoding="utf-8")
     updates.started()   # sul Mac: chi ha appena messo questa versione al posto della vecchia aspetta di saperla partita
     first_login_item(a.test)
     threading.Thread(target=updates.loop, daemon=True).start()

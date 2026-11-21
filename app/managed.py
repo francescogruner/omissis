@@ -75,8 +75,13 @@ def _from_mac_profile():
     return sistema.mac_profile("eu.omissis") if sistema.MAC else {}
 
 
+LINUX_FILE = "/etc/omissis/managed.json"   # su Linux le impostazioni imposte stanno qui: lo scrive solo chi amministra il computer
+
+
 def _from_file():
     path = os.environ.get("OMISSIS_MANAGED_FILE")
+    if not path and sys.platform.startswith("linux") and os.path.isfile(LINUX_FILE):
+        path = LINUX_FILE
     if not path:
         return {}
     try:

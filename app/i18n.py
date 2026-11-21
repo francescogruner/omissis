@@ -69,15 +69,16 @@ def active():
 
 
 MAC = sys.platform == "darwin"
+VARIANT = ".mac" if MAC else ".linux" if sys.platform.startswith("linux") else None   # le frasi scritte apposta per questo sistema
 _THIS_PC = re.compile(r"\b(questo|dal|sul|del|il|this|the) PC\b", re.I)   # sempre questo computer: «i PC», «un PC» restano
 
 
 def t(key, **values):
     """La frase per una chiave nella lingua attiva, con i valori tra graffe sostituiti. Sul Mac vale, se c'e', la
     variante «chiave.mac» (le frasi che nominano Windows o l'icona vicino all'orologio), e «questo PC» diventa
-    «questo Mac». La pagina del pannello fa lo stesso (app.js)."""
+    «questo Mac»; su Linux vale, se c'e', la variante «chiave.linux». La pagina del pannello fa lo stesso (app.js)."""
     here, ref = _read(active()), _read(REFERENCE)
-    phrase = (MAC and here.get(key + ".mac")) or here.get(key) or (MAC and ref.get(key + ".mac")) or ref.get(key) or key
+    phrase = (VARIANT and here.get(key + VARIANT)) or here.get(key) or (VARIANT and ref.get(key + VARIANT)) or ref.get(key) or key
     if MAC:
         phrase = _THIS_PC.sub(lambda m: m.group(1) + " Mac", phrase)
     return re.sub(r"\{(\w+)\}", lambda m: str(values[m.group(1)]) if m.group(1) in values else m.group(), phrase) if values else phrase

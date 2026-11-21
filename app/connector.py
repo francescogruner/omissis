@@ -748,6 +748,11 @@ def reopen_app(key):
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     else:
         subprocess.Popen([command, *app.get("arguments", [])], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **sistema.detached())
+    for _ in range(40):   # fino a venti secondi: se non riparte lo diciamo, invece di lasciare chi la usa senza l'app
+        if processes(app.get("process")):
+            return
+        time.sleep(0.5)
+    raise Error(i18n.t("connector.error.not_reopened", name=app["name"]))
 
 
 def launch_app(key, timeout=40, close_first=False):

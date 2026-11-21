@@ -22,8 +22,10 @@ Ogni sistema ha il suo foglio e il suo tipo di file, firmati con la stessa chiav
   Mac       update-mac-arm64.json   l'immagine disco (.dmg) della pagina delle versioni. Appena scaricata viene
                                     scompattata e controllata accanto alla versione in uso (macapp.unpack); lo scambio
                                     avviene a programma chiuso, e se la versione nuova non parte torna quella di prima
+  Linux     update-linux-x86_64.json  l'archivio (.tar.gz) della pagina delle versioni, con lo stesso giro del Mac
 Sul Mac si aggiorna da sola solo l'app che sta in un posto suo (di solito Applicazioni): aperta dal disco di
-installazione non puo' sostituirsi, e il pannello propone di spostarla.
+installazione non puo' sostituirsi, e il pannello propone di spostarla. Su Linux quella messa dall'installatore
+(install.sh) in ~/.local/lib/omissis.
 
   OMISSIS_UPDATES_URL        altro indirizzo da cui leggere (prove, o copia interna aziendale): la firma vale lo stesso
   OMISSIS_UPDATES_TEST_KEY   solo in una copia di prova (OMISSIS_TEST=1): la chiave pubblica, usa e getta, con cui la
@@ -55,7 +57,7 @@ ORIGIN = (os.environ.get("OMISSIS_UPDATES_URL") or "https://github.com/francesco
 PAGE = "https://github.com/francescogruner/omissis/releases/latest"
 FOLDER = paths.DATA / "updates"
 RX_FILE = re.compile(r"^[A-Za-z0-9][\w.-]{3,80}\.exe$")
-# fuori da Windows: l'immagine disco del Mac; su Linux (solo prove) un archivio tar con dentro la stessa cartella
+# fuori da Windows: l'immagine disco del Mac; su Linux un archivio tar con dentro la stessa cartella
 RX_PACKAGE = {"mac": re.compile(r"^[A-Za-z0-9][\w.-]{3,80}\.dmg$"), "linux": re.compile(r"^[A-Za-z0-9][\w.-]{3,80}\.tar\.gz$")}
 RX_VERSION = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}$")
 # fase: mai | controllo | aggiornato | disponibile | scarico | preparo (solo Mac) | pronto | errore
@@ -85,7 +87,7 @@ def mode():
 
 
 def target():
-    """Per quale sistema si cercano gli aggiornamenti: windows | mac-arm64 | mac-x86_64 (linux-...: solo nelle prove)."""
+    """Per quale sistema si cercano gli aggiornamenti: windows | mac-arm64 | mac-x86_64 | linux-x86_64 | linux-arm64."""
     if sistema.WINDOWS:
         return "windows"
     return f"{'mac' if sistema.MAC else 'linux'}-{'arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'x86_64'}"

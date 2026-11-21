@@ -10,6 +10,8 @@ provare l'estensione (e2e_extension.py).
 """
 import json
 import sys
+import time
+import zlib
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -121,8 +123,32 @@ class Handler(BaseHTTPRequestHandler):
     def _lines(self, lines, kind="text/plain; charset=utf-8"):
         self._to_blocks(kind, [(r + "\n").encode("utf-8") for r in lines])
 
+    def _open_channel(self, packed):
+        """Un canale di eventi che resta aperto (venti secondi: per chi ascolta non finisce), compresso se chiesto. Nel
+        proxy non deve fermarsi: l'app di Claude ne tiene uno cosi', e senza resta «senza connessione»."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Transfer-Encoding", "chunked")
+        if packed:
+            self.send_header("Content-Encoding", "gzip")
+        self.end_headers()
+        z = zlib.compressobj(wbits=31) if packed else None
+        try:
+            for i in range(40):
+                part = f'event: tick\ndata: {{"n": {i}, "testo": "ciao"}}\n\n'.encode("utf-8")
+                if z:
+                    part = z.compress(part) + z.flush(zlib.Z_SYNC_FLUSH)
+                self.wfile.write(f"{len(part):x}\r\n".encode() + part + b"\r\n")
+                self.wfile.flush()
+                time.sleep(0.5)
+            self.wfile.write(b"0\r\n\r\n")
+        except OSError:   # chi ascoltava se n'e' andato
+            pass
+
     def do_GET(self):
-        if self.path == "/seen_file":
+        if "/open_channel" in self.path:
+            self._open_channel("gz=1" in self.path)
+        elif self.path == "/seen_file":
             self._json(FILE)
         elif self.path == "/seen":
             self._json(SEEN)

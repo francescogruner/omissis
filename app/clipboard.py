@@ -53,14 +53,35 @@ if sistema.WINDOWS:
 
 # ------------------------------------------------------------------ appunti
 
+def _tools():
+    """I comandi che leggono e scrivono gli appunti fuori da Windows: quelli del Mac; su Linux quelli di Wayland
+    (wl-clipboard) o di X11 (xclip, xsel), se ci sono. -> (leggere, scrivere) oppure None."""
+    if sistema.MAC:
+        return ["pbpaste"], ["pbcopy"]
+    import shutil
+    if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste") and shutil.which("wl-copy"):
+        return ["wl-paste", "--no-newline"], ["wl-copy"]
+    if shutil.which("xclip"):
+        return ["xclip", "-selection", "clipboard", "-o"], ["xclip", "-selection", "clipboard"]
+    if shutil.which("xsel"):
+        return ["xsel", "--clipboard", "--output"], ["xsel", "--clipboard", "--input"]
+    return None
+
+
 def _pasteboard(text=None):
-    """Appunti del Mac con pbpaste e pbcopy (testo in UTF-8). Senza testo li legge; con il testo li scrive."""
-    env = {**os.environ, "LANG": "en_US.UTF-8"}
+    """Appunti del Mac (pbpaste e pbcopy) e di Linux (vedi _tools), testo in UTF-8. Senza testo li legge; con il testo
+    li scrive. Dove i comandi non ci sono: None, o False."""
+    tools = _tools()
+    if tools is None:
+        return None if text is None else False
+    env = {**os.environ, "LANG": "en_US.UTF-8"} if sistema.MAC else None
     try:
         if text is None:
-            r = subprocess.run(["pbpaste"], capture_output=True, timeout=10, env=env)
+            r = subprocess.run(tools[0], capture_output=True, timeout=10, env=env)
             return r.stdout.decode("utf-8", errors="replace") if r.returncode == 0 else None
-        return subprocess.run(["pbcopy"], input=text.encode("utf-8"), timeout=10, env=env).returncode == 0
+        # su Linux chi scrive resta acceso in sottofondo a tenere gli appunti: non se ne aspetta l'uscita su un tubo
+        return subprocess.run(tools[1], input=text.encode("utf-8"), timeout=10, env=env,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return None if text is None else False
 
@@ -75,7 +96,7 @@ def _open_up():
 
 def read():
     if not sistema.WINDOWS:
-        return _pasteboard() if sistema.MAC else None
+        return _pasteboard()
     if not _open_up():
         return None
     try:
@@ -93,7 +114,7 @@ def read():
 
 def write(text):
     if not sistema.WINDOWS:
-        return _pasteboard(text) if sistema.MAC else False
+        return _pasteboard(text)
     data = ctypes.create_unicode_buffer(text)
     if not _open_up():
         return False
@@ -410,7 +431,7 @@ class Shortcuts:
             self.status = status or {n: {"combo": self.wanted.get(n, ""), "active": False, "error": "not_here" if n == "replace" else ""}
                                      for n in self.actions}
             return self.status
-        if not sistema.WINDOWS:   # su Linux (solo prove) niente scorciatoie di sistema
+        if not sistema.WINDOWS:   # su Linux niente scorciatoie di sistema: restano le azioni sugli appunti del menu e del pannello
             self.status = {n: {"combo": self.wanted.get(n, ""), "active": False, "error": ""} for n in self.actions}
             return self.status
         self.recorded.clear()

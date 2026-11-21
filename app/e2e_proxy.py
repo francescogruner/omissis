@@ -8,8 +8,11 @@ start.py --test) e mock_service.py.
 """
 import http.client
 import json
+import socket
 import sys
+import time
 import urllib.parse
+import zlib
 
 import settings   # noqa: E402
 
@@ -32,6 +35,36 @@ def call(method, path, body=None, via_proxy=True):
     c.request(method, f"http://{FAKE}{path}" if via_proxy else path, body=data, headers={"Content-Type": kind, "Host": FAKE})
     r = c.getresponse()
     return r.status, r.read().decode("utf-8")
+
+
+def open_channel(path, headers):
+    """Ascolta per tre secondi un canale di eventi che resta aperto: -> (secondi al primo evento o None, eventi arrivati)."""
+    c = http.client.HTTPConnection(*PROXY, timeout=4)
+    t0 = time.time()
+    try:
+        c.request("GET", f"http://{FAKE}{path}", headers={"Host": FAKE, **headers})
+        r = c.getresponse()
+    except (socket.timeout, TimeoutError):
+        return None, 0
+    d = zlib.decompressobj(wbits=31) if r.getheader("Content-Encoding") == "gzip" else None
+    # piu' lungo dell'intervallo tra due eventi (mezzo secondo): dopo un tempo scaduto la lettura non riprende, e
+    # un canale sano sembrerebbe fermo. Se il canale e' fermo davvero, scade e la prova lo dice
+    r.fp.raw._sock.settimeout(2)
+    first, raw = None, b""
+    while time.time() - t0 < 3:
+        try:
+            piece = r.read1(4096)
+        except (socket.timeout, TimeoutError):
+            continue
+        except OSError:
+            break
+        if not piece:
+            break
+        raw += d.decompress(piece) if d else piece
+        if first is None and b"data:" in raw:
+            first = time.time() - t0
+    c.close()
+    return first, raw.count(b"data:")
 
 
 def events(raw):
@@ -120,6 +153,15 @@ for name, method, path, body, extract in CASES:
     if not ok:
         print("   in chiaro:", outside, "| non ripristinati:", lost)
         print("   ricevuto dal client:", received[:400])
+# un canale di eventi che resta aperto deve arrivare subito, anche compresso e anche fuori dai servizi protetti
+for name, path, headers in (
+        ("canale di eventi aperto, non compresso", "/api/organizations/o1/open_channel?gz=0", {"Accept": "text/event-stream"}),
+        ("canale di eventi aperto, compresso", "/api/organizations/o1/open_channel?gz=1", {"Accept": "text/event-stream", "Accept-Encoding": "gzip, br"}),
+        ("canale di eventi aperto, fuori dai servizi protetti", "/other/open_channel?gz=1", {"Accept": "*/*", "Accept-Encoding": "gzip"})):
+    first, n = open_channel(path, headers)
+    ok = first is not None and first < 1.5 and n >= 3
+    all_ok &= ok
+    print(f"{'OK    ' if ok else 'ERRORE'} {name}: primo evento dopo {'%.1f s' % first if first is not None else 'mai'}, {n} eventi in tre secondi")
 seen = json.loads(call("GET", "/seen", via_proxy=False)[1])["body"]
 print("\nUltimo testo arrivato al servizio:\n  ", json.dumps(seen, ensure_ascii=False)[:420])
 sys.exit(0 if all_ok else 1)

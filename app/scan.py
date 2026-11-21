@@ -31,6 +31,7 @@ if sistema.WINDOWS:
 HOME = Path.home()
 LOCALE, ROAMING = Path(os.environ.get("LOCALAPPDATA", "")), Path(os.environ.get("APPDATA", ""))
 MAC_SUPPORT = HOME / "Library" / "Application Support"   # sul Mac i profili dei browser stanno tutti qui
+LINUX_CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")   # su Linux qui, o nelle cartelle di Snap e Flatpak
 
 
 def _ps(command):
@@ -59,8 +60,8 @@ def _recognize(name):
 
 def programs():
     found_items = {}
-    if not sistema.WINDOWS:   # sul Mac le app in /Applications; su Linux (solo prove) niente
-        for name, version in sistema.mac_applications():
+    if not sistema.WINDOWS:   # sul Mac le app in /Applications; su Linux le voci del menu delle applicazioni
+        for name, version in (sistema.mac_applications() if sistema.MAC else sistema.linux_applications()):
             r = _recognize(name)
             if r:
                 found_items[name] = {"name": name, "version": version, "origin": i18n.t("detected.origin.program"), "service": r}
@@ -140,6 +141,14 @@ def browser_extensions():
         browser = {"Chrome": MAC_SUPPORT / "Google/Chrome", "Edge": MAC_SUPPORT / "Microsoft Edge",
                    "Brave": MAC_SUPPORT / "BraveSoftware/Brave-Browser", "Vivaldi": MAC_SUPPORT / "Vivaldi",
                    "Arc": MAC_SUPPORT / "Arc/User Data", "Opera": MAC_SUPPORT / "com.operasoftware.Opera"}
+    elif sistema.LINUX:   # il pacchetto del sistema, poi quelli di Snap e di Flatpak (ognuno tiene i profili a casa sua)
+        flatpak = HOME / ".var" / "app"
+        browser = {"Chrome": LINUX_CONFIG / "google-chrome", "Chromium": LINUX_CONFIG / "chromium", "Edge": LINUX_CONFIG / "microsoft-edge",
+                   "Brave": LINUX_CONFIG / "BraveSoftware/Brave-Browser", "Vivaldi": LINUX_CONFIG / "vivaldi", "Opera": LINUX_CONFIG / "opera",
+                   "Chromium (Snap)": HOME / "snap/chromium/common/chromium", "Brave (Snap)": HOME / "snap/brave/current/.config/BraveSoftware/Brave-Browser",
+                   "Chrome (Flatpak)": flatpak / "com.google.Chrome/config/google-chrome", "Chromium (Flatpak)": flatpak / "org.chromium.Chromium/config/chromium",
+                   "Brave (Flatpak)": flatpak / "com.brave.Browser/config/BraveSoftware/Brave-Browser",
+                   "Edge (Flatpak)": flatpak / "com.microsoft.Edge/config/microsoft-edge"}
     for name_b, base in browser.items():
         if not base.exists():
             continue
@@ -158,7 +167,9 @@ def browser_extensions():
                             "all_sites_access": any(x in ("<all_urls>", "*://*/*", "https://*/*", "http://*/*")
                                                            for x in (man.get("host_permissions") or []) + (man.get("permissions") or [])
                                                            if isinstance(x, str))})
-    for prof in ((MAC_SUPPORT / "Firefox/Profiles") if sistema.MAC else (ROAMING / "Mozilla/Firefox/Profiles")).glob("*/extensions.json"):
+    firefox = [MAC_SUPPORT / "Firefox/Profiles"] if sistema.MAC else [ROAMING / "Mozilla/Firefox/Profiles"] if sistema.WINDOWS else \
+        [HOME / ".mozilla/firefox", HOME / "snap/firefox/common/.mozilla/firefox", HOME / ".var/app/org.mozilla.firefox/.mozilla/firefox"]
+    for prof in (p for base in firefox for p in base.glob("*/extensions.json")):
         try:
             for a in json.loads(prof.read_text(encoding="utf-8")).get("addons", []):
                 name = str((a.get("defaultLocale") or {}).get("name", ""))

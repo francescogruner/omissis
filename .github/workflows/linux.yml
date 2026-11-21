@@ -1,0 +1,39 @@
+name: Linux (pacchetto di prova)
+
+# Costruisce Omissis per Linux su un Ubuntu di GitHub e lancia le prove (packaging/linux/ci_linux.sh): la serie comune a
+# Mac e Linux, gli aggiornamenti con ritorno alla versione di prima, e la prova di Linux (installatore, menu delle
+# applicazioni, avvio all'accesso, chiusura, cestino, disinstallazione, scansioni con Tesseract). L'archivio resta tra i
+# risultati della costruzione: non viene pubblicato. Parte solo a mano.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versione (solo numeri e punti, per esempio 0.1.7)
+        required: true
+        default: 0.1.7
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04   # la piu' vecchia disponibile: il pacchetto deve partire anche li'
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Programmi che le prove usano se ci sono
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-ita poppler-utils desktop-file-utils fonts-dejavu-core
+      - name: Costruzione e prove
+        env:
+          GITHUB_TOKEN: ${{ github.token }}   # solo per chiedere a GitHub qual e' l'ultimo Python da scaricare
+        run: bash packaging/linux/ci_linux.sh "${{ inputs.version }}"
+      - name: Archivio
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: omissis-linux-x86_64
+          path: dist/Omissis-*-linux-*.tar.gz
+          if-no-files-found: warn
+          retention-days: 14

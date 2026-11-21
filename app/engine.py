@@ -54,7 +54,9 @@ class Seal:
     """Cifratura dei valori dell'archivio con la protezione dei dati di Windows (DPAPI): solo l'utente di Windows
     che ha creato l'archivio puo' rileggerlo, anche se il file viene copiato altrove. Non richiede password.
     Sul Mac: AES-GCM con una chiave tenuta nel Portachiavi dell'utente (stesso effetto: il file copiato altrove non
-    si legge). Altrove non cifra (e lo dichiara: attivo = False)."""
+    si legge). Su Linux lo stesso, con il portachiavi del desktop (Secret Service: GNOME Keyring, KWallet, KeePassXC);
+    dove il portachiavi non c'e' non cifra, e lo dichiara (attivo = False): resta la cartella dei dati, che puo'
+    leggere solo chi usa il computer."""
     PREFIX = "dp1:"
     MAC_PREFIX = "kc1:"
 
@@ -79,6 +81,11 @@ class Seal:
         f_key = Path(folder) / "vault_key.bin"
         if f_key.exists():
             raw = f_key.read_bytes()
+            if not self.is_active and sys.platform.startswith("linux") and len(raw) != 32:
+                # l'archivio e' stato cifrato con la chiave del portachiavi, che adesso non risponde: aprirlo lo stesso
+                # vorrebbe dire non ritrovare piu' i valori gia' salvati e scriverne di nuovi in chiaro
+                raise OSError("l'archivio è cifrato con una chiave custodita nel portachiavi di questo utente, che ora non risponde: "
+                              "sblocca il portachiavi (di solito basta accedere al desktop con la password) e riavvia Omissis")
             if not self.is_active:
                 self.key = raw
             elif self._aes is not None and len(raw) == 32:

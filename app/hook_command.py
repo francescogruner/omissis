@@ -16,7 +16,9 @@ chiede dal pannello. Le app gia' aperte lo vedono dopo essere state chiuse e ria
 registro di Windows non viene toccato: al suo posto c'e' un file tra i dati di prova.
 
 Sul Mac il PATH dell'utente sta nei file di avvio della shell: Omissis aggiunge una riga sua, riconoscibile dal commento,
-a ~/.zprofile (e a ~/.bash_profile, se c'e'), e la toglie quando glielo si chiede.
+a ~/.zprofile (e a ~/.bash_profile, se c'e'), e la toglie quando glielo si chiede. Su Linux fa lo stesso con ~/.profile
+(letto all'accesso) e, se ci sono, con ~/.bashrc, ~/.bash_profile, ~/.zshrc e ~/.zprofile: cosi' lo vede anche un
+terminale aperto subito dopo.
 """
 import ctypes
 import json
@@ -93,8 +95,11 @@ def _write_path(value, kind):
 
 
 def _profiles():
-    """I file di avvio della shell del Mac da toccare: ~/.zprofile sempre (zsh e' la shell del Mac), ~/.bash_profile se c'e'."""
+    """I file di avvio della shell da toccare. Mac: ~/.zprofile sempre (zsh e' la shell del Mac), ~/.bash_profile se c'e'.
+    Linux: ~/.profile sempre, e gli altri file di bash e zsh se ci sono. Il primo e' quello che dice se la riga c'e'."""
     home = Path.home()
+    if sistema.LINUX:
+        return [home / ".profile"] + [f for f in (home / ".bashrc", home / ".bash_profile", home / ".zshrc", home / ".zprofile") if f.exists()]
     return [home / ".zprofile"] + [f for f in (home / ".bash_profile",) if f.exists()]
 
 
@@ -104,7 +109,7 @@ def _profile_line():
 
 def _profile_on():
     try:
-        return (Path.home() / ".zprofile").read_text(encoding="utf-8").count(_profile_line()) > 0
+        return _profiles()[0].read_text(encoding="utf-8").count(_profile_line()) > 0
     except OSError:
         return False
 
@@ -126,10 +131,8 @@ def _same(a, b):
 def on_path():
     if os.environ.get("OMISSIS_TEST") == "1":
         return _test_note().exists()
-    if sistema.MAC:
+    if not sistema.WINDOWS:
         return _profile_on()
-    if os.name != "nt":
-        return False
     try:
         return any(_same(p, folder()) for p in _read_path()[0].split(";") if p.strip())
     except OSError:
@@ -141,7 +144,7 @@ def install():
     write()
     if os.environ.get("OMISSIS_TEST") == "1":
         _test_note().write_text(str(folder()), encoding="utf-8")
-    elif sistema.MAC and not on_path():
+    elif not sistema.WINDOWS and not on_path():
         _profile_write(True)
     elif os.name == "nt" and not on_path():
         value, kind = _read_path()
@@ -153,7 +156,7 @@ def remove():
     """Toglie la cartella dal PATH dell'utente e cancella i due file: i plugin, da quel momento, non fanno piu' nulla."""
     if os.environ.get("OMISSIS_TEST") == "1":
         _test_note().unlink(missing_ok=True)
-    elif sistema.MAC:
+    elif not sistema.WINDOWS:
         _profile_write(False)
     elif os.name == "nt" and on_path():
         value, kind = _read_path()

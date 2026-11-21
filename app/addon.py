@@ -181,15 +181,34 @@ class MspPii:
 
     # ---------------------------------------------------------------- risposta
     def responseheaders(self, flow: http.HTTPFlow):
-        ad = flow.metadata.get("msp")
-        if ad is None or not settings.read()["restore"]:
-            return
-        rs = flow.response
-        if ad.in_streaming(rs.headers.get("content-type", ""), flow.request.path) and \
-                rs.headers.get("content-encoding", "identity") == "identity":
+        """Decide come consegnare la risposta. Una risposta che resta aperta (un canale di eventi) non va mai trattenuta:
+        mitmproxy aspetterebbe la fine prima di consegnarla, e l'app resterebbe senza connessione. Visto il 21/11/2026 con
+        l'app di Claude dietro il proxy del sistema: il suo canale di eventi arriva compresso, non veniva consegnato e
+        l'app diceva «Connessione non riuscita»."""
+        rs, ad = flow.response, flow.metadata.get("msp")
+        kind = rs.headers.get("content-type", "")
+        coding = rs.headers.get("content-encoding", "identity").strip().lower() or "identity"
+        if ad is not None and settings.read()["restore"] and ad.in_streaming(kind, flow.request.path):
             stream = ad.stream(self.search, self.preload)
+            if coding != "identity":
+                try:   # compressa: la apriamo a pezzi, cosi' le etichette si rimettono lo stesso
+                    opened = R.Unpack(coding, stream)
+                except ValueError:   # compressione che non conosciamo: passa com'e', senza essere letta, e lo scriviamo
+                    rs.stream = True
+                    self.write(service=flow.metadata.get("msp_service"), path=self.path(flow), event="stream_not_read", coding=coding[:20])
+                    return
+                del rs.headers["content-encoding"]
+                if "content-length" in rs.headers:
+                    del rs.headers["content-length"]
+                rs.stream = opened
+            else:
+                rs.stream = stream
             flow.metadata["msp_stream"] = stream
-            rs.stream = stream
+            return
+        # cio' che non riscriviamo passa a pezzi, com'e': canali di eventi, pagine, file. Restano intere solo le risposte
+        # che response() puo' dover riscrivere (json e testo dei servizi protetti, quando il ripristino e' acceso)
+        if ad is None or not settings.read()["restore"] or not any(x in kind for x in ("json", "text/plain")):
+            rs.stream = True
 
     def response(self, flow: http.HTTPFlow):
         ad = flow.metadata.get("msp")

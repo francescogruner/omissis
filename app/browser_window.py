@@ -35,7 +35,7 @@ key = x509.load_pem_x509_certificate(CERT.read_bytes()).public_key().public_byte
     serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
 fingerprint = base64.b64encode(hashlib.sha256(key).digest()).decode()
 import sistema   # noqa: E402
-exe = next((b for b in BROWSER if Path(b).exists()), None) if sistema.WINDOWS else sistema._mac_browser()
+exe = next((b for b in BROWSER if Path(b).exists()), None) if sistema.WINDOWS else sistema.chromium_browser()
 if exe is None:
     sys.exit(i18n.t("program.window_without_browser"))
 subprocess.Popen([exe, f"--user-data-dir={paths.DATA / 'browser_profile'}", f"--proxy-server=http://127.0.0.1:{settings.read()['port']}",
