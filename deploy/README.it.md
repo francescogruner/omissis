@@ -116,7 +116,7 @@ pulsante «Vedi che cosa parte» mostra il riepilogo esatto.
   serve, si informano i dipendenti.
 - Il protocollo è aperto (`app/central.py`): una richiesta `POST` a `<console_url>/api/v1/report` con la chiave
   nell'intestazione `Authorization`. La console è un programma a parte, non aperto: si scarica compilata dalla
-  pagina delle versioni ed è gratuita fino a 5 PC (vedi [`../console/README.it.md`](../console/README.it.md)).
+  pagina delle versioni ed è gratuita fino a 3 PC (vedi [`../console/README.it.md`](../console/README.it.md)).
 - Un rinvio verso un altro indirizzo non viene seguito, e un indirizzo non `https` viene rifiutato.
 - **Regole dalla console.** Con `"console_rules": true` il PC applica le regole che la console gli manda in risposta
   al riepilogo (per servizio, file, allegati, aggiornamenti, analisi, profilo dei dati, divieto di spegnere la

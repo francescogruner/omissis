@@ -213,7 +213,7 @@ browser extension, connect desktop apps and terminal tools. Everything else is i
   script. Start from the [guide for organisations](deploy/GUIDE-ORGANISATIONS.md).
 - **All the PCs on one page:** the [central console](console/README.md) shows, organisation by organisation, which
   PCs are protected and how much data was kept away from AI services. A separate program, compiled and not open
-  source, **free up to 5 PCs**.
+  source, **free up to 3 PCs**.
 - **PCs that cannot hold the model:** one PC with Omissis can lend its model to the others on the network. The text
   travels encrypted and only the positions of the data found come back; placeholders, real values, rules and lists
   stay on each PC. Off by default.

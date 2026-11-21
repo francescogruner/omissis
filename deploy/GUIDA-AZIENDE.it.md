@@ -17,8 +17,8 @@ Tutto ciò che gira sui PC è gratuito e aperto (licenza Apache 2.0), anche per 
 | Impostazioni bloccate dall'amministratore | sì | |
 | Server di inferenza in rete (un PC presta il modello agli altri) | sì | |
 | Stato di ogni PC letto dal tuo RMM (`Get-OmissisStatus.ps1`) | sì | |
-| **Console centrale**: tutti i PC in una pagina sola, fino a 5 PC di un'azienda | sì, ma non aperta | |
-| Console centrale oltre i 5 PC, o per più aziende (MSP) | | sì, con una licenza |
+| **Console centrale**: tutti i PC in una pagina sola, fino a 3 PC di un'azienda | sì, ma non aperta | |
+| Console centrale oltre i 3 PC, o per più aziende (MSP) | | sì, con una licenza |
 
 **Che cosa aggiunge la console.** Quanti PC hanno Omissis e quali vanno controllati (protezione spenta, PC che non
 si fanno sentire, versioni vecchie), quanti dati sono stati tenuti fuori dai servizi AI in totale, per giorno, per
@@ -39,7 +39,7 @@ nessun codice di licenza: il programma dei PC resta quello gratuito. La console 
    Dalla console si possono anche **mandare le regole ai PC** (quali servizi proteggere o bloccare, file,
    aggiornamenti, divieto di spegnere la protezione; per azienda e, dove serve, per singolo PC), ricevere **avvisi** e tenere un **registro di conformità**. Le regole valgono solo sui PC che
    le accettano: `"console_rules": true` nello stesso file. La console non può cambiare a chi i PC mandano i dati.
-4. **Oltre i 5 PC, o con più di un'azienda**: nella console, scheda «Licenza» → «Richiedi una licenza». Prepara un
+4. **Oltre i 3 PC, o con più di un'azienda**: nella console, scheda «Licenza» → «Richiedi una licenza». Prepara un
    file con l'identificativo dell'installazione; lo si manda da <https://francescogruner.it/contatti/> e si riceve
    un file di licenza da caricare nella stessa scheda.
 

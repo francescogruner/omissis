@@ -23,11 +23,15 @@ English: [README.md](README.md).
   catena di impronte che scopre le righe ritoccate.
 - **Accessi**: con nome e password, oppure con l'account Microsoft dell'organizzazione (Entra ID).
 
-## Gratis fino a 5 PC
+## Gratis fino a 3 PC
 
-La console è **gratuita fino a 5 PC di una sola azienda**, senza scadenza e senza registrarsi. Per seguire più PC o
+La console è **gratuita fino a 3 PC di una sola azienda**, senza scadenza e senza registrarsi. Per seguire più PC o
 più aziende si chiede una licenza dalla console stessa (scheda «Licenza» → «Richiedi una licenza»): prepara un file
 con l'identificativo della tua installazione, lo mandi, e ricevi un file di licenza da caricare nella stessa scheda.
+
+La licenza è un abbonamento: 20 € a PC all'anno per aziende, studi ed enti. Chi segue più clienti (MSP e
+rivenditori) paga a fine mese sui PC seguiti, con un listino riservato che si chiede scrivendo. Il listino aggiornato
+è su [omissis.eu](https://omissis.eu/#prezzi).
 
 ## Non è software aperto
 

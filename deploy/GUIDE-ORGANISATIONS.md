@@ -19,8 +19,8 @@ on the number of PCs.
 | Settings locked by the administrator | yes | |
 | Inference server on the network (one PC lends its model to the others) | yes | |
 | State of each PC read by your RMM (`Get-OmissisStatus.ps1`) | yes | |
-| **Central console**: all the PCs on one page, up to 5 PCs of one organisation | yes, but not open source | |
-| Central console beyond 5 PCs, or for several organisations (MSP) | | yes, with a licence |
+| **Central console**: all the PCs on one page, up to 3 PCs of one organisation | yes, but not open source | |
+| Central console beyond 3 PCs, or for several organisations (MSP) | | yes, with a licence |
 
 **What the console adds.** How many PCs have Omissis and which ones need attention (protection off, PCs that
 have gone quiet, old versions), how much data was kept away from AI services in total, per day, per type of data
@@ -42,7 +42,7 @@ code is not in this repository): its guide is in [`../console/README.md`](../con
    From the console you can also **send rules to the PCs** (which services to protect or block, files, updates,
    the ban on turning protection off; per organisation and, where needed, per single PC), receive **alerts** and keep a **compliance log**. Rules apply only to PCs that accept them:
    `"console_rules": true` in the same file. The console cannot change where the PCs send their data.
-4. **Beyond 5 PCs, or with more than one organisation**: in the console, "Licence" card → "Request a licence". It
+4. **Beyond 3 PCs, or with more than one organisation**: in the console, "Licence" card → "Request a licence". It
    prepares a file with the identifier of the installation; send it from <https://francescogruner.it/contatti/> and
    you get back a licence file to load in the same card.
 

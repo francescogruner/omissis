@@ -213,7 +213,7 @@ e collegare l'estensione, collegare le app desktop e gli strumenti da terminale.
   da uno script di accesso. Si parte dalla [guida per le aziende](deploy/GUIDA-AZIENDE.it.md).
 - **Tutti i PC in una pagina:** la [console centrale](console/README.it.md) mostra, azienda per azienda, quali PC
   sono protetti e quanti dati sono stati tenuti fuori dai servizi AI. È un programma a parte, compilato e non
-  aperto, **gratuito fino a 5 PC**.
+  aperto, **gratuito fino a 3 PC**.
 - **PC che non reggono il modello:** un PC con Omissis può prestare il suo modello agli altri della rete. Il testo
   viaggia cifrato e tornano solo le posizioni dei dati trovati; segnaposto, valori veri, regole ed elenchi restano
   su ogni PC. Di serie è spento.

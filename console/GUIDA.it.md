@@ -3,7 +3,7 @@
 Per chi installa la console su un server proprio. Alla fine c'è una pagina dove compaiono i PC delle aziende, che
 parte da sola con il server e ha una copia di sicurezza ogni notte.
 
-La console è gratuita fino a 5 PC di una sola azienda; oltre serve una licenza (vedi «La licenza», più sotto). È
+La console è gratuita fino a 3 PC di una sola azienda; oltre serve una licenza (vedi «La licenza», più sotto). È
 software proprietario, distribuito compilato: le condizioni d'uso sono in `LICENZA.it.md`.
 
 English: `GUIDE.md`.
@@ -230,7 +230,7 @@ che Microsoft accetti: con la console in rete locale e il certificato fatto da s
 
 ## La licenza
 
-Senza licenza la console funziona, e segue fino a **5 PC di un'azienda sola**. Per seguirne di più serve un file di
+Senza licenza la console funziona, e segue fino a **3 PC di un'azienda sola**. Per seguirne di più serve un file di
 licenza: dice a chi è intestata, quanti PC e quante aziende copre e fino a quando. È firmato: cambiando un numero
 smette di valere.
 
@@ -247,7 +247,7 @@ smette di valere.
 - **PC oltre il numero coperto**: la console tiene i primi arrivati e non accoglie i riepiloghi degli altri; la
   pagina lo scrive in cima. Nulla viene cancellato: con una licenza più ampia riprendono da dove erano.
 - **Scadenza**: da trenta giorni prima la pagina lo ricorda. Dopo la scadenza la licenza vale ancora per 14
-  giorni; poi la console torna a 5 PC e un'azienda, finché non se ne carica una nuova.
+  giorni; poi la console torna a 3 PC e un'azienda, finché non se ne carica una nuova.
 
 ## Tutti i giorni
 

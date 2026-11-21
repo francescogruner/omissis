@@ -23,12 +23,16 @@ Italiano: [README.it.md](README.it.md).
   fingerprints that catches altered rows.
 - **Logins**: with a name and password, or with the organisation's Microsoft account (Entra ID).
 
-## Free up to 5 PCs
+## Free up to 3 PCs
 
-The console is **free up to 5 PCs of a single organisation**, with no time limit and nothing to register. To follow
+The console is **free up to 3 PCs of a single organisation**, with no time limit and nothing to register. To follow
 more PCs or more organisations you ask for a licence from the console itself ("Licence" card → "Request a licence"):
 it prepares a file with the identifier of your installation, you send it, you get back a licence file to load in
 the same card.
+
+The licence is a subscription: €20 per PC per year for companies, firms and public bodies. Those who follow several
+customers (MSPs and resellers) pay at month end on the PCs followed, on a reseller price list available on request.
+The current price list is on [omissis.eu](https://omissis.eu/en/#prezzi).
 
 ## It is not open source
 

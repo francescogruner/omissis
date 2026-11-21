@@ -3,7 +3,7 @@
 For whoever installs the console on a server of their own. At the end there is a page where the organisations' PCs
 show up, which starts by itself with the server and gets a backup every night.
 
-The console is free up to 5 PCs of a single organisation; beyond that a licence is needed (see "The licence", further
+The console is free up to 3 PCs of a single organisation; beyond that a licence is needed (see "The licence", further
 down). It is proprietary software, distributed compiled: the terms of use are in `LICENSE.md`.
 
 Italiano: `GUIDA.it.md`.
@@ -231,7 +231,7 @@ warning.
 
 ## The licence
 
-Without a licence the console works, and follows up to **5 PCs of a single organisation**. To follow more you need a
+Without a licence the console works, and follows up to **3 PCs of a single organisation**. To follow more you need a
 licence file: it says who it is issued to, how many PCs and organisations it covers, and until when. It is signed:
 change a number and it stops being valid.
 
@@ -249,7 +249,7 @@ change a number and it stops being valid.
   summaries of the others; the page says so at the top. Nothing is deleted: with a wider licence they pick up
   where they were.
 - **Expiry**: from thirty days before, the page reminds you. After expiry the licence stays in force for 14 days;
-  then the console goes back to 5 PCs and one organisation, until a new one is loaded.
+  then the console goes back to 3 PCs and one organisation, until a new one is loaded.
 
 ## Day to day
 
