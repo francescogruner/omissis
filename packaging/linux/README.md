@@ -1,15 +1,21 @@
-# Omissis for Linux (in preparation) · Omissis per Linux (in preparazione)
+# Omissis for Linux (preview) · Omissis per Linux (versione di prova)
 
 **English** · [Italiano](#italiano)
 
-The Linux build is **not released yet**: there is no Linux package on the [releases page](https://github.com/francescogruner/omissis/releases). The code, the installer and the tests are here. On 21 November 2026 the package was built and tested automatically in Ubuntu 24.04 (inside Windows, with WSL). **Nobody has used it on a real Linux desktop yet**: what depends on the desktop (the icon, the entry in the applications menu, the start at sign-in, the keyring prompt) has been checked file by file, not by eye.
+The Linux build is a **preview**: version 0.1.7, on the [releases page](https://github.com/francescogruner/omissis/releases/latest) since 21 November 2026. It was built and tested automatically on Ubuntu 22.04 (a GitHub machine) and in Ubuntu 24.04 (inside Windows, with WSL). **Nobody has used it on a real Linux desktop yet**: what depends on the desktop (the icon, the entry in the applications menu, the start at sign-in, the keyring prompt) has been checked file by file, not by eye.
 
 ## Installing
 
 One command, as the user who will use it. It does not ask for administrator rights and refuses to run as root.
 
 ```
-sh install.sh                                     # downloads the latest version from the releases page (once a Linux package is there)
+curl -fsSL https://github.com/francescogruner/omissis/releases/latest/download/install.sh | sh
+```
+
+The command downloads the installer from the releases page and runs it. If you prefer to read it first, download `install.sh` from the same page and then:
+
+```
+sh install.sh                                     # downloads the latest version from the releases page
 sh install.sh Omissis-0.1.7-linux-x86_64.tar.gz   # installs an archive you already have, also without a network
 ```
 
@@ -83,14 +89,20 @@ Not verified: any real Linux desktop (GNOME, KDE and the others), the icon, the 
 
 # Italiano
 
-La versione per Linux **non è ancora pubblicata**: nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases) non c'è un pacchetto per Linux. Qui ci sono il codice, l'installatore e le prove. Il 21 novembre 2026 il pacchetto è stato costruito e provato in automatico in Ubuntu 24.04 (dentro Windows, con WSL). **Nessuno l'ha ancora usato su un desktop Linux vero**: ciò che dipende dal desktop (l'icona, la voce nel menu delle applicazioni, l'avvio all'accesso, la richiesta del portachiavi) è stato controllato file per file, non a occhio.
+La versione per Linux è una **versione di prova**: la 0.1.7, nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases/latest) dal 21 novembre 2026. È stata costruita e provata in automatico su Ubuntu 22.04 (una macchina di GitHub) e in Ubuntu 24.04 (dentro Windows, con WSL). **Nessuno l'ha ancora usato su un desktop Linux vero**: ciò che dipende dal desktop (l'icona, la voce nel menu delle applicazioni, l'avvio all'accesso, la richiesta del portachiavi) è stato controllato file per file, non a occhio.
 
 ## Installazione
 
 Un comando, dall'utente che lo userà. Non chiede diritti di amministratore e si rifiuta di partire come root.
 
 ```
-sh install.sh                                     # scarica l'ultima versione dalla pagina delle versioni (quando ci sarà un pacchetto per Linux)
+curl -fsSL https://github.com/francescogruner/omissis/releases/latest/download/install.sh | sh
+```
+
+Il comando scarica l'installatore dalla pagina delle versioni e lo esegue. Se preferisci leggerlo prima, scarica `install.sh` dalla stessa pagina e poi:
+
+```
+sh install.sh                                     # scarica l'ultima versione dalla pagina delle versioni
 sh install.sh Omissis-0.1.7-linux-x86_64.tar.gz   # installa un archivio che hai già, anche senza rete
 ```
 
