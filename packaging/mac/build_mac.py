@@ -54,6 +54,23 @@ def triple(arch, plat):
     return f"{'aarch64' if arch == 'arm64' else 'x86_64'}-unknown-linux-gnu"
 
 
+def data_filter(member, dest):
+    """Il filtro «data» di tarfile, con una correzione. I Python meno recenti (per esempio il 3.10 di Ubuntu 22.04)
+    calcolano i collegamenti relativi dalla radice dell'archivio invece che dalla cartella del file, e cosi' rifiutano
+    collegamenti leciti come quelli di share/terminfo. Quando succede il controllo viene rifatto qui, dalla cartella
+    giusta: un collegamento che esce davvero dalla destinazione resta rifiutato."""
+    try:
+        return tarfile.data_filter(member, dest)
+    except tarfile.LinkOutsideDestinationError:
+        if not member.issym() or os.path.isabs(member.linkname):
+            raise
+        root = os.path.realpath(dest)
+        inside = os.path.realpath(os.path.join(root, os.path.dirname(member.name), member.linkname))
+        if os.path.commonpath([root, inside]) != root:
+            raise
+        return member
+
+
 def download_python(target, arch, plat):
     """Scarica e scompatta l'ultima python-build-standalone della serie 3.12 per questa macchina."""
     req = urllib.request.Request(STANDALONE, headers={"Accept": "application/vnd.github+json", "User-Agent": "omissis-build"})
@@ -69,7 +86,7 @@ def download_python(target, arch, plat):
         print("scarico", asset["name"], flush=True)
         urllib.request.urlretrieve(asset["browser_download_url"], archive)
     with tarfile.open(archive) as t:
-        t.extractall(target.parent, filter="data")   # dentro c'e' una cartella «python»
+        t.extractall(target.parent, filter=data_filter)   # dentro c'e' una cartella «python»
     if target.name != "python":
         (target.parent / "python").rename(target)
     return target / "bin" / "python3"
