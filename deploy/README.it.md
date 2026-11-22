@@ -31,8 +31,8 @@ amministratori: quello va lanciato come amministratore o come SYSTEM, una volta 
 
 1. **L'installer** `Omissis-<versione>-setup.exe` e la sua **impronta SHA-256**. L'impronta sta in
    `update.json`, pubblicato firmato accanto all'installer: lo script rifiuta un file con un'impronta diversa.
-2. Facoltativo, ma consigliato: **una cartella con il modello**, così ogni PC non scarica 537 MB per conto suo.
-   Dentro ci va una sottocartella con il nome del modello (`omissis-small`) e i cinque file che il programma
+2. Facoltativo, ma consigliato: **una cartella con il modello**, così ogni PC non scarica 124 MB per conto suo.
+   Dentro ci va una sottocartella con il nome del modello (`omissis-light`) e i cinque file che il programma
    scaricherebbe (`config.json`, `tokenizer.json`, `tokenizer_config.json`, `omissis.json`, `model.onnx`).
    Ogni file viene accettato solo se dimensione e impronta sono quelle dell'elenco che viaggia con il
    programma; se uno non torna, la copia viene scartata e il programma scarica il modello da sé.
@@ -55,7 +55,7 @@ Solo le chiavi scritte nel file vengono imposte; ogni altra impostazione resta c
 
 | Chiave | Valori | Che cosa decide |
 |---|---|---|
-| `model` | `omissis-small` (di serie), `omissis-base` | Il modello. Su PC da ufficio il piccolo; il grande vuole 16 GB |
+| `model` | `omissis-light` (di serie), `omissis-small`, `omissis-base` | Il modello. Il leggero va bene su ogni PC; il grande vuole 16 GB |
 | `updates` | `automatic`, `notify`, `never` | `never` se le versioni le distribuisci tu, con questo stesso script |
 | `policies` | per servizio: `protect`, `record`, `block`, `ignore` | Per esempio `"deepseek": "block"`. I nomi dei servizi sono quelli della sezione Servizi AI del pannello |
 | `profile` | `standard`, `confidential`, `special`, `maximum` | Il profilo dei dati, fissato per tutti: `standard` (di serie) sostituisce persone, identificativi, pagamenti e dati informatici; `confidential` anche i nomi delle aziende; `special` anche i dati particolari (salute, religione…); `maximum` tutto ciò che il modello riconosce. Imposto, l'utente non cambia né gruppi né categorie |

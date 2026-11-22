@@ -3,7 +3,8 @@
 Riconosce i dati personali e riservati in testi italiani e li restituisce come intervalli con
 un'etichetta. Sono tre strati, applicati insieme da `inference.py`:
 
-1. **il modello** (`models\omissis-base` o `omissis-small`): classificatore di parole su mmBERT,
+1. **il modello** (`models\omissis-base` o `omissis-small`; `omissis-light` è `omissis-small` compresso, solo in
+   formato ONNX, ed è quello che il programma usa di serie): classificatore di parole su mmBERT,
    41 etichette (`taxonomy.py`). Ventotto sono identificativi (nomi, recapiti, codici, credenziali,
    nomi di macchine) e vengono sempre restituite. Le altre tredici sono dettagli che identificano
    solo insieme ad altro o categorie particolari (date, orari, età, genere, titoli, professione,

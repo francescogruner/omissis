@@ -83,10 +83,10 @@ Verified **live** means on the real service, with made-up data, checking what ac
 | 📄 | Documents inside AI apps (MCP server) with Claude Code; keyboard shortcuts on the clipboard | ✅ live |
 | 🧪 | Kimi (plugin), opencode, aider and OpenAI/Anthropic-compatible tools (gateway), Gemini CLI (plugin; Google retired it for personal accounts, it is left with an API key or Vertex AI only: Antigravity CLI, covered above, takes its place), MCP server in Cursor and Windsurf | 🧪 automated tests |
 | ⏳ | Codex plugin (needs approval with `/hooks`), MCP inside Claude Desktop | ⏳ to be tested |
-| ⏳ | **Claude** desktop app: protected through the computer's network, with one button in the panel (*Connections → Apps → Protect Claude*; from version 0.1.5, not released for Windows yet) that installs the certificate and sends only the traffic to claude.ai to the Omissis proxy. You use it as always, with your own sign-in. Tried on 20 Nov 2026 with the real app on Windows and on a Mac (6.28899.2), as far as the sign-in window; a message replaced with a real sign-in has not been seen yet | ⏳ to be tried with an account |
+| ⏳ | **Claude** desktop app: protected through the computer's network, with one button in the panel (*Connections → Apps → Protect Claude*) that installs the certificate and sends only the traffic to claude.ai to the Omissis proxy. You use it as always, with your own sign-in. Tried on 20 Nov 2026 with the real app on Windows and on a Mac (6.28899.2), as far as the sign-in window; a message replaced with a real sign-in has not been seen yet | ⏳ to be tried with an account |
 | 🚫 | Copilot inside Teams and Outlook, Cursor and Windsurf chat (documents go through the MCP server, see above), Firefox | ❌ not covered |
-| 🍎 | **Mac** (Apple silicon): preview build 0.1.6, not signed with Apple. Built and tested automatically on a GitHub Mac; nobody has used it on a real Mac yet. It updates itself, starts at sign-in, reads scans and has the clipboard shortcuts. The first preview, 0.1.5, does not: if you have it, download the new one once. [How to install it](packaging/mac/README.md) | 🧪 preview |
-| 🐧 | **Linux** (64-bit, x86): preview build 0.1.7. It installs with one command, without administrator rights, and then updates itself. Built and tested automatically on Ubuntu; nobody has used it on a real Linux desktop yet. Keyboard shortcuts are missing and, on stock Ubuntu, so is the icon next to the clock. [How to install it](packaging/linux/README.md) | 🧪 preview |
+| 🍎 | **Mac** (Apple silicon): preview build 0.1.8, not signed with Apple. Built and tested automatically on a GitHub Mac; nobody has used it on a real Mac yet. It updates itself, starts at sign-in, reads scans and has the clipboard shortcuts. The first preview, 0.1.5, does not: if you have it, download the new one once. [How to install it](packaging/mac/README.md) | 🧪 preview |
+| 🐧 | **Linux** (64-bit, x86): preview build 0.1.8. It installs with one command, without administrator rights, and then updates itself. Built and tested automatically on Ubuntu; nobody has used it on a real Linux desktop yet. Keyboard shortcuts are missing and, on stock Ubuntu, so is the icon next to the clock. [How to install it](packaging/linux/README.md) | 🧪 preview |
 
 The full, dated list is on [omissis.eu](https://omissis.eu) and, for your own PC, in the panel (*Connections →
 Compatibility*), which also records which program versions each replacement last worked with.
@@ -122,14 +122,17 @@ If the engine does not answer, protected requests are **blocked**, never forward
 
 ## 🧠 The model
 
-Two sizes, same labels and same training data: about one million texts, made of 200,000 synthetic Italian documents
+Two trained sizes, same labels and same training data: about one million texts, made of 200,000 synthetic Italian documents
 written by our own generator and the training splits of nine public datasets in 23 languages. Everything is
 synthetic except two collections of court decisions, which contain names that are already public in the decisions.
+A third one, `omissis-light`, is `omissis-small` compressed to 90 MB without retraining: it is the model the
+program uses by default.
 
 | | Parameters | Size | CPU latency* |
 |---|---|---|---|
+| [`omissis-light`](https://huggingface.co/francescogruner/omissis-light), the default | 140.9 M | 90 MB | ~20% less than `omissis-small` |
+| [`omissis-small`](https://huggingface.co/francescogruner/omissis-small) | 140.9 M | 563 MB | ~26 ms |
 | [`omissis-base`](https://huggingface.co/francescogruner/omissis-base) | 307.8 M | 1.2 GB | ~61 ms |
-| [`omissis-small`](https://huggingface.co/francescogruner/omissis-small) | 140.9 M | 537 MB | ~26 ms |
 
 \* per short text on a desktop CPU.
 
@@ -142,8 +145,9 @@ character level, model weights alone):
 |---|---|---|---|---|
 | `omissis-base` | 98.8 % | 17.0 % | 94 % | 0.911 |
 | `omissis-small` | 98.8 % | 17.2 % | 92 % | **0.912** |
+| `omissis-light` | 98.8 % | 17.1 % | 90 % | 0.910 |
 
-Measured on 13 November 2026. The best of the other 36 models listed by PIIMB scores 0.836 on average; ours are
+Measured on 13 November 2026 (`omissis-light` on 22 November). The best of the other 36 models listed by PIIMB scores 0.836 on average; ours are
 first on average, not in every task, and the training splits of the same datasets are among their training data
 (the test splits were never used). How they compare with OpenAI's privacy-filter, Presidio and the best models of
 the public list: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
@@ -168,9 +172,9 @@ repository.
 > The instructions the agent follows are in [INSTALL-FOR-AGENTS.md](INSTALL-FOR-AGENTS.md).
 
 **Requirements:** 64-bit Windows 10 (version 2004 or later) or Windows 11 on an Intel or AMD processor, 4 cores,
-8 GB of memory with `omissis-small` (16 GB for `omissis-base`), 1 to 2 GB of disk. No graphics card needed. On an
-ordinary office PC choose `omissis-small`: measured quality is almost the same and it is twice as fast (about 0.1 s
-for a short message, 3 s for two pages on a 4-core PC).
+8 GB of memory (16 GB for `omissis-base`), 1 GB of disk. No graphics card needed. The program starts with
+`omissis-light`: 124 MB to download on first start, almost the same measured quality as `omissis-small`, faster and
+with less memory. The other two models can be chosen in the settings.
 
 **📦 With the installer** (if you just want to use it): download `Omissis-<version>-setup.exe` from the
 [releases page](https://github.com/francescogruner/omissis/releases/latest). No Python and no administrator rights
@@ -188,7 +192,7 @@ py -3.12 -m venv app\.venv
 app\.venv\Scripts\pip install -r app\requirements.txt
 py -3.12 -m venv model\.venv
 model\.venv\Scripts\pip install -r model\requirements-light.txt
-model\.venv\Scripts\python model\download_model.py omissis-small
+model\.venv\Scripts\python model\download_model.py omissis-light
 app\.venv\Scripts\python app\panel.py
 ```
 

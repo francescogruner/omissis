@@ -81,7 +81,9 @@ if ($Settings) {
     (Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).PSObject.Properties | Where-Object { $_.Name -notmatch '^_' } | ForEach-Object { $current[$_.Name] = $_.Value }
     [System.IO.File]::WriteAllText($settingsFile, ($current | ConvertTo-Json -Depth 8), $utf8)
 }
-$model = if ($current['model']) { [string]$current['model'] } else { 'omissis-small' }
+$model = if ($current['model']) { [string]$current['model'] }
+    elseif ((Test-Path -LiteralPath (Join-Path $data 'models\omissis-small\model.onnx')) -and -not (Test-Path -LiteralPath (Join-Path $data 'models\omissis-light\model.onnx'))) { 'omissis-small' }
+    else { 'omissis-light' }
 
 # 4. the model from a folder of yours, each file checked against the list that ships with the program
 $copied = $null

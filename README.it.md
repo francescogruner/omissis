@@ -83,10 +83,10 @@ chiama «Anonimizza» perché è la parola più conosciuta, ma il senso tecnico 
 | 📄 | Documenti dentro le app AI (server MCP) con Claude Code; scorciatoie da tastiera sugli appunti | ✅ dal vivo |
 | 🧪 | Kimi (plugin), opencode, aider e gli strumenti compatibili con OpenAI o Anthropic (gateway), Gemini CLI (plugin; Google l'ha ritirata per gli account personali, resta solo con chiave API o Vertex AI: al suo posto c'è Antigravity CLI, coperta qui sopra), server MCP in Cursor e Windsurf | 🧪 prove automatiche |
 | ⏳ | Plugin di Codex (va approvato con `/hooks`), MCP dentro Claude Desktop | ⏳ da provare |
-| ⏳ | App desktop di **Claude**: si protegge dalla rete del computer, con un pulsante del pannello (*Collegamenti → App → Proteggi Claude*; dalla versione 0.1.5, per Windows non ancora pubblicata) che mette il certificato e manda al proxy di Omissis solo il traffico verso claude.ai. La si usa come sempre, con il proprio accesso. Provato il 20/11/2026 con l'app vera su Windows e su Mac (6.28899.2), fino alla finestra d'ingresso; un messaggio sostituito con un accesso vero non è ancora stato visto | ⏳ da provare con un account |
+| ⏳ | App desktop di **Claude**: si protegge dalla rete del computer, con un pulsante del pannello (*Collegamenti → App → Proteggi Claude*) che mette il certificato e manda al proxy di Omissis solo il traffico verso claude.ai. La si usa come sempre, con il proprio accesso. Provato il 20/11/2026 con l'app vera su Windows e su Mac (6.28899.2), fino alla finestra d'ingresso; un messaggio sostituito con un accesso vero non è ancora stato visto | ⏳ da provare con un account |
 | 🚫 | Copilot dentro Teams e Outlook, chat di Cursor e Windsurf (i documenti passano dal server MCP, vedi sopra), Firefox | ❌ non coperti |
-| 🍎 | **Mac** (processore Apple): versione di prova 0.1.6, non firmata con Apple. Costruita e provata in automatico su un Mac di GitHub; nessuno l'ha ancora usata su un Mac vero. Si aggiorna da sola, parte all'accesso, legge le scansioni e ha le scorciatoie sugli appunti. La prima versione di prova, la 0.1.5, no: chi l'ha installata riscarica quella nuova una volta. [Come si installa](packaging/mac/README.md#italiano) | 🧪 di prova |
-| 🐧 | **Linux** (64 bit, x86): versione di prova 0.1.7. Si installa con un comando, senza diritti di amministratore, e poi si aggiorna da sola. Costruita e provata in automatico su Ubuntu; nessuno l'ha ancora usata su un desktop Linux vero. Mancano le scorciatoie da tastiera e, sull'Ubuntu di serie, l'icona vicino all'orologio. [Come si installa](packaging/linux/README.md#italiano) | 🧪 di prova |
+| 🍎 | **Mac** (processore Apple): versione di prova 0.1.8, non firmata con Apple. Costruita e provata in automatico su un Mac di GitHub; nessuno l'ha ancora usata su un Mac vero. Si aggiorna da sola, parte all'accesso, legge le scansioni e ha le scorciatoie sugli appunti. La prima versione di prova, la 0.1.5, no: chi l'ha installata riscarica quella nuova una volta. [Come si installa](packaging/mac/README.md#italiano) | 🧪 di prova |
+| 🐧 | **Linux** (64 bit, x86): versione di prova 0.1.8. Si installa con un comando, senza diritti di amministratore, e poi si aggiorna da sola. Costruita e provata in automatico su Ubuntu; nessuno l'ha ancora usata su un desktop Linux vero. Mancano le scorciatoie da tastiera e, sull'Ubuntu di serie, l'icona vicino all'orologio. [Come si installa](packaging/linux/README.md#italiano) | 🧪 di prova |
 
 L'elenco completo e datato è su [omissis.eu](https://omissis.eu) e, per il tuo PC, nel pannello (*Collegamenti →
 Compatibilità*), che annota anche con quale versione di ogni programma la sostituzione ha funzionato l'ultima volta.
@@ -122,14 +122,17 @@ Se il motore non risponde, le richieste verso i servizi protetti vengono **blocc
 
 ## 🧠 Il modello
 
-Due taglie, stesse etichette e stessi dati di addestramento: circa un milione di testi, cioè 200.000 documenti
+Due taglie addestrate, stesse etichette e stessi dati di addestramento: circa un milione di testi, cioè 200.000 documenti
 sintetici in italiano scritti dal nostro generatore e le parti di addestramento di nove raccolte pubbliche in 23
 lingue. Tutto è sintetico, tranne due raccolte di sentenze che contengono nomi già pubblici negli atti.
+Una terza, `omissis-light`, è `omissis-small` compresso a 90 MB senza riaddestrarlo: è il modello che il
+programma usa di serie.
 
 | | Parametri | Dimensione | Tempo su processore* |
 |---|---|---|---|
+| [`omissis-light`](https://huggingface.co/francescogruner/omissis-light), di serie | 140,9 M | 90 MB | circa il 20% in meno di `omissis-small` |
+| [`omissis-small`](https://huggingface.co/francescogruner/omissis-small) | 140,9 M | 563 MB | circa 26 ms |
 | [`omissis-base`](https://huggingface.co/francescogruner/omissis-base) | 307,8 M | 1,2 GB | circa 61 ms |
-| [`omissis-small`](https://huggingface.co/francescogruner/omissis-small) | 140,9 M | 537 MB | circa 26 ms |
 
 \* per un testo breve, su un processore da scrivania.
 
@@ -142,8 +145,9 @@ gruppi, a livello di carattere, solo i pesi del modello):
 |---|---|---|---|---|
 | `omissis-base` | 98,8 % | 17,0 % | 94 % | 0,911 |
 | `omissis-small` | 98,8 % | 17,2 % | 92 % | **0,912** |
+| `omissis-light` | 98,8 % | 17,1 % | 90 % | 0,910 |
 
-Misure del 13 novembre 2026. Il migliore degli altri 36 modelli in elenco su PIIMB ottiene in media 0,836; i nostri
+Misure del 13 novembre 2026 (`omissis-light` il 22 novembre). Il migliore degli altri 36 modelli in elenco su PIIMB ottiene in media 0,836; i nostri
 sono primi in media, non in ogni gruppo, e le parti di addestramento delle stesse raccolte sono tra i loro dati di
 addestramento (quelle di prova non sono mai state usate). Il confronto con il privacy-filter di OpenAI, Presidio e i
 migliori della classifica pubblica è in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (in inglese).
@@ -167,9 +171,9 @@ I pesi si scaricano da Hugging Face con `model/download_model.py`; non stanno in
 > Le istruzioni che l'agente segue sono in [INSTALL-FOR-AGENTS.md](INSTALL-FOR-AGENTS.md), in inglese.
 
 **Requisiti:** Windows 10 (versione 2004 o successiva) o Windows 11 a 64 bit su processore Intel o AMD, 4 core,
-8 GB di memoria con `omissis-small` (16 GB per `omissis-base`), da 1 a 2 GB di disco. Non serve una scheda video. Su
-un normale PC da ufficio conviene `omissis-small`: la qualità misurata è quasi la stessa e va il doppio più veloce
-(circa 0,1 s per un messaggio breve, 3 s per due pagine su un PC a 4 core; i dettagli nella
+8 GB di memoria (16 GB per `omissis-base`), 1 GB di disco. Non serve una scheda video. Il programma parte con
+`omissis-light`: 124 MB da scaricare al primo avvio, qualità misurata quasi uguale a `omissis-small`, più veloce e
+con meno memoria. Gli altri due modelli si scelgono nelle impostazioni (i dettagli nella
 [guida](app/README.it.md)).
 
 **📦 Con l'installer** (per chi vuole solo usarlo): dalla pagina delle
@@ -188,7 +192,7 @@ py -3.12 -m venv app\.venv
 app\.venv\Scripts\pip install -r app\requirements.txt
 py -3.12 -m venv model\.venv
 model\.venv\Scripts\pip install -r model\requirements-light.txt
-model\.venv\Scripts\python model\download_model.py omissis-small
+model\.venv\Scripts\python model\download_model.py omissis-light
 app\.venv\Scripts\python app\panel.py
 ```
 

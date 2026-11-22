@@ -1,6 +1,6 @@
 {
  "_about": "Customer template for Install-Omissis.ps1 -Settings. Keys starting with an underscore are ignored. Only the keys written here are imposed; every other setting stays as the user has it.",
- "model": "omissis-small",
+ "model": "omissis-light",
  "updates": "automatic",
  "view": "simple",
  "language": "it",

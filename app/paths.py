@@ -24,7 +24,7 @@ import sistema
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-DEFAULT_MODEL = "omissis-small"
+DEFAULT_MODEL = "omissis-light"   # il modello di serie; vedi default_model()
 ENGINE_PORT = int(os.environ.get("OMISSIS_PORT") or 8765)
 PANEL_PORT, GATEWAY_PORT = ENGINE_PORT + 1, ENGINE_PORT + 2
 _OLD_NAMES = {"v3-base": "omissis-base", "v3-small": "omissis-small"}
@@ -102,3 +102,14 @@ def model(name):
     if INSTALLED is not None or (downloaded.is_dir() and not beside.is_dir()):
         return downloaded   # quelli scaricati dal programma stanno tra i dati
     return beside
+
+
+def default_model():
+    """Il modello che si usa quando l'utente non ne ha scelto uno: omissis-light. Chi ha gia' sul PC i pesi di
+    omissis-small e non quelli di omissis-light continua con omissis-small: nessuno scaricamento a sorpresa."""
+    def present(name):
+        c = model(name)
+        return (c / "config.json").exists() and ((c / "model.onnx").exists() or (c / "model.safetensors").exists())
+    if not present(DEFAULT_MODEL) and present("omissis-small"):
+        return "omissis-small"
+    return DEFAULT_MODEL

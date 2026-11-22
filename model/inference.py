@@ -44,6 +44,31 @@ MINIMUM = {"EMAIL": 6, "CAP": 3, "DATA_NASCITA": 4, "CF": 8, "PIVA": 8, "IBAN": 
           "ID_DISPOSITIVO": 3, "CARTA_SEC": 3}
 
 
+def _library_windows_ok(tok):
+    """La libreria divide davvero in finestre un testo lungo? tokenizers 0.23.1 e 0.23.2 ne restituiscono una sola in piu'
+    e lasciano fuori tutto il resto: il testo oltre i primi 900 token circa non verrebbe letto, ne' mascherato."""
+    text = "parola " * (WINDOW * 3)
+    e = tok.encode(text)
+    ends = [end for start, end in ([e] + list(e.overflowing))[-1].offsets if end > start]
+    return bool(ends) and max(ends) >= len(text.rstrip())
+
+
+def _own_windows(e):
+    """Le stesse finestre che fa la libreria quando funziona (WINDOW token con i due speciali, STRIDE in comune), fatte qui
+    da un testo codificato per intero."""
+    ids, offsets = e.ids, e.offsets
+    if len(ids) <= WINDOW:
+        return [(ids, offsets)]
+    first, last, content = ids[0], ids[-1], WINDOW - 2
+    windows, start = [], 1
+    while True:
+        end = min(start + content, len(ids) - 1)
+        windows.append(([first] + ids[start:end] + [last], [(0, 0)] + offsets[start:end] + [(0, 0)]))
+        if end == len(ids) - 1:
+            return windows
+        start += content - STRIDE
+
+
 class Detector:
     def __init__(self, folder, device=None, rules=True, threshold="auto", well_known=True, never=None, always=None, off="auto"):
         """soglia: un token resta "non sensibile" solo se il modello ne e' sicuro almeno quanto la soglia
@@ -64,7 +89,8 @@ class Detector:
         self.shift = float(choices.get("shift") or 0.0)
         # lo stesso per le soglie proprie di singole etichette: {etichetta: di quanto e' stato alzato il suo punteggio}
         self.shifts = {k: float(v) for k, v in (choices.get("shifts") or {}).items()}
-        self.onnx = torch is None or os.environ.get("OMISSIS_ENGINE") == "onnx"
+        # un modello che esiste solo in formato ONNX (omissis-light) si usa cosi' anche dove c'e' PyTorch
+        self.onnx = torch is None or os.environ.get("OMISSIS_ENGINE") == "onnx" or not (Path(folder) / "model.safetensors").exists()
         if self.onnx:
             self._open_onnx(Path(folder))
         else:
@@ -112,6 +138,9 @@ class Detector:
         self.tok = Tokenizer.from_file(str(folder / "tokenizer.json"))
         self.tok.enable_truncation(max_length=WINDOW, stride=STRIDE)
         self.tok.no_padding()
+        self.own_windows = not _library_windows_ok(self.tok)
+        if self.own_windows:   # con una libreria che perde le finestre il testo si codifica intero e si divide qui
+            self.tok.no_truncation()
         self.session = onnxruntime.InferenceSession(str(folder / "model.onnx"), providers=["CPUExecutionProvider"])
         self.device = "cpu"
         self.mod = types.SimpleNamespace(name_or_path=str(folder))
@@ -120,8 +149,8 @@ class Detector:
         np = self.np
         windows = []   # (testo a cui appartiene, identificativi, posizioni nel testo)
         for doc, e in enumerate(self.tok.encode_batch(list(texts))):
-            for w in [e] + list(e.overflowing):
-                windows.append((doc, w.ids, w.offsets))
+            for ids, offsets in (_own_windows(e) if self.own_windows else [(w.ids, w.offsets) for w in [e] + list(e.overflowing)]):
+                windows.append((doc, ids, offsets))
         best_ones = [dict() for _ in texts]
         order = sorted(range(len(windows)), key=lambda i: len(windows[i][1]))   # lunghezze simili insieme: meno riempitivo
         # Quante finestre per volta: tante se corte, poche se piene (al massimo GETTONI_PER_GIRO token in tutto).

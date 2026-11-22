@@ -50,6 +50,31 @@
      "sha256": "0a0ef4e0fdc06373c12b85bb82428adaae4983c188ac594d19f4f40f221a1944"
     }
    }
+  },
+  "omissis-light": {
+   "revision": "main",
+   "file": {
+    "config.json": {
+     "byte": 5758,
+     "sha256": "c909e3ed260cc8e2e006420eb645e0854f45b643da6a8db739da5ef0e05a96b3"
+    },
+    "tokenizer.json": {
+     "byte": 34363286,
+     "sha256": "f34b44a6dc8a0eef651bfa10e8325057530152606a69d9c3b6ae02efb1558f0a"
+    },
+    "tokenizer_config.json": {
+     "byte": 598,
+     "sha256": "25a88ff2d2e2034feca4cd0b4d04fc1df03a730b32a642ff30cb5ff56835a94a"
+    },
+    "omissis.json": {
+     "byte": 285,
+     "sha256": "e16517ac7c1bda4d5b37dd0fc6b8baa8bcb4b33d2a57b916dc1152c2ea95e251"
+    },
+    "model.onnx": {
+     "byte": 89859860,
+     "sha256": "9436e8e778a37cbd7b4b666bf9028bb72cf12649d178dc65907cb7fbef6c312c"
+    }
+   }
   }
  }
 }

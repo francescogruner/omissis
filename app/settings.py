@@ -10,7 +10,7 @@ import paths
 
 FILE = paths.DATA / "settings.json"
 DEFAULTS = {
-    "model": "omissis-small",  # omissis-small (di serie: piu' leggero e veloce) oppure omissis-base (un po' piu' preciso, piu' memoria)
+    "model": paths.default_model(),  # omissis-light (di serie: 124 MB da scaricare), omissis-small (un po' piu' preciso sui nomi di azienda) oppure omissis-base (documenti lunghi, piu' memoria)
     "device": "auto",            # auto | cpu | cuda
     "port": 8080,
     "restore": True,          # False: le risposte restano con i segnaposto (per vedere cosa riceve il servizio)
@@ -45,6 +45,8 @@ DEFAULTS = {
     "console_pin": "",            # impronta SHA-256 del certificato della console, per quelle in rete locale che se lo fanno da se'
     "console_rules": False,       # True: questo PC applica le regole che la console gli manda (solo quelle di CONSOLE_RULES)
     "onboarded": False,           # la configurazione guidata del primo avvio e' gia' stata vista (o saltata)
+    # il passaggio a omissis-light, proposto a chi usa omissis-small: "" = da chiedere, "no" = ha detto di no, "done" = fatto
+    "light_offer": "",
     # quando si apre un'app AI che non ha ancora una regola scelta, Omissis chiede che cosa fare (una volta per app)
     "ask_apps": True,
     "ask_never": [],              # le app per cui chi usa il PC ha risposto «Non chiederlo piu'» (id del servizio)
@@ -281,6 +283,7 @@ def _clean(data):
     clean["policies"] = {k: v for k, v in (clean["policies"] or {}).items()
                            if k in catalog.PER_ID and v in catalog.POLICIES}
     clean["onboarded"] = clean["onboarded"] is True
+    clean["light_offer"] = clean["light_offer"] if clean["light_offer"] in ("no", "done") else ""
     clean["ask_apps"] = clean["ask_apps"] is not False
     clean["ask_never"] = sorted({str(x) for x in (clean["ask_never"] if isinstance(clean["ask_never"], list) else []) if str(x) in catalog.PER_ID})
     clean["app_proxy"] = sorted({str(x) for x in (clean["app_proxy"] if isinstance(clean["app_proxy"], list) else [])

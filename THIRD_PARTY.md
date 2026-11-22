@@ -56,7 +56,7 @@ qui la sua licenza. Nessun componente di questo progetto è AGPL: per i PDF si u
 
 ## Dati di addestramento dei modelli
 
-I pesi di `omissis-base` e `omissis-small` sono stati addestrati, oltre che sui documenti sintetici
+I pesi di `omissis-base` e `omissis-small` (e quindi di `omissis-light`, che è `omissis-small` compresso) sono stati addestrati, oltre che sui documenti sintetici
 prodotti da questo progetto, sulle parti di addestramento di queste raccolte pubbliche, convertite
 alle etichette del progetto da `model/external_data.py` (che le scarica: non sono ridistribuite qui).
 Le parti di prova non sono state usate.

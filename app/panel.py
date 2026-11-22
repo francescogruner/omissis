@@ -271,10 +271,62 @@ class Supervisor:
                 "downloading": weights.status(settings.read()["model"]) if self.phase in ("model", "error") and not remote.configured(settings.read()) else None,
                 "remote": info.get("remote"), "shared": bool(info.get("shared")),
                 "update": updates.status(),
+                "light": light_status(),   # il modello leggero da proporre a chi usa omissis-small, e a che punto e' il passaggio
                 "model": Path(info["model"]).name if info.get("model") else None, "device": info.get("device"),
                 "threshold": info.get("threshold"), "entries": info.get("entries"), "port": settings.read()["port"],
                 "groups_off": settings.reduced(),   # gruppi accesi di serie e spenti a mano: la pagina iniziale lo dice
                 "always_on": settings.read()["always_on"]}   # la protezione non si puo' fermare: la pagina tiene fermo il pulsante
+
+
+LIGHT = {"phase": "", "error": "", "freed": 0}   # il passaggio a omissis-light: "" | downloading | switching | done | error
+
+
+def light_offer():
+    """Va proposto il modello leggero? A chi usa omissis-small per scelta sua (non imposta da chi amministra il PC), ha finito
+    il primo avvio e non ha ancora risposto. Chi usa il modello di un server della rete non ha nulla da cambiare."""
+    cfg = settings.read()
+    return (cfg["model"] == "omissis-small" and cfg["light_offer"] == "" and cfg["onboarded"] and "model" not in settings.locked()["keys"]
+            and not remote.configured(cfg) and weights.downloadable(paths.DEFAULT_MODEL))
+
+
+def light_status():
+    return {"offer": LIGHT["phase"] in ("", "error") and light_offer(), "phase": LIGHT["phase"], "error": LIGHT["error"],
+            "completed": weights.STATUS["completed"] if LIGHT["phase"] == "downloading" else 0,
+            "total": weights.size(paths.DEFAULT_MODEL), "old": weights.size("omissis-small"), "freed": LIGHT["freed"]}
+
+
+def light_switch():
+    """Passa a omissis-light senza lasciare il PC scoperto: prima scarica il modello nuovo, mentre la protezione continua con
+    quello di adesso; poi cambia e riavvia, e se con il nuovo la protezione non riparte torna al modello di adesso. Solo alla
+    fine cancella i pesi che non servono piu', e solo quelli scaricati dal programma (mai quelli accanto ai sorgenti)."""
+    old, new = settings.read()["model"], paths.DEFAULT_MODEL
+    try:
+        LIGHT.update(phase="downloading", error="", freed=0)
+        if weights.missing(new):
+            weights.download(new)
+        LIGHT["phase"] = "switching"
+        was_active = SUP.phase == "active"
+        settings.write({**settings.read(), "model": new, "light_offer": "done"})
+        if was_active:
+            SUP.stop()
+            SUP.launch()
+            for _ in range(300):
+                time.sleep(1)
+                if SUP.phase in ("active", "error", "stop"):
+                    break
+            if SUP.phase != "active":
+                reason = SUP.error
+                settings.write({**settings.read(), "model": old, "light_offer": ""})
+                SUP.stop()
+                SUP.launch()
+                raise RuntimeError(reason or i18n.t("program.engine_silent"))
+        folder = paths.DATA / "models" / old
+        if old in weights.listing()["models"] and folder.is_dir():
+            LIGHT["freed"] = sum(x.stat().st_size for x in folder.iterdir() if x.is_file())
+            shutil.rmtree(folder, ignore_errors=True)
+        LIGHT["phase"] = "done"
+    except Exception as ex:   # noqa: BLE001
+        LIGHT.update(phase="error", error=str(ex))
 
 
 def server_state():
@@ -1138,6 +1190,14 @@ class Handler(BaseHTTPRequestHandler):
                     if data.get("action") == "restart":
                         SUP.stop()
                     SUP.launch()
+                self._respond(200, SUP.status())
+            elif p == "/api/model/light":   # la risposta alla proposta del modello leggero
+                if data.get("accept"):
+                    if light_offer() and LIGHT["phase"] in ("", "error"):
+                        LIGHT.update(phase="downloading", error="", freed=0)
+                        threading.Thread(target=light_switch, daemon=True).start()
+                elif settings.read()["light_offer"] == "":
+                    settings.write({**settings.read(), "light_offer": "no"})
                 self._respond(200, SUP.status())
             elif p == "/api/settings":
                 # la console e il server di inferenza hanno le loro chiamate: qui non si toccano. always_on si puo' solo imporre

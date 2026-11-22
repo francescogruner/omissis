@@ -70,6 +70,32 @@ async function copy(text, message) {
   notify(message || t("general.copied"));
 }
 
+// Il modello leggero, proposto una volta a chi usa omissis-small: una finestra con la scelta, poi l'avanzamento del passaggio.
+let LIGHT_ASKED = false, LIGHT_NOW = null;
+function lightOffer(l) {
+  const d = $("#lighter");
+  if (!l || !d) return;
+  LIGHT_NOW = l;
+  const busy = ["downloading", "switching"].includes(l.phase);
+  if (!d.open) {
+    if (!busy && !(l.offer && !LIGHT_ASKED)) return;
+    LIGHT_ASKED = true;
+    d.showModal();
+  }
+  const pc = l.total ? Math.min(100, Math.floor(100 * l.completed / l.total)) : 0;
+  $("#lighterTitle").textContent = t(l.phase === "done" ? "lighter.done.title" : "lighter.title");
+  $("#lighterText").innerHTML = l.phase === "downloading"
+      ? `${esc(t("lighter.downloading", {completed: megabyte(l.completed), total: megabyte(l.total), pc}))}<progress class="progress" max="100" value="${pc}" aria-label="${esc(t("lighter.title"))}"></progress>`
+    : l.phase === "switching" ? esc(t("lighter.switching"))
+    : l.phase === "done" ? esc(t(l.freed ? "lighter.done" : "lighter.done.kept", {freed: megabyte(l.freed)}))
+    : l.phase === "error" ? esc(t("lighter.error", {error: l.error}))
+    : `${esc(t("lighter.text", {light: megabyte(l.total), old: megabyte(l.old)}))}<br><br><span class="small">${esc(t("lighter.later"))}</span>`;
+  $("#lighterYes").hidden = busy || l.phase === "done";
+  $("#lighterYes").textContent = t(l.phase === "error" ? "lighter.retry" : "lighter.yes");
+  $("#lighterNo").disabled = busy;
+  $("#lighterNo").textContent = t(busy ? "lighter.wait" : l.phase === "done" ? "general.close" : "lighter.no");
+}
+
 function confirm(title, text, yes) {
   const d = $("#confirm");
   $("#confirmTitle").textContent = title; $("#confirmText").textContent = text;
@@ -221,6 +247,12 @@ DRAW.start = el => {
     </div>
     ${card(`<h2>${esc(t("start.chart.kinds"))}</h2><div class="bars" id="byKind"></div>`, "", "only-advanced")}`;
   $("#main_switch").onclick = test(async () => { await api("/api/protection", {action: ["active", "model"].includes(S?.phase) ? "stop" : "launch"}); readStatus(); });
+  $("#lighterYes").onclick = test(async () => { lightOffer((await api("/api/model/light", {accept: true})).light); });
+  $("#lighterNo").onclick = test(async () => {
+    if (LIGHT_NOW && LIGHT_NOW.phase !== "done") await api("/api/model/light", {accept: false});   // «Resto con questo»: non si chiede piu'
+    $("#lighter").close();
+    readStatus();
+  });
   $("#restart").onclick = test(async () => { await api("/api/protection", {action: "restart"}); readStatus(); });
   // le app AI aperte che aspettano una risposta: se la notifica vicino all'orologio e' sfuggita, si risponde da qui
   api("/api/ask").then(x => {
@@ -253,6 +285,7 @@ REFRESH.start = s => {
   if (fixed && phase === "active") below.textContent += " · " + t("managed.always_on");
   $("#restart").hidden = !s.restart_needed;
   updateNotice(s.update);
+  lightOffer(s.light);
   // chi ha spento un gruppo di dati lo deve vedere ogni volta che apre il programma, non solo nelle impostazioni
   const off = (s.groups_off || []).map(g => t(`groups.${g}`)).join(", ");
   if ($("#reduced").dataset.off !== off) {
@@ -747,7 +780,7 @@ const recognitionSettings = test(async el => {
                   details: ["DATA", "ORA", "ETA", "GENERE", "TITOLO", "PROFESSIONE", "ISTRUZIONE", "LUOGO"]};
   const groups = Object.entries(GROUPS).map(([name, entries]) => [name, entries.filter(v => cat.known.includes(v))]).filter(([, entries]) => entries.length);
   el.innerHTML = `${managedNote(i)}<section class="card" aria-label="${esc(t("settings.card.recognition"))}">
-      ${line(t("recognition.model"), esc(t("recognition.model.below")), `<select id="model" aria-label="${esc(t("recognition.model"))}"><option value="omissis-small">${esc(t("recognition.model.small"))}</option><option value="omissis-base">${esc(t("recognition.model.base"))}</option></select>`)}
+      ${line(t("recognition.model"), esc(t("recognition.model.below")), `<select id="model" aria-label="${esc(t("recognition.model"))}"><option value="omissis-light">${esc(t("recognition.model.light"))}</option><option value="omissis-small">${esc(t("recognition.model.small"))}</option><option value="omissis-base">${esc(t("recognition.model.base"))}</option></select>`)}
       ${line(t("recognition.where"), "", `<select id="device" aria-label="${esc(t("recognition.where"))}">${["auto", "cuda", "cpu"].map(v => `<option value="${v}">${esc(t(`recognition.where.${v}`))}</option>`).join("")}</select>`)}
       ${["box", "attachments", "restore", "block_files"].map(k => line(t(`recognition.${k}`), esc(t(`recognition.${k}.below`)), toggle(k, t(`recognition.${k}`)))).join("")}
     </section>

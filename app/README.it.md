@@ -1112,8 +1112,8 @@ toglie il certificato del proxy da Windows); altrimenti restano dove sono.
 Una copia lanciata dai sorgenti continua a tenere i dati in `data`, accanto al codice.
 
 **Il modello** non sta nell'installer. Al primo avvio il programma scarica i pesi dalla pagina
-pubblica del modello (di serie `omissis-small`, 537 MB; chi sceglie `omissis-base` nelle
-Impostazioni ne scarica 1,2 GB) e mostra l'avanzamento
+pubblica del modello (di serie `omissis-light`, 124 MB; chi sceglie nelle Impostazioni `omissis-small`
+ne scarica 598, chi sceglie `omissis-base` 1,3 GB) e mostra l'avanzamento
 nella Panoramica; se la rete cade riprende da dove era arrivato. Ogni file viene accettato solo se
 dimensione e impronta SHA-256 sono quelle scritte in `weights.json`, che viaggia con il programma:
 un file diverso da quello con cui la versione è stata provata viene scartato. Dopo, il programma

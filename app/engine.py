@@ -541,7 +541,7 @@ def serve(engine, port, token, extension_token, bridge):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", dest="model", default=str(paths.model(paths.DEFAULT_MODEL)))
+    ap.add_argument("--model", dest="model", default=str(paths.model(paths.default_model())))
     ap.add_argument("--port", dest="port", type=int, default=8765)
     ap.add_argument("--device", default=None)
     a = ap.parse_args()

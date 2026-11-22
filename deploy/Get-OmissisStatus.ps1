@@ -32,7 +32,9 @@ if (-not $version) { Write-Output (@{ installed = $false; computer = $env:COMPUT
 $settings = @{}
 $file = Join-Path $data 'settings.json'
 if (Test-Path -LiteralPath $file) { try { (Get-Content -LiteralPath $file -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $settings[$_.Name] = $_.Value } } catch { } }
-$model = if ($settings['model']) { [string]$settings['model'] } else { 'omissis-small' }
+$model = if ($settings['model']) { [string]$settings['model'] }
+    elseif ((Test-Path -LiteralPath (Join-Path $data 'models\omissis-small\model.onnx')) -and -not (Test-Path -LiteralPath (Join-Path $data 'models\omissis-light\model.onnx'))) { 'omissis-small' }
+    else { 'omissis-light' }
 
 # activity of the last days: how many requests had data replaced, how many values, how many were stopped
 $since = (Get-Date).AddDays(-$Days).ToString('yyyy-MM-dd HH:mm:ss')
