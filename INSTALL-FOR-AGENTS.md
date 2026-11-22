@@ -52,7 +52,7 @@ The installer is about 53 MB. It is not code-signed yet: that is why the hash ch
 ## Step 2. Install (ASK)
 
 Tell the person: "I am about to install Omissis for your Windows user, in your profile, without administrator
-rights. On first start it downloads its model, about 540 MB."
+rights. On first start it downloads its model, about 124 MB."
 
 ```powershell
 $raw = "https://raw.githubusercontent.com/francescogruner/omissis/main/deploy"
