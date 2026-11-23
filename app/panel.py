@@ -631,6 +631,15 @@ def _proxy_marks(**change):
     return data
 
 
+def version_since():
+    """Da quando lavora questa versione di Omissis (secondi dall'epoca). Cio' che una versione precedente non leggeva non
+    dice nulla di questa, che puo' averlo corretto: gli avvisi contano da qui in poi."""
+    key, marks = "_version " + VERSION, _proxy_marks()
+    if key not in marks:
+        marks = _proxy_marks(**{key: time.time()}, **{k: None for k in marks if k.startswith("_version ")})
+    return marks[key]
+
+
 def pac_apply(leaving=False, ask=False):
     """Mette nel sistema il file PAC se ci sono app scelte; lo toglie se non ce ne sono piu' o se il programma si chiude.
     Un proxy che non e' il nostro non si tocca mai. True se alla fine il sistema e' come lo vogliamo."""
@@ -683,8 +692,16 @@ def proxy_state(key):
     # dietro il proxy l'app lavora per due strade: le richieste lette dal proxy e la casella di scrittura, con il codice
     # che il proxy mette nella pagina (inpage.py) e che il registro segna come "app desktop"
     mine = lambda g: g["service"] == service and g["via"] in ("proxy", "app desktop") and g["client"].startswith(client)   # noqa: E731
-    seen = max((_epoch(c["last"]) for c in activity.clients() if mine(c)), default=0.0)
+    known = [c for c in activity.clients() if mine(c)]
+    seen = max((_epoch(c["last"]) for c in known), default=0.0)
     groups = [g for g in activity.compatibility() if mine(g)]
+    # «da ricontrollare» riguarda la versione dell'app vista per ultima e questa versione di Omissis: cio' che una versione
+    # vecchia dell'una o dell'altro non leggeva non dice nulla di quelle in uso. Le due strade si guardano insieme, e
+    # decide l'ultima cosa successa: dopo l'ultima sostituzione riuscita c'e' stato un messaggio non letto?
+    current = max(known, key=lambda c: c["last"])["client"] if known else ""
+    last_ok = max((g["last_ok"] for g in groups if g["client"] == current), default="")
+    last_unread = max((g["last_unread"] for g in groups if g["client"] == current), default="")
+    fresh = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(version_since()))
     marks, started = _proxy_marks(), app_started(a)
     store = updates.channel() == "store"   # la copia dello Store non puo' cambiare le impostazioni del PC
     foreign = now["proxy"] or ("" if ours else now["pac"])
@@ -698,7 +715,7 @@ def proxy_state(key):
     return {"available": now["supported"] and not store, "store": store, "on": on, "network": ours, "certificate": cert,
             "foreign": foreign[:80], "active": SUP.phase == "active", "problem": problem, "state": state, "open": bool(started),
             "seen": passing, "messages": sum(g["ok"] for g in groups), "last_ok": max((g["last_ok"] for g in groups), default=""),
-            "to_recheck": any(g["status"] == "to_recheck" for g in groups), "report": True}
+            "to_recheck": bool(last_unread) and last_unread >= max(last_ok, fresh), "report": True}
 
 
 NOTIFIED_REOPEN = set()   # (app, da quando gira): l'avviso «va riaperta» si da' una volta sola per ogni apertura dell'app

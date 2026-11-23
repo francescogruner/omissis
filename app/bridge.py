@@ -222,6 +222,9 @@ class Bridge:
         if outside:
             entry["VALUES_IN_CLEAR"] = outside
             entry.setdefault("structure", activity.shape(parsed))
+        # una richiesta in cui non c'e' nulla di scritto (la lingua, un orario, un contatore) non e' un messaggio non letto
+        if entry.get("event") == "no_text_field" and not outside and not activity.written(parsed):
+            return outcome_ext
         if network:
             if outcome_ext["action"] != "replace" and not outside:
                 return outcome_ext

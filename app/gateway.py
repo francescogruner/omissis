@@ -334,7 +334,7 @@ class Gateway:
                             self.counts["replacements"] += sum(outcome["counts"].values())
                         self.reg.write(**entry, event="masked", fields=len(ref), characters=sum(len(t) for t in outcome["texts"]),
                                         replacements=outcome["counts"], ms=outcome["ms"])
-                    elif len(body) > 200:
+                    elif len(body) > 200 and activity.written(parsed):
                         self.reg.write(**entry, event="no_text_field", structure=activity.shape(parsed))
 
         # ---- inoltro al servizio vero

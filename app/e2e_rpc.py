@@ -30,6 +30,7 @@ sys.path.insert(0, str(HERE))
 
 from mitmproxy import http             # noqa: E402
 from mitmproxy.test import tflow       # noqa: E402
+import activity                        # noqa: E402
 import addon                           # noqa: E402
 import inpage                          # noqa: E402
 import wire                            # noqa: E402
@@ -235,6 +236,32 @@ def main():
     n = len(log())
     asyncio.run(a.request(f))
     mark("richiesta di servizio: fuori dal registro", len(log()) == n)
+
+    # 11. cio' che non porta nulla di scritto non e' un messaggio non letto (l'app ne manda di nuovi a ogni versione)
+    mark("che cosa è «scritto»: una frase sì, a qualunque profondità; lingua, orari, codici, numeri e titoli corti no",
+         activity.written({"a": [{"b": 1}, {"c": {"d": "ciao, come stai oggi"}}]}) and activity.written("x y z w v u t")
+         and not activity.written({"displayLanguage": "it-IT", "timezone": "Europe/Rome", "date": "2026-11-23T10:00:00Z", "ms": 1200, "ok": True,
+                                   "url": "https://esempio.example/a/b?c=d", "name": "New chat", "id": "0199f0aa-7d0c-7c1e-9d59-3f4a6f6a1b2c", "x": None, "v": []}))
+    f = request("POST", "/claudeai-rpc/anthropic.bard.api.v1alpha.SettingsService/UpdateSettings", "application/json",
+                json.dumps({"displayLanguage": "it-IT"}).encode())
+    n = len(log())
+    asyncio.run(a.request(f))
+    mark("chiamata senza nulla di scritto (la lingua): passa e resta fuori dal registro", len(log()) == n and f.response is None
+         and json.loads(f.request.get_text()) == {"displayLanguage": "it-IT"})
+    f = request("POST", "/api/organizations/o1/notes", "application/json",
+                json.dumps({"note": {"parts": [{"kind": "t"}, {"kind": "t", "value": "Buongiorno, vorrei spostare l'appuntamento di domani"}]}, "lang": "it-IT"}).encode())
+    asyncio.run(a.request(f))
+    last = log()[-1]
+    mark("campo sconosciuto con una frase dentro: nel registro come non letto, con il programma", len(log()) == n + 1 and last["event"] == "no_text_field"
+         and last.get("client") == CLIENT and (activity.signal_of(last) or [""])[-1] == "unread" and "Buongiorno" not in json.dumps(last),
+         json.dumps(last.get("structure"))[:80])
+    a.originals["Giulia Ferraresi"] = "[PERSONA_1]"
+    f = request("POST", "/api/organizations/o1/lookup", "application/json", json.dumps({"q": "Giulia Ferraresi"}).encode())
+    asyncio.run(a.request(f))
+    last = log()[-1]
+    mark("un valore già sostituito che riparte in chiaro: annotato anche dove non c'è una frase", len(log()) == n + 2 and last.get("VALUES_IN_CLEAR") == 1
+         and last["path"].endswith("/lookup") and "Giulia" not in json.dumps(last))
+    a.originals.clear()
     mark("regole: 'unsafe-inline' senza nonce non si tocca; default-src fa da script-src",
          inpage.allow("script-src 'self' 'unsafe-inline'", "H") == "script-src 'self' 'unsafe-inline'" and "'sha256-H'" in inpage.allow("default-src 'self'", "H"))
 

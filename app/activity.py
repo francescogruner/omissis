@@ -29,6 +29,19 @@ def shape(node, prof=0):
     return type(node).__name__
 
 
+def written(node, prof=0):
+    """Nel corpo di una richiesta c'e' qualcosa che puo' aver scritto una persona? Basta una stringa di almeno tre parole,
+    a qualunque profondita'. Le chiamate di servizio (la lingua, un orario, un contatore, un codice) non ne hanno: non
+    sono messaggi, e nel registro non devono risultare come «formato non letto»."""
+    if isinstance(node, str):
+        return len(node) >= 12 and len(node.split()) >= 3
+    if isinstance(node, dict):
+        return prof > 30 or any(written(v, prof + 1) for v in node.values())
+    if isinstance(node, list):
+        return prof > 30 or any(written(v, prof + 1) for v in node)
+    return False
+
+
 def clean_path(path):
     """Percorso senza parametri e senza identificativi (che potrebbero indicare una conversazione)."""
     return RX_ID.sub("{id}", path.split("?")[0])

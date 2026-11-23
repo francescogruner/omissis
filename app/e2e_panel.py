@@ -17,6 +17,7 @@ import base64
 import json
 import os
 import re
+import sqlite3
 import sys
 import tempfile
 import time
@@ -436,6 +437,13 @@ def main():
                         stale = wait(pag, "() => !!document.querySelector('[data-app-line=claude] .label.error') && !!document.querySelector('[data-app-line=claude] button[data-action=reopen]')", timeout=20)
                         said = pag.inner_text("[data-app-line=claude] .label") if stale else ""
                         mark(f"{language}: app di Claude: aperta da prima, il pannello dice che è senza protezione e offre di riaprirla", stale and "app.proxy" not in said, said)
+                        # una versione vecchia dell'app, vista mesi fa, che il proxy non leggeva: non pesa su quella in uso
+                        past = sqlite3.connect(paths.DATA / "contacts.sqlite", timeout=10)
+                        past.execute("INSERT OR REPLACE INTO clients VALUES ('claude', 'proxy', 'Claude 1.0.0', '2026-01-01 10:00:00', '2026-01-01 10:00:05')")
+                        past.commit()
+                        past.close()
+                        activity.Log().write(service="claude", client="Claude 1.0.0", event="rpc_not_read", method="POST",
+                                             path="/rpc/Vecchia/Invia", kind="application/proto", structure="non letto")
                         # riaperta, passa dal proxy e manda un messaggio con dati inventati: il pannello dice che funziona
                         system({**now, "app_started": time.time() - 1, "grace": 90})
                         try:
@@ -447,6 +455,44 @@ def main():
                             works = wait(pag, "() => !!document.querySelector('[data-app-line=claude] .label.ok') && !!document.querySelector('[data-app-note=proxy-numbers]')", timeout=20)
                             mark(f"{language}: app di Claude: quando passa dal proxy e manda un messaggio, il pannello dice che funziona",
                                  works and len(answer) > 20, pag.inner_text("[data-app-line=claude] .label"))
+
+                            # le chiamate di servizio dell'app (la lingua, un orario) non sono messaggi non letti; un campo
+                            # sconosciuto con una frase dentro si': il pannello lo dice e offre di segnalarlo
+                            def send(path, content):
+                                r = urllib.request.Request("http://127.0.0.1:9911" + path, data=json.dumps(content, ensure_ascii=False).encode("utf-8"),
+                                                           headers={"Content-Type": "application/json", "User-Agent": req.get_header("User-agent")})
+                                try:
+                                    via.open(r, timeout=120).read()
+                                except urllib.error.HTTPError:
+                                    pass   # il servizio finto non conosce l'indirizzo: conta che la richiesta sia passata dal proxy
+
+                            def state():
+                                return next(a for a in call(code, "/api/app") if a["id"] == "claude")["proxy"]
+                            time.sleep(1.2)   # il registro segna i secondi: ogni passo in un secondo diverso
+                            send("/api/organizations/o1/preferences", {"displayLanguage": "it-IT", "timezone": "Europe/Rome", "ms": 1200})
+                            time.sleep(1.2)
+                            calm = state()
+                            mark(f"{language}: app di Claude: una chiamata di servizio e una versione vecchia non letta non la fanno «da ricontrollare»",
+                                 calm["state"] == "protected" and not calm["to_recheck"] and not pag.locator("[data-app-note=proxy-recheck]").count()
+                                 and pag.locator("[data-app-line=claude] .label.ok").count() == 1, f"stato {calm['state']}")
+                            send("/api/organizations/o1/notes", {"note": "Buongiorno, vorrei spostare l'appuntamento di domani mattina"})
+                            doubt = wait(pag, "() => !!document.querySelector('[data-app-note=proxy-recheck] button[data-report]')", timeout=20)
+                            mark(f"{language}: app di Claude: un testo in un campo sconosciuto la fa «da ricontrollare», con «Segnala il problema»",
+                                 doubt and state()["to_recheck"], pag.inner_text("[data-app-line=claude] .label"))
+                            # dopo un aggiornamento di Omissis gli avvisi di prima non restano: contano da quando lavora la versione nuova
+                            marks = paths.DATA / "app_proxy.json"
+                            before_marks = marks.read_text(encoding="utf-8")
+                            marks.write_text(json.dumps({**json.loads(before_marks), "_version " + report.VERSION: time.time() + 5}), encoding="utf-8")
+                            gone = wait(pag, "() => !document.querySelector('[data-app-note=proxy-recheck]') && !!document.querySelector('[data-app-line=claude] .label.ok')", timeout=20)
+                            marks.write_text(before_marks, encoding="utf-8")
+                            back = wait(pag, "() => !!document.querySelector('[data-app-note=proxy-recheck]')", timeout=20)
+                            mark(f"{language}: app di Claude: un avviso nato prima di questa versione di Omissis non resta", gone and back and "_version " + report.VERSION in before_marks,
+                                 f"sparito {gone} · tornato {back}")
+                            time.sleep(1.2)
+                            send("/api/organizations/o1/chat_conversations/c1/completion", {"prompt": TEXT, "attachments": [], "rendering_mode": "messages"})
+                            clear = wait(pag, "() => !document.querySelector('[data-app-note=proxy-recheck]') && !!document.querySelector('[data-app-line=claude] .label.ok')", timeout=20)
+                            mark(f"{language}: app di Claude: dopo un messaggio sostituito torna «funziona»", clear and not state()["to_recheck"],
+                                 pag.inner_text("[data-app-line=claude] .label"))
                         except OSError as ex:
                             print(f"SALTATO app di Claude vista dal proxy: serve mock_service.py 9911 ({type(ex).__name__})")
                         # qualcuno toglie il certificato o cambia la rete: il pannello lo dice e offre «Sistema»

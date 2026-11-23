@@ -33,7 +33,7 @@ not appear. On a PC where Smart App Control is on, an unsigned installer can be 
 
 ```powershell
 python -m pip install pillow
-python packaging\windows\build_windows.py --version 0.1.9 --smoke-test
+python packaging\windows\build_windows.py --version 0.1.10 --smoke-test
 ```
 
 Needs Windows, Python 3.12 and Inno Setup 6 (`winget install JRSoftware.InnoSetup`). The script prepares the whole
@@ -89,7 +89,7 @@ firmato può essere bloccato in tutti e due i casi.
 
 ```powershell
 python -m pip install pillow
-python packaging\windows\build_windows.py --version 0.1.9 --smoke-test
+python packaging\windows\build_windows.py --version 0.1.10 --smoke-test
 ```
 
 Servono Windows, Python 3.12 e Inno Setup 6 (`winget install JRSoftware.InnoSetup`). Lo script prepara il programma

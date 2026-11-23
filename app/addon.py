@@ -34,7 +34,7 @@ import activity
 import restore as R
 import inpage
 import wire
-from activity import shape
+from activity import shape, written
 
 HERE = Path(__file__).resolve().parent
 ENGINE = os.environ.get("OMISSIS_ENGINE_URL", "http://127.0.0.1:8765")
@@ -211,9 +211,10 @@ class MspPii:
             entry["VALUES_IN_CLEAR"] = outside
             entry.setdefault("structure", shape(body))
         # misure d'uso e controlli del sito non sono messaggi: nel registro direbbero «formato non letto». Restano fuori,
-        # a meno che dentro non ci sia un valore in chiaro
+        # a meno che dentro non ci sia un valore in chiaro. Lo stesso vale per ogni richiesta in cui non c'e' nulla di
+        # scritto (la lingua, un orario, un contatore): le app ne aggiungono a ogni versione
         quiet = getattr(ad, "QUIET", None)
-        if entry.get("event") == "no_text_field" and not outside and quiet is not None and quiet.search(rq.path):
+        if entry.get("event") == "no_text_field" and not outside and (not written(body) or (quiet is not None and quiet.search(rq.path))):
             return
         self.write(**entry)
 
@@ -384,7 +385,7 @@ class MspPii:
         if msg.from_client:
             ref = [(c, k) for c, k in ad.fields(flow.request.path, obj) if c[k].strip()] if obj is not None else []
             if not ref:
-                if len(msg.content) > 200:
+                if len(msg.content) > 200 and (obj is None or written(obj)):
                     self.write(service=service, path=self.path(flow), event="websocket_no_text_field",
                                 byte=len(msg.content), structure=shape(obj) if obj is not None else "non JSON")
                 return
