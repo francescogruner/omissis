@@ -83,10 +83,10 @@ chiama «Anonimizza» perché è la parola più conosciuta, ma il senso tecnico 
 | 📄 | Documenti dentro le app AI (server MCP) con Claude Code; scorciatoie da tastiera sugli appunti | ✅ dal vivo |
 | 🧪 | Kimi (plugin), opencode, aider e gli strumenti compatibili con OpenAI o Anthropic (gateway), Gemini CLI (plugin; Google l'ha ritirata per gli account personali, resta solo con chiave API o Vertex AI: al suo posto c'è Antigravity CLI, coperta qui sopra), server MCP in Cursor e Windsurf | 🧪 prove automatiche |
 | ⏳ | Plugin di Codex (va approvato con `/hooks`), MCP dentro Claude Desktop | ⏳ da provare |
-| ⏳ | App desktop di **Claude**: si protegge dalla rete del computer, con un pulsante del pannello (*Collegamenti → App → Proteggi Claude*) che mette il certificato e manda al proxy di Omissis solo il traffico verso claude.ai. La si usa come sempre, con il proprio accesso. Provato il 20/11/2026 con l'app vera su Windows e su Mac (6.28899.2), fino alla finestra d'ingresso; un messaggio sostituito con un accesso vero non è ancora stato visto | ⏳ da provare con un account |
+| 🖥️ | App desktop di **Claude** su Windows: un pulsante del pannello (*Collegamenti → App → Proteggi Claude*) mette il certificato di Omissis e fa passare da lui solo il traffico verso claude.ai. Così Omissis porta nella finestra dell'app lo stesso codice dell'estensione: all'Invio il testo viene sostituito nella casella, in chat e nella scheda Code, e a schermo tornano i valori veri. La si usa come sempre, con il proprio accesso. Sul Mac la stessa strada è provata in automatico fino alla finestra d'ingresso | ✅ dal vivo, 23/11/2026 (6.28899.6) |
 | 🚫 | Copilot dentro Teams e Outlook, chat di Cursor e Windsurf (i documenti passano dal server MCP, vedi sopra), Firefox | ❌ non coperti |
-| 🍎 | **Mac** (processore Apple): versione di prova 0.1.8, non firmata con Apple. Costruita e provata in automatico su un Mac di GitHub; nessuno l'ha ancora usata su un Mac vero. Si aggiorna da sola, parte all'accesso, legge le scansioni e ha le scorciatoie sugli appunti. La prima versione di prova, la 0.1.5, no: chi l'ha installata riscarica quella nuova una volta. [Come si installa](packaging/mac/README.md#italiano) | 🧪 di prova |
-| 🐧 | **Linux** (64 bit, x86): versione di prova 0.1.8. Si installa con un comando, senza diritti di amministratore, e poi si aggiorna da sola. Costruita e provata in automatico su Ubuntu; nessuno l'ha ancora usata su un desktop Linux vero. Mancano le scorciatoie da tastiera e, sull'Ubuntu di serie, l'icona vicino all'orologio. [Come si installa](packaging/linux/README.md#italiano) | 🧪 di prova |
+| 🍎 | **Mac** (processore Apple): versione di prova 0.1.9, non firmata con Apple. Costruita e provata in automatico su un Mac di GitHub; nessuno l'ha ancora usata su un Mac vero. Si aggiorna da sola, parte all'accesso, legge le scansioni e ha le scorciatoie sugli appunti. La prima versione di prova, la 0.1.5, no: chi l'ha installata riscarica quella nuova una volta. [Come si installa](packaging/mac/README.md#italiano) | 🧪 di prova |
+| 🐧 | **Linux** (64 bit, x86): versione di prova 0.1.9. Si installa con un comando, senza diritti di amministratore, e poi si aggiorna da sola. Costruita e provata in automatico su Ubuntu; nessuno l'ha ancora usata su un desktop Linux vero. Mancano le scorciatoie da tastiera e, sull'Ubuntu di serie, l'icona vicino all'orologio. [Come si installa](packaging/linux/README.md#italiano) | 🧪 di prova |
 
 L'elenco completo e datato è su [omissis.eu](https://omissis.eu) e, per il tuo PC, nel pannello (*Collegamenti →
 Compatibilità*), che annota anche con quale versione di ogni programma la sostituzione ha funzionato l'ultima volta.
@@ -115,7 +115,7 @@ Se il motore non risponde, le richieste verso i servizi protetti vengono **blocc
 | **Plugin e hook** (`app/ai_hook.py`) | Per le app che hanno un loro sistema di hook (Claude Code, Codex, Kimi, Gemini CLI, Antigravity): ogni messaggio viene controllato prima dell'invio, e quello con dati personali viene fermato, con la versione protetta negli appunti. I plugin sono in [`plugins/`](plugins/README.it.md), in questo stesso repository |
 | **Gateway per il terminale** (`app/gateway.py`) | Per Claude Code, Codex, Antigravity (CLI e app), opencode, aider e ogni strumento a cui si può indicare l'indirizzo del servizio: `http://127.0.0.1:8767/<servizio>`. Maschera messaggi, risultati degli strumenti e azioni già fatte; ripristina il testo e gli argomenti delle nuove azioni. Funziona con l'accesso in abbonamento e può stare davanti a un gateway che si ha già |
 | **Server MCP** (`app/mcp_server.py`) | Per Claude Desktop, Claude Code, Codex, Cursor, Windsurf, Antigravity e le altre app che parlano MCP: l'assistente fa leggere i documenti a Omissis e riceve solo il testo con i segnaposto; il ripristino scrive sul PC e non restituisce mai i valori veri |
-| **Proxy** (`app/addon.py`) | Addon di [mitmproxy](https://mitmproxy.org) per i programmi che parlano con le API o accettano un proxy con un certificato locale. L'app desktop di Claude è tra questi: la si usa come sempre, con il proprio abbonamento |
+| **Proxy** (`app/addon.py`) | Addon di [mitmproxy](https://mitmproxy.org) per i programmi che parlano con le API o accettano un proxy con un certificato locale. L'app desktop di Claude è tra questi: il proxy mette nella sua pagina il codice della casella di scrittura (`app/inpage.py`) e legge le sue chiamate in protobuf (`app/wire.py`). La si usa come sempre, con il proprio abbonamento |
 | **Uso manuale** | Mascherare e ripristinare un testo incollato e correggere il risultato a mano; scorciatoie sugli appunti registrate come scorciatoie di Windows (il programma non vede gli altri tasti); anonimizzare e ripristinare Word, Excel, PowerPoint, file di testo e cartelle intere; PDF scansionati e immagini si leggono con il riconoscimento dei caratteri di Windows |
 | **Pannello** (`app/panel.py`) | Pagina locale e icona vicino all'orologio, in italiano e in inglese. Una modalità *semplice* per tutti i giorni e una *avanzata* per chi lo gestisce: registro delle attività (solo conteggi, mai i testi), regola per servizio, archivio dei segnaposto, inventario degli strumenti AI sul PC |
 | **Inventario degli strumenti AI** (`app/scan.py`, `app/inventory.py`) | App AI installate, estensioni del browser e dell'editor, comandi da terminale, modelli in locale, servizi contattati: ogni analisi viene salvata e confrontata con la precedente, con un giudizio per ogni voce ed esportazione in CSV. Solo nomi, versioni e date, tutto in locale |
@@ -261,9 +261,14 @@ Meglio conoscere i limiti prima di contarci:
   che qualunque programma del PC può usare finché l'app è aperta. L'app di Claude lo ha fatto: avviata con la porta
   di debug si chiude da sola, e Omissis lì dentro non può entrare.
 - **L'app di Claude, protetta dalla rete del computer,** legge le impostazioni di rete solo quando parte: va aperta
-  dopo Omissis. Se era già aperta, o se Omissis è spento, esce senza protezione: il pannello lo dice e la riapre con un
-  clic. I file allegati nell'app non vengono sostituiti (si possono bloccare). Il certificato installato permette al
-  proxy di Omissis, su quel computer, di leggere il traffico verso claude.ai: è così che sostituisce i dati.
+  dopo Omissis. Se era già aperta esce senza protezione: il pannello lo dice e la riapre con un clic. A Omissis chiuso
+  l'app esce senza protezione, e la finestra rimasta aperta lo dice al primo invio. Nella scheda Code i file allegati
+  restano come sono, e l'agente riceve i segnaposto: nei file che scrive e nei comandi che lancia finiscono quelli
+  (per Claude Code la strada completa è il gateway). Il certificato installato permette al proxy di Omissis, su quel
+  computer, di leggere il traffico verso claude.ai: è così che porta il suo codice nella pagina e sostituisce i dati.
+- **Le app cambiano con gli aggiornamenti.** Quando Omissis non riesce più a leggere un messaggio lo ferma, lo dice, e
+  nel pannello (*Collegamenti → Compatibilità*) prepara una segnalazione con le versioni e la forma della richiesta,
+  mai i testi. La segnalazione si vede per intero e parte solo se la invii tu: Omissis da solo non manda nulla.
 
 Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 
@@ -273,8 +278,8 @@ Modello di minaccia e segnalazioni: [SECURITY.md](SECURITY.md).
 - [x] App desktop: ChatGPT, Perplexity, Microsoft Copilot, Antigravity
 - [x] Terminale: Claude Code, Codex, Antigravity CLI
 - [x] Antigravity (CLI e app) attraverso il gateway, con l'abbonamento: i dati vengono sostituiti invece di fermare il messaggio
-- [x] App desktop di Claude: un pulsante nel pannello la protegge dalla rete del computer (certificato e file PAC)
-- [ ] App desktop di Claude: prova di un messaggio con un accesso vero
+- [x] App desktop di Claude: un pulsante nel pannello la protegge, in chat e nella scheda Code (provato dal vivo su Windows)
+- [ ] App desktop di Claude sul Mac: prova di un messaggio con un accesso vero
 - [x] Mac (processore Apple): versione di prova, non firmata
 - [x] Mac: aggiornamenti automatici, avvio all'accesso, spostamento in Applicazioni e disinstallazione dal pannello, lettura delle scansioni, scorciatoie sugli appunti (nella versione di prova 0.1.6)
 - [ ] Mac: firma Apple; la prova di una persona su un Mac vero

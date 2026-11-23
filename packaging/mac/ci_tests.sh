@@ -86,7 +86,7 @@ if ! wait_protection; then
 fi
 
 failed=$icon_bad
-for t in e2e_vault.py e2e_central.py e2e_inventory.py e2e_mcp.py e2e_gateway.py e2e_proxy.py e2e_plugins.py e2e_kimi.py e2e_documents.py e2e_macapp.py; do
+for t in e2e_vault.py e2e_central.py e2e_inventory.py e2e_mcp.py e2e_gateway.py e2e_proxy.py e2e_rpc.py e2e_plugins.py e2e_kimi.py e2e_documents.py e2e_macapp.py; do
   echo "=================== $t"
   if ! timeout 900 "$PY" "$t"; then failed=1; echo "### NON PASSATA: $t"; fi
 done

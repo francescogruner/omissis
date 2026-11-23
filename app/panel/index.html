@@ -38,6 +38,13 @@
   <div class="inside"><h2 id="lighterTitle"></h2><p class="faded" id="lighterText"></p></div>
   <div class="footer"><button class="button" id="lighterNo"></button><button class="button primary" id="lighterYes"></button></div>
 </dialog>
+<dialog id="report" aria-labelledby="reportTitle">
+  <div class="inside"><h2 id="reportTitle"></h2><p class="faded" id="reportIntro"></p>
+    <label class="small" for="reportNote" id="reportNoteLabel"></label><textarea id="reportNote" rows="2"></textarea>
+    <span class="small" id="reportContentLabel"></span><pre id="reportText" tabindex="0" aria-labelledby="reportContentLabel"></pre>
+    <p class="small faded" id="reportGithubNote"></p></div>
+  <div class="footer"><a class="button" id="reportContact" target="_blank" rel="noopener"></a><span class="space"></span><button class="button" id="reportClose"></button><button class="button" id="reportCopy"></button><button class="button primary" id="reportGithub"></button></div>
+</dialog>
 <dialog id="welcome" aria-labelledby="welcomeTitle" tabindex="-1"></dialog>
 <noscript>Omissis: questa pagina ha bisogno di JavaScript. This page needs JavaScript.</noscript>
 <script src="/app.js" type="module"></script>

@@ -217,10 +217,27 @@ class Adapter:
 class Claude(Adapter):
     """claude.ai nel browser e in Claude Desktop (stessa API privata)."""
     name = "claude"
-    FIELDS = {"prompt", "message_content", "extracted_content"}
+    # first_session_message: il primo messaggio di una sessione di codice, mandato per darle un titolo
+    # (/dust/generate_title_and_branch, visto il 23/11/2026 con l'app 6.28899.6)
+    FIELDS = {"prompt", "message_content", "extracted_content", "first_session_message"}
     # richieste del sito che non sono messaggi (misure d'uso, controlli): non vanno contate come «formato non letto»
     # (dal 21/11/2026 anche quelle di servizio dell'app desktop: dispositivi, connettori, stato dei rami del codice)
-    QUIET = re.compile(r"/event_logging/|/browser-reports|/cdn-cgi/|/client-health/|/cowork/|/remote_devices|/v1/toolbox/|/v1/code/")
+    QUIET = re.compile(r"/event_logging/|/browser-reports|/cdn-cgi/|/client-health/|/cowork/|/remote_devices|/v1/toolbox/|/v1/code/"
+                       r"|/experiences/|/privacy-consents/|/subscription/|/billing/|/quirky-lollipop/|/url_hash_check/|/reflections/"
+                       r"|ClientMetricsService|/api/auth/")
+    # Dal novembre 2026 claude.ai (sito e app) manda i messaggi con chiamate Connect in protobuf, non piu' in JSON
+    # (ConversationService/PerformAction; per le sessioni di codice le stesse sotto /v1/code/rpc). Tre difese:
+    #  PAGE        il proxy mette nella pagina il codice della casella di scrittura dell'estensione (inpage.py): il testo
+    #              viene sostituito prima che l'app lo legga, e i valori veri tornano nel testo della pagina. E' la strada
+    #              che protegge l'app desktop, che la porta di debug del connettore la rifiuta;
+    #  RPC         le chiamate in protobuf della chat vengono lette senza schema e i testi sostituiti (wire.py), se la
+    #              casella non lo ha gia' fatto. Quelle delle sessioni di codice no: li' lavora solo la casella;
+    #  UNREADABLE  il messaggio che non si riesce nemmeno a leggere viene fermato invece di partire in chiaro.
+    PAGE = True
+    # le sessioni di codice: li' le risposte non si toccano (un segnaposto scritto in un programma resta com'e')
+    OUTSIDE = re.compile(r"^/v1/code/")
+    RPC = re.compile(r"^/claudeai-rpc/")   # la chat. Le sessioni di codice (/v1/code/rpc) non passano di qui: sono tra le QUIET
+    UNREADABLE = re.compile(r"^/claudeai-rpc/[^?]*ConversationService/PerformAction")
 
     def fields(self, path, body):
         return _keys(body, self.FIELDS, [])
@@ -434,7 +451,8 @@ class Gemini(Generic):
 
 CLASSES = {"claude": Claude, "anthropic": Anthropic, "openai": OpenAI, "chatgpt": ChatGPT, "generic": Generic, "gemini": Gemini}
 # per le prove con il servizio finto in locale: l'adattatore si sceglie dal percorso
-BY_PATH = [("/api/organizations/", Claude), ("/v1/messages", Anthropic), ("/v1/chat/completions", OpenAI),
+BY_PATH = [("/api/organizations/", Claude), ("/claudeai-rpc/", Claude), ("/claude-app", Claude), ("/__omissis__/", Claude),
+           ("/v1/messages", Anthropic), ("/v1/chat/completions", OpenAI),
                 ("/v1/responses", OpenAI), ("/backend-api/", ChatGPT), ("/_/BardChatUi/", Gemini), ("/generic/", Generic)]
 
 

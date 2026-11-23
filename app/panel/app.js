@@ -945,10 +945,13 @@ function drawApp(listing, even_if_same = true) {
     const steps = a.installed && pl && pl.ready && !pl.installed ? `<details class="steps" data-app-note="plugin-steps" open><summary>${esc(t("app.plugin.steps"))}</summary><ol class="listing"><li>${esc(t("app.plugin.step.1", {name: a.name}))}<br><code id="pluginSentence">${esc(pl.sentence)}</code><button class="button copy" id="pluginCopy">${esc(t("app.plugin.copy"))}</button></li><li>${esc(t("app.plugin.step.2"))}</li><li>${esc(t("app.plugin.step.3"))}</li></ol><span class="help">${esc(t("app.plugin.folder", {folder: pl.folder}))}</span></details>` : "";
     const errors = (a.errors || []).map(e => `<div class="hint error"><span class="dot" aria-hidden="true"></span><span>${esc(e)}</span></div>`).join("");
     const trouble = px && px.on && proxyProblem(px) ? `<div class="hint error" data-app-note="proxy-problem"><span class="dot" aria-hidden="true"></span><span>${esc(t(`app.proxy.problem.${proxyProblem(px)}`, {name: a.name, what: px.foreign}))}</span></div>` : "";
-    const extra = policy + steps + trouble + errors;
+    // un messaggio non letto: di solito e' l'app che e' cambiata con un aggiornamento. Lo si segnala da qui
+    const recheck = px && px.on && px.to_recheck && px.report ? `<div class="hint" data-app-note="proxy-recheck"><span class="dot" aria-hidden="true"></span><span>${esc(t("app.proxy.recheck.note", {name: a.name}))}</span><button class="button small" data-report="${esc(a.name)}">${esc(t("report.button"))}</button></div>` : "";
+    const extra = policy + steps + trouble + recheck + errors;
     return `<div class="setting app" data-app-line="${esc(a.id)}" data-outcome="${esc(a.connected ? a.outcome || "no" : "")}" data-open="${a.open_unprotected ? "unprotected" : ""}"><span class="name">${esc(a.name)} ${status}</span>${about}${numbers}<span class="command">${button}</span>${extra ? `<div class="app-extra">${extra}</div>` : ""}</div>`;
   }).join("");
   wireProtect(el, async () => drawApp(await api("/api/app")));
+  $$("button[data-report]", el).forEach(b => b.onclick = test(() => reportDialog(b.dataset.report)));
   if ($("#pluginCopy", el)) $("#pluginCopy", el).onclick = async () => { try { await navigator.clipboard.writeText($("#pluginSentence", el).textContent); notify(t("app.plugin.copied")); } catch (e) { /* la frase resta leggibile nella pagina */ } };
   $$("button[data-app]", el).forEach(b => b.onclick = test(async () => {
     if (b.dataset.action === "relaunch" && !await confirm(t("app.relaunch.title", {name: b.dataset.name}), t("app.relaunch.text", {name: b.dataset.name}), t("app.relaunch"))) return;
@@ -1092,6 +1095,34 @@ const connectProxy = test(async el => {
   $$("button[data-address]").forEach(b => b.onclick = test(async () => notify((await api("/api/browser", {address: b.dataset.address})).outcome)));
 });
 
+/** Segnalare un problema: il testo lo prepara il programma (versioni e forma delle richieste non lette, mai i testi), qui lo si
+ *  vede per intero, e parte solo se lo si invia. */
+async function reportDialog(what = "") {
+  const r = await api("/api/report" + (what ? "?what=" + encodeURIComponent(what) : "")), d = $("#report");
+  $("#reportTitle").textContent = t("report.title"); $("#reportIntro").textContent = t("report.intro");
+  $("#reportNoteLabel").textContent = t("report.note.label"); $("#reportNote").placeholder = t("report.note.placeholder"); $("#reportNote").value = "";
+  $("#reportContentLabel").textContent = t("report.content.label"); $("#reportText").textContent = r.text;
+  $("#reportGithubNote").textContent = t("report.github.note");
+  $("#reportClose").textContent = t("general.close"); $("#reportCopy").textContent = t("report.copy"); $("#reportGithub").textContent = t("report.github");
+  $("#reportContact").textContent = t("report.contact"); $("#reportContact").href = CONTACT;
+  const note = () => $("#reportNote").value.trim(), whole = () => [note(), r.text].filter(Boolean).join("\n\n");
+  const address = body => `${r.issues}?title=${encodeURIComponent(r.title)}&body=${encodeURIComponent(body)}`;
+  $("#reportClose").onclick = () => d.close();
+  $("#reportCopy").onclick = () => copy(whole(), t("report.copied"));
+  $("#reportContact").onclick = () => { copy(whole(), t("report.copied")); };
+  $("#reportGithub").onclick = async () => {
+    // GitHub non accetta indirizzi lunghi: nell'indirizzo va quanto ci sta (l'inizio dice versioni e programmi), il testo
+    // intero finisce negli appunti e la pagina dice di incollarlo
+    const lines = r.text.split("\n");
+    const make = n => address([note(), "```\n" + lines.slice(0, n).join("\n") + "\n```", n < lines.length ? t("report.paste_here") : ""].filter(Boolean).join("\n\n"));
+    let kept = lines.length, url = make(kept);
+    while (url.length > 7000 && kept > 1) { kept = Math.max(1, Math.floor(kept * 0.8)); url = make(kept); }
+    if (kept < lines.length) await copy(whole(), t("report.copied"));
+    window.open(url, "_blank", "noopener");
+  };
+  d.showModal();
+}
+
 const connectCompatibility = test(async el => {
   const c = await api("/api/compatibility");
   const when = s => esc((s || "").slice(0, 16));
@@ -1101,12 +1132,13 @@ const connectCompatibility = test(async el => {
   const verified = v => `<tr><td><b>${esc(v.name || t(v.via === "clipboard" ? "compatibility.any_program" : "compatibility.every_service"))}</b></td><td>${esc(tSe("via." + v.via, v.via))}</td><td>${esc([v.client, v.version].filter(Boolean).join(" "))}</td>
     <td>${label(t(`compatibility.level.${v.level}`), v.level === "live" ? "ok" : "")}<div class="below">${esc(t(`compatibility.method.${v.method}`))}</div></td><td>${esc(v.data || "")}</td></tr>`;
   const head = columns => `<thead><tr>${columns.map(k => `<th scope="col">${esc(t(`compatibility.column.${k}`))}</th>`).join("")}</tr></thead>`;
-  el.innerHTML = `<section class="card"><div class="inside"><div class="line"><h2>${esc(t("compatibility.sightings"))}</h2><span class="space"></span><button class="button" id="copyCompatibility">${esc(t("compatibility.copy"))}</button></div>
+  el.innerHTML = `<section class="card"><div class="inside"><div class="line"><h2>${esc(t("compatibility.sightings"))}</h2><span class="space"></span><button class="button" id="copyCompatibility">${esc(t("compatibility.copy"))}</button>${c.report ? `<button class="button" id="reportCompatibility">${esc(t("report.button"))}</button>` : ""}</div>
       <p>${esc(t("compatibility.sightings.below"))}</p></div>
       <div class="table"><table><caption class="vh">${esc(t("compatibility.sightings"))}</caption>${head(["service", "way", "program", "status", "last"])}<tbody>${
         c.sightings.map(line).join("") || `<tr><td colspan="5" class="empty">${esc(t("compatibility.empty"))}</td></tr>`}</tbody></table></div></section>
     <section class="card"><div class="inside"><h2>${esc(t("compatibility.verified_ones"))}</h2><p>${esc(t("compatibility.verified_ones.below", {data: c.updated}))}</p></div>
       <div class="table"><table><caption class="vh">${esc(t("compatibility.verified_ones"))}</caption>${head(["service", "way", "program", "level", "data"])}<tbody>${c.verified_ones.map(verified).join("")}</tbody></table></div></section>`;
+  if ($("#reportCompatibility")) $("#reportCompatibility").onclick = test(() => reportDialog());
   $("#copyCompatibility").onclick = () => copy(c.sightings.map(g => `${g.name} | ${g.via} | ${g.client || "?"} | ${g.status} | ok ${g.ok}, ripristini ${g.restoring}, non letti ${g.unread} | ultimo ${g.last_ok || "-"}`).join("\n") || t("compatibility.empty"));
 });
 

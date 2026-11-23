@@ -303,6 +303,7 @@ class Detector:
         """Aggiunge agli span del modello gli elenchi e le regole."""
         if self.well_known or self.never:
             spans = [m for m in spans if not ((m[2] == "ORG" and self.well_known and _well_known.is_known(text[m[0]:m[1]], self.never))
+                                              or (m[2] == "PERSONA" and self.well_known and _well_known.norm(text[m[0]:m[1]]) in _well_known.ASSISTANTS)
                                               or _well_known.norm(text[m[0]:m[1]]) in self.never)]
         certain = _rules.detect(text) if self.rules else []
         if self.never and certain:   # «non mascherare mai» vale anche per cio' che trovano le regole (es. l'email generica dell'azienda)

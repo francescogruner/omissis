@@ -21,12 +21,15 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+import activity
 import catalog
+import report
 import connector
 import inventory
 import paths
@@ -1005,6 +1008,35 @@ def main():
             after = call(code, "/api/inventory")
             mark("inventario: «Analizza ora» fotografa il PC e salva l'analisi", done_one and after["scan_count"] == saved + 1 and after["scan"][0]["origin"] == "manual",
                   f"{after['scan'][0]['seconds']} s, {after['scan'][0]['items']} voci")
+            # --- la segnalazione di un problema: si vede per intero prima di partire, e dentro non c'e' nulla di chi usa il PC
+            _, at = report.news(None)
+            activity.Log().write(service="test", via="proxy", client="AppDiProva 9.9", event="blocked_rpc_not_read", method="POST", path="/rpc/Servizio/Invia",
+                                 kind="application/proto", structure={"1": "str36", "2": {"1": "str120"}, "mario rossi@esempio": "str5"})
+            fresh, _ = report.news(at)
+            mark("segnalazione: un messaggio fermato perché non letto fa partire l'avviso", ("blocked", "test", "AppDiProva 9.9") in fresh, str(fresh)[:80])
+            r = call(code, "/api/report?what=AppDiProva")
+            hidden = [p.read_text(encoding="utf-8").strip() for p in paths.DATA.glob("token*.txt")] + [code, str(Path.home())]
+            mark("segnalazione: dice versione, sistema e programma", report.VERSION in r["title"] and "AppDiProva 9.9" in r["title"] and report.system() in r["text"], r["title"])
+            mark("segnalazione: porta la forma della richiesta non letta, senza i nomi di campo sospetti", "blocked_rpc_not_read" in r["text"]
+                 and "/rpc/Servizio/Invia" in r["text"] and '"(…)"' in r["text"] and "mario rossi" not in r["text"])
+            mark("segnalazione: dentro non ci sono codici né cartelle di questo PC", not any(s and s in r["text"] + r["title"] for s in hidden))
+            pag.goto(f"{PANEL}/#/connections/compatibility")
+            pag.wait_for_selector("#reportCompatibility")
+            pag.evaluate("() => { window.open = u => { window.__opened = u; }; }")
+            pag.click("#reportCompatibility")
+            shown = wait(pag, "() => !!document.querySelector('dialog#report[open]') && document.getElementById('reportText').textContent.includes('Omissis')", timeout=10)
+            pag.fill("#reportNote", "prova")
+            pag.click("#reportGithub")
+            wait(pag, "() => !!window.__opened", timeout=8)   # se il testo e' lungo prima lo copia negli appunti, poi apre
+            opened = pag.evaluate("() => window.__opened || ''")
+            mark("segnalazione: la finestra mostra il testo intero e apre GitHub con il testo già scritto", shown and opened.startswith(report.ISSUES + "?title=")
+                 and "prova" in urllib.parse.unquote(opened) and len(opened) < 7600, f"{len(opened)} caratteri")
+            pag.click("#reportCopy")
+            copied = pag.evaluate("() => navigator.clipboard.readText()")
+            mark("segnalazione: «Copia» mette negli appunti la nota e il testo", copied.startswith("prova") and "blocked_rpc_not_read" in copied)
+            narrow = pag.evaluate("() => { const d = document.querySelector('dialog#report'); return d.scrollWidth <= d.clientWidth + 1; }")
+            pag.click("#reportClose")
+            mark("segnalazione: la finestra si chiude e non esce dai bordi", narrow and not pag.evaluate("() => document.querySelector('dialog#report').open"))
             mark("nessun errore nelle prove finali", not errors, "; ".join(errors[:3]))
             errors.clear()
 

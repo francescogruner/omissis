@@ -7,6 +7,11 @@ arrivati solo segnaposto.   Uso: python mock_service.py [porta=9911]
 
 GET /pagina e' una pagina che fa le stesse richieste dal browser (fetch e XMLHttpRequest): serve a
 provare l'estensione (e2e_extension.py).
+
+GET /claude-app e' l'«app finta»: manda il messaggio come fa claude.ai dal novembre 2026 (una chiamata in protobuf a
+/claudeai-rpc/...ConversationService/PerformAction) ed e' servita con una Content-Security-Policy a nonce, come la pagina
+vera. Serve a provare il codice della casella portato nella pagina dal proxy (e2e_inpage.py). Il servizio risponde con i
+testi che ha ricevuto: la pagina li mostra, e li' si vede se i valori veri tornano.
 """
 import json
 import sys
@@ -15,7 +20,50 @@ import zlib
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-SEEN = {"body": None, "file": 0}
+import wire
+
+SEEN = {"body": None, "file": 0, "rpc": None}
+PAGE_APP = r"""<!doctype html><html lang="it"><head><meta charset="utf-8"><title>App finta</title>
+<script nonce="N0nce">window.__sent = []; window.__code = []; window.__files = []; window.__chatfiles = []; window.__raw = window.__draft = '';</script></head><body>
+<h1>App finta</h1><div id="chat"></div>
+<textarea id="draft" data-copy-as-text aria-label="Bozza" rows="3" style="width:100%"></textarea>
+<button id="copydraft">Copia la bozza</button><button id="copyraw">Copia il messaggio</button>
+<div id="write" contenteditable="true" style="border:1px solid #888;min-height:2em"></div><button id="post" aria-label="Invia messaggio">&gt;</button><input type="file" id="chatfile">
+<div class="epitaxy-prompt"><div id="codebox" contenteditable="true" style="border:1px dashed #888;min-height:2em"></div><input type="file" id="codefile"></div>
+<script nonce="N0nce">
+const enc = n => { const o = []; do { const b = n % 128; n = Math.floor(n / 128); o.push(b | (n ? 128 : 0)); } while (n); return o; };
+const field = (n, bytes) => [...enc(n * 8 + 2), ...enc(bytes.length), ...bytes];
+const utf8 = s => [...new TextEncoder().encode(s)];
+async function send(text) {
+  const body = new Uint8Array([...field(1, utf8('0199f0aa-7d0c-7c1e-9d59-3f4a6f6a1b2c')), ...field(2, field(1, field(1, utf8(text)))), ...field(3, utf8('it-IT'))]);
+  let texts;
+  try {
+    const r = await fetch('/claudeai-rpc/anthropic.bard.api.v1alpha.ConversationService/PerformAction',
+      {method: 'POST', headers: {'content-type': 'application/proto', 'connect-protocol-version': '1'}, body});
+    texts = r.ok ? JSON.parse(new TextDecoder().decode(await r.arrayBuffer())).texts : ['', 'ERRORE ' + r.status];
+  } catch (e) { texts = ['', 'ERRORE di rete']; }
+  const d = document.createElement('div');
+  d.className = 'msg';
+  d.textContent = texts[1] || '';
+  document.getElementById('chat').appendChild(d);
+  // la bozza: un campo che l'app tiene nella sua memoria, come quella di un'email in claude.ai. «Copia» copia dalla memoria
+  window.__raw = texts[1] || '';
+  draft.value = window.__draft = window.__raw;
+  window.__sent.push(text);
+}
+const draft = document.getElementById('draft');
+draft.addEventListener('input', () => { window.__draft = draft.value; });
+document.getElementById('copydraft').addEventListener('click', () => navigator.clipboard.writeText(window.__draft));
+document.getElementById('copyraw').addEventListener('click', () => navigator.clipboard.writeText(window.__raw));
+// la zona «Code»: li' il testo serve com'e' a un agente che lavora sui file, e non passa dalla chat
+const codebox = document.getElementById('codebox');
+codebox.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.defaultPrevented) { e.preventDefault(); window.__code.push(codebox.innerText); codebox.innerText = ''; } });
+document.getElementById('codefile').addEventListener('change', e => { for (const f of e.target.files) window.__files.push(f.name); });
+document.getElementById('chatfile').addEventListener('change', e => { for (const f of e.target.files) window.__chatfiles.push(f.name); });
+const box = document.getElementById('write');
+box.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.defaultPrevented) { e.preventDefault(); const t = box.innerText; box.innerText = ''; send(t); } });
+document.getElementById('post').addEventListener('click', () => { const t = box.innerText; box.innerText = ''; send(t); });
+</script></body></html>"""
 FILE = {"last": ""}   # il corpo dell'ultimo caricamento: a parte, perche' /visto deve restare il solo ultimo messaggio
 PAGE = r"""<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Servizio finto</title></head><body>
 <h1>Servizio finto</h1><div id="outcome"></div><div id="incollato"></div><textarea id="box"></textarea>
@@ -159,6 +207,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path.split("?")[0] in ("/claude-app", "/claude-app/code"):   # il secondo e' la «zona Code» della stessa app
+            body = PAGE_APP.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", "script-src 'nonce-N0nce' 'strict-dynamic'; object-src 'none'; base-uri 'none'")
+            self.send_header("Cache-Control", "private, no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif self.path.startswith("/api/organizations/"):   # cronologia di una conversazione
             self._json({"chat_messages": [{"sender": "human", "text": (SEEN["body"] or {}).get("prompt", "")}]})
         else:
@@ -171,6 +228,17 @@ class Handler(BaseHTTPRequestHandler):
             SEEN["file"] += 1
             FILE["last"] = binary.decode("utf-8", errors="replace")[:20000]
             self._json({"file": SEEN["file"]})
+            return
+        if p.startswith("/claudeai-rpc/"):   # la chiamata in protobuf dell'app finta: risponde con i testi che ha ricevuto
+            SEEN["rpc"] = wire.texts(binary)
+            # la risposta e' dichiarata binaria, come quelle vere: il proxy non la riscrive, e i valori veri nella pagina
+            # li puo' rimettere solo il codice della casella
+            body = json.dumps({"texts": SEEN["rpc"] or []}, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/proto")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         raw = binary.decode("utf-8")
         if p.startswith("/_/BardChatUi/"):   # Gemini: modulo con JSON dentro JSON, risposta a blocchi con lunghezza

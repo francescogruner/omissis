@@ -3,7 +3,7 @@
 # programma installato carichi librerie e codice, poi lo disinstalla. Controlla anche che un file diverso da quello
 # pubblicato venga rifiutato. Non avvia Omissis e non tocca l'avvio all'accesso.
 #
-#   pwsh packaging\windows\ci_windows.ps1 -Version 0.1.8 [-Port 8797] [-SkipBuild]
+#   pwsh packaging\windows\ci_windows.ps1 -Version 0.1.9 [-Port 8797] [-SkipBuild]
 param([Parameter(Mandatory = $true)] [string]$Version, [int]$Port = 8797, [switch]$SkipBuild)
 
 $ErrorActionPreference = 'Stop'

@@ -178,5 +178,11 @@
  },
  "extension_notice": {
   "message": "Messaggio non inviato: l'estensione non riesce a proteggerlo."
+ },
+ "gone_notice": {
+  "message": "Omissis è spento e qui non protegge più. Per inviare lo stesso, ripeti: partirà senza protezione."
+ },
+ "page_reload_notice": {
+  "message": "Omissis è ripartito: ricarica la finestra prima di scrivere (Ctrl+R, sul Mac Cmd+R)."
  }
 }

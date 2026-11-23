@@ -14,7 +14,8 @@ import time
 import paths   # noqa: E402
 
 DATA = paths.DATA
-RX_ID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}|[0-9a-fA-F]{16,}|\d{4,}")
+# anche gli identificativi con un prefisso (cse_01AbC..., session_01...): dicono quale sessione o conversazione
+RX_ID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}|[0-9a-fA-F]{16,}|\b[a-z]{2,10}_[0-9A-Za-z]{16,}|\d{4,}")
 
 
 def shape(node, prof=0):
@@ -64,7 +65,8 @@ def signal_of(entry):
         outcome = "ok"
     elif event.startswith("response") and entry.get("restored"):
         outcome = "restoring"
-    elif "no_text_field" in event:
+    # anche la chiamata binaria che il proxy non sa leggere, e la pagina in cui il codice della casella non e' entrato
+    elif "no_text_field" in event or "rpc_not_read" in event or "page_not_prepared" in event:
         outcome = "unread"
     else:
         return None

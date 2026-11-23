@@ -49,6 +49,7 @@ import settings
 import i18n
 import weights
 import paths
+import report
 import remote
 import restore
 import scan
@@ -402,6 +403,7 @@ def watch_apps():
         try:
             reattach()
             check_proxy_apps()
+            check_reports()
         except Exception:   # noqa: BLE001
             pass
 
@@ -678,7 +680,9 @@ def proxy_state(key):
     now, cert = system_now()
     on, ours = key in pac_apps(), now["pac"].startswith(PAC)
     service, client = a.get("service", ""), a["name"] + " "
-    mine = lambda g: g["service"] == service and g["via"] == "proxy" and g["client"].startswith(client)   # noqa: E731
+    # dietro il proxy l'app lavora per due strade: le richieste lette dal proxy e la casella di scrittura, con il codice
+    # che il proxy mette nella pagina (inpage.py) e che il registro segna come "app desktop"
+    mine = lambda g: g["service"] == service and g["via"] in ("proxy", "app desktop") and g["client"].startswith(client)   # noqa: E731
     seen = max((_epoch(c["last"]) for c in activity.clients() if mine(c)), default=0.0)
     groups = [g for g in activity.compatibility() if mine(g)]
     marks, started = _proxy_marks(), app_started(a)
@@ -694,7 +698,7 @@ def proxy_state(key):
     return {"available": now["supported"] and not store, "store": store, "on": on, "network": ours, "certificate": cert,
             "foreign": foreign[:80], "active": SUP.phase == "active", "problem": problem, "state": state, "open": bool(started),
             "seen": passing, "messages": sum(g["ok"] for g in groups), "last_ok": max((g["last_ok"] for g in groups), default=""),
-            "to_recheck": any(g["status"] == "to_recheck" for g in groups)}
+            "to_recheck": any(g["status"] == "to_recheck" for g in groups), "report": True}
 
 
 NOTIFIED_REOPEN = set()   # (app, da quando gira): l'avviso «va riaperta» si da' una volta sola per ogni apertura dell'app
@@ -712,6 +716,23 @@ def check_proxy_apps():
             if mark not in NOTIFIED_REOPEN:
                 NOTIFIED_REOPEN.add(mark)
                 NOTIFY(i18n.t("app.proxy.notify.reopen", name=a["name"]))
+
+
+REPORT_MARK = {"at": None, "told": {}}   # fin dove si e' letto il registro, e di che cosa si e' gia' avvisato
+
+
+def check_reports():
+    """Un messaggio fermato perche' Omissis non riesce a leggerlo, o il codice della casella che non entra nella pagina:
+    di solito e' l'app che e' cambiata con un aggiornamento. Chi usa il computer lo deve sapere subito, e dal pannello
+    lo puo' segnalare (report.py). Un avviso ogni sei ore per programma basta."""
+    fresh, REPORT_MARK["at"] = report.news(REPORT_MARK["at"])
+    names = {s["id"]: s["name"] for s in catalog.SERVICES}
+    for kind, service, client in fresh:
+        if time.time() - REPORT_MARK["told"].get((kind, service, client), 0) < 6 * 3600:
+            continue
+        REPORT_MARK["told"][(kind, service, client)] = time.time()
+        if NOTIFY is not None and not SUP.test:
+            NOTIFY(i18n.t(f"report.notify.{kind}", name=client or names.get(service, service)))
 
 
 def app_proxy(key, on):
@@ -1098,7 +1119,9 @@ class Handler(BaseHTTPRequestHandler):
                 names = {s["id"]: s["name"] for s in catalog.SERVICES}
                 self._respond(200, {"sightings": [{**g, "name": names.get(g["service"], g["service"])} for g in activity.compatibility()],
                                      "verified_ones": [{**v, "name": names.get(v.get("service"), v.get("service"))} for v in verified_ones.get("entries", [])],
-                                     "updated": verified_ones.get("updated", "")})
+                                     "updated": verified_ones.get("updated", ""), "report": True})
+            elif u.path == "/api/report":   # la segnalazione di un problema: il testo che si vede, e che parte solo se lo si invia
+                self._respond(200, report.build(q.get("what", ""), SUP.phase, SUP.status().get("model") or ""))
             elif u.path == "/api/languages":
                 self._respond(200, {"choice": i18n.choice(), "active": i18n.active(), "available": i18n.available()})
             elif u.path == "/api/status":

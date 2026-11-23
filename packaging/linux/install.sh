@@ -3,7 +3,7 @@
 # Omissis for Linux: installs for the user who runs this script. It does not ask for administrator rights.
 #
 #   sh install.sh                                   scarica l'ultima versione e la installa / downloads the latest version
-#   sh install.sh Omissis-0.1.8-linux-x86_64.tar.gz installa da un archivio gia' scaricato / installs a downloaded archive
+#   sh install.sh Omissis-0.1.9-linux-x86_64.tar.gz installa da un archivio gia' scaricato / installs a downloaded archive
 #
 # Mette il programma in ~/.local/lib/omissis (oppure in $OMISSIS_HOME) e lo avvia. Al primo avvio Omissis aggiunge da solo
 # la voce nel menu delle applicazioni, il comando «omissis» e l'avvio all'accesso, che si spegne dal pannello. I dati di

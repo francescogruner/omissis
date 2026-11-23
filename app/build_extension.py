@@ -81,9 +81,9 @@ def stamp(folder=None):
 
 def defaults(test, build=None):
     services = [{"id": s["id"], "name": s["name"], "domains": s["domains"], "policy": catalog.default_policy(s),
-                "readable": bool(s["adapter"]), **({"box": True} if s["box"] else {})} for s in catalog.SERVICES if not s["radar"]]
+                "readable": bool(s["adapter"]), **({"box": True} if s["box"] else {}), **catalog.page(s["id"])} for s in catalog.SERVICES if not s["radar"]]
     if test:
-        services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True})
+        services.append({"id": "test", "name": "Servizio finto", "domains": ["localhost"], "policy": "protect", "readable": True, **catalog.page("test")})
     return ("// generato da build_extension.py: politiche di partenza, finche' il programma non manda le sue\n"
             "globalThis.MSP_DEFAULTS = " + json.dumps({"services": services, "restore": True, "block_files": False},
                                                          ensure_ascii=False, separators=(",", ":")) + ";\n"

@@ -9,6 +9,11 @@ Regole di sicurezza:
   - nel registro (data\\activity.jsonl) finiscono solo conteggi e nomi dei campi, mai i testi;
   - i file caricati (PDF, immagini) NON vengono mascherati: sono segnalati nel registro e,
     se impostato, bloccati.
+  - le chiamate in formato binario (protobuf) dei servizi che le usano vengono lette senza schema (wire.py) e i testi
+    sostituiti come negli altri formati; una che non si riesce a leggere non passa in silenzio: finisce nel registro
+    con la sua forma e, se l'adattatore del servizio lo chiede, viene fermata invece di partire in chiaro;
+  - nelle pagine dei servizi che lo chiedono (oggi claude.ai, per la sua app) il proxy mette il codice della casella di
+    scrittura dell'estensione (inpage.py): il testo viene sostituito prima ancora che l'app lo legga.
 
 Le impostazioni si leggono da data\\settings.json a ogni richiesta (vedi settings.py).
 OMISSIS_TEST=1 accetta anche il servizio finto in locale.
@@ -27,6 +32,8 @@ import settings
 import paths
 import activity
 import restore as R
+import inpage
+import wire
 from activity import shape
 
 HERE = Path(__file__).resolve().parent
@@ -41,6 +48,10 @@ def engine(path, data):
                                   headers={"Content-Type": "application/json", "X-Token": token})
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read().decode("utf-8"))
+
+
+# codifiche binarie delle chiamate ai servizi: gli adattatori leggono JSON, queste no
+RX_BINARY = re.compile(r"(?i)proto|grpc|msgpack|cbor|thrift")
 
 
 class MspPii:
@@ -122,6 +133,9 @@ class MspPii:
 
     # ---------------------------------------------------------------- richiesta
     async def request(self, flow: http.HTTPFlow):
+        if flow.request.path.startswith(inpage.PREFIX):   # una chiamata del codice messo nella pagina: risponde il proxy
+            await self.page_call(flow)
+            return
         ad, service = self.adapter(flow)
         if ad is None:
             return
@@ -145,6 +159,30 @@ class MspPii:
             return
         opened = ad.request(rq.path, kind, rq.get_text(strict=False) or "")
         if opened is None:
+            # Un corpo che l'adattatore non sa leggere. Se e' una chiamata in formato binario (protobuf: dal novembre 2026
+            # claude.ai manda cosi' i messaggi, ConversationService/PerformAction) dentro puo' esserci il testo di chi
+            # scrive: non deve passare in silenzio. Dove l'adattatore lo chiede (RPC) si legge senza schema e i testi si
+            # sostituiscono; se non si riesce, nel registro va la forma (mai i valori) e, se l'adattatore lo chiede
+            # (UNREADABLE), la richiesta viene fermata invece di partire in chiaro.
+            if RX_BINARY.search(kind) and len(rq.raw_content) > 8:
+                rpc = getattr(ad, "RPC", None)
+                if rpc is not None and rpc.search(rq.path) and await self.rpc(flow, entry, kind):
+                    return
+                message = None
+                if len(rq.raw_content) <= 400_000:
+                    message = wire.unwrap(rq.get_content(strict=False) or b"", kind, rq.headers.get("connect-content-encoding", ""))[1]
+                form = wire.shape(message) if message else None
+                stop, quiet = getattr(ad, "UNREADABLE", None), getattr(ad, "QUIET", None)
+                blocked = bool(stop is not None and stop.search(rq.path))
+                if not blocked and quiet is not None and quiet.search(rq.path):
+                    return   # chiamate di servizio (nell'app di Claude: le sessioni di codice), fuori dal registro come le altre
+                if blocked:
+                    flow.response = http.Response.make(
+                        415, json.dumps({"error": {"type": "omissis", "message": "Omissis: richiesta in un formato che non so leggere, "
+                                                                               "fermata per non inviare dati in chiaro"}}),
+                        {"content-type": "application/json"})
+                self.write(**entry, event="blocked_rpc_not_read" if blocked else "rpc_not_read",
+                           kind=kind.split(";")[0].strip()[:60], structure=form if form is not None else "non letto")
             return
         ref, reassemble, body = opened
         ref = [(c, k) for c, k in ref if c[k].strip()]
@@ -179,6 +217,92 @@ class MspPii:
             return
         self.write(**entry)
 
+    async def rpc(self, flow, entry, kind):
+        """Una chiamata in protobuf (protocollo Connect) verso un servizio protetto: i testi che puo' aver scritto una
+        persona passano dal motore come negli altri formati, e il messaggio viene ricomposto con le lunghezze giuste.
+        Se nella pagina ha gia' lavorato la casella (inpage.py) qui arrivano solo segnaposto e non cambia nulla.
+        True se la chiamata e' stata letta (anche quando non c'era nulla da sostituire), False se non si legge."""
+        rq = flow.request
+        if len(rq.raw_content) > MAX_BODY:
+            return False
+        enveloped, message = wire.unwrap(rq.get_content(strict=False) or b"", kind, rq.headers.get("connect-content-encoding", ""))
+        found = wire.texts(message) if message else None
+        if found is None:
+            return False
+        chosen = [x for x in dict.fromkeys(found) if wire.prose(x)]
+        if not chosen:
+            return True
+        try:
+            outcome = await self.mask(chosen)
+        except Exception as ex:   # noqa: BLE001
+            flow.response = http.Response.make(
+                503, json.dumps({"error": {"type": "omissis", "message": "Omissis: motore di protezione non raggiungibile, "
+                                                                       "richiesta bloccata per non inviare dati in chiaro"}}),
+                {"content-type": "application/json"})
+            self.write(**entry, event="blocked_engine_unreachable", error=type(ex).__name__)
+            return True
+        changes = {old: new for old, new in zip(chosen, outcome["texts"]) if new != old}
+        if changes:
+            rq.set_content(wire.wrap(enveloped, wire.rebuild(message, changes)))
+            listing = wire.places(message) or []
+            where = [f"{place}:{len(text)}" for place, text in listing if text in changes][:30]
+            # e dove stavano i testi rimasti com'erano (il messaggio gia' sostituito dalla casella, per esempio)
+            kept = [f"{place}:{len(text)}" for place, text in listing if text not in changes and wire.prose(text)][:12]
+            self.write(**entry, event="masked", fields=len(changes), characters=sum(len(x) for x in changes.values()),
+                       replacements=outcome["counts"], ms=outcome["ms"], kind="protobuf", where=where, kept=kept, texts=len(chosen))
+        return True
+
+    # ---------------------------------------------------------------- il codice della casella, portato nella pagina
+    async def page_call(self, flow):
+        """Una chiamata del codice che il proxy ha messo nella pagina (inpage.py): trova risposta qui e non parte MAI
+        verso il sito, nemmeno se il servizio non e' (piu') tra quelli protetti."""
+        rq = flow.request
+
+        def answer(code, data):
+            flow.response = http.Response.make(code, json.dumps(data, ensure_ascii=False).encode("utf-8"),
+                                               {"content-type": "application/json", "cache-control": "no-store", "x-omissis": "1"})
+        try:
+            ad, service = self.adapter(flow)
+            if ad is None or not getattr(ad, "PAGE", False):
+                return answer(404, {})
+            what = rq.path[len(inpage.PREFIX):].split("?")[0]
+            if what == "here":   # «chi risponde?»: la pagina lo chiede senza chiave, prima di mandare qualunque cosa
+                return answer(200, {})
+            if rq.headers.get("x-omissis-key", "") != inpage.key():
+                return answer(403, {})
+            client = activity.client_from_ua(rq.headers.get("User-Agent", ""))
+            if rq.headers.get("x-omissis-hello") == "1":   # il codice si presenta appena parte: gira davvero dentro quel programma
+                self.write(service=service, via="app desktop", client=client, event="page_active", path="(codice nella pagina)")
+            if what == "status":
+                return answer(200, await asyncio.to_thread(inpage.status, ENGINE, client, TEST))
+            if what == "call" and rq.method == "POST":
+                m = json.loads(rq.get_text(strict=False) or "{}").get("m")
+                return answer(200, await asyncio.to_thread(inpage.handle, ENGINE, m, client))
+            answer(404, {})
+        except Exception:   # noqa: BLE001
+            answer(500, {})
+
+    async def page_insert(self, flow):
+        """Mette in cima alla pagina di un servizio protetto il codice della casella di scrittura."""
+        rs, service = flow.response, flow.metadata.get("msp_service")
+        client = activity.client_from_ua(flow.request.headers.get("User-Agent", ""))
+        try:
+            if not rs.raw_content or len(rs.raw_content) > inpage.MAX_PAGE:
+                return
+            html = rs.get_text(strict=False) or ""
+            if "<" not in html[:4000]:
+                return
+            state = await asyncio.to_thread(inpage.status, ENGINE, client, TEST)
+            page, digest = inpage.inject(html, inpage.source(state))
+            rs.set_text(page)
+            rules = rs.headers.get_all("content-security-policy")
+            if rules:
+                rs.headers.set_all("content-security-policy", [inpage.allow(r, digest) for r in rules])
+            rs.headers["cache-control"] = "no-store"
+            self.write(service=service, path=self.path(flow), client=client, event="page_prepared")
+        except Exception as ex:   # noqa: BLE001  (la pagina passa com'era: resta la barriera del proxy)
+            self.write(service=service, path=self.path(flow), client=client, event="page_not_prepared", error=type(ex).__name__)
+
     # ---------------------------------------------------------------- risposta
     def responseheaders(self, flow: http.HTTPFlow):
         """Decide come consegnare la risposta. Una risposta che resta aperta (un canale di eventi) non va mai trattenuta:
@@ -188,6 +312,18 @@ class MspPii:
         rs, ad = flow.response, flow.metadata.get("msp")
         kind = rs.headers.get("content-type", "")
         coding = rs.headers.get("content-encoding", "identity").strip().lower() or "identity"
+        # la pagina di un servizio che vuole il codice della casella: resta intera, response() ce lo mette in cima
+        if (ad is not None and getattr(ad, "PAGE", False) and flow.request.method == "GET" and rs.status_code == 200
+                and "text/html" in kind and flow.request.headers.get("sec-fetch-dest", "document") == "document"):
+            flow.metadata["msp_page"] = True
+            return
+        # una zona del servizio dove le risposte non si toccano (in claude.ai le sessioni di codice: li' un segnaposto
+        # scritto in un programma o in un registro deve restare com'e')
+        outside = getattr(ad, "OUTSIDE", None) if ad is not None else None
+        if outside is not None and outside.search(flow.request.path):
+            flow.metadata["msp"] = None
+            rs.stream = True
+            return
         if ad is not None and settings.read()["restore"] and ad.in_streaming(kind, flow.request.path):
             stream = ad.stream(self.search, self.preload)
             if coding != "identity":
@@ -210,7 +346,10 @@ class MspPii:
         if ad is None or not settings.read()["restore"] or not any(x in kind for x in ("json", "text/plain")):
             rs.stream = True
 
-    def response(self, flow: http.HTTPFlow):
+    async def response(self, flow: http.HTTPFlow):
+        if flow.metadata.get("msp_page"):
+            await self.page_insert(flow)
+            return
         ad = flow.metadata.get("msp")
         if ad is None or not settings.read()["restore"]:
             return

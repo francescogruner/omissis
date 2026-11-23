@@ -1,7 +1,16 @@
 {
  "_what": "Cio' che l'autore ha verificato di persona, con quale programma e quale versione. livello: dal_vivo (servizio vero, dati inventati) | servizio_finto (prove automatiche contro un servizio simulato).",
- "updated": "2026-11-18",
+ "updated": "2026-11-23",
  "entries": [
+  {
+   "service": "claude",
+   "via": "app desktop",
+   "client": "Claude per Windows",
+   "version": "6.28899.6",
+   "method": "box",
+   "level": "live",
+   "data": "2026-11-23"
+  },
   {
    "service": "chatgpt",
    "via": "app desktop",

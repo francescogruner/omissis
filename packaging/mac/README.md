@@ -2,13 +2,13 @@
 
 **English** · [Italiano](#italiano)
 
-The Mac build is out as a **preview** since 20 November 2026 (now version 0.1.8, Apple silicon only): the `.dmg` is on the [releases page](https://github.com/francescogruner/omissis/releases). It is not signed with Apple, so macOS refuses to open it the first time: see «Installing the preview» below. On 20 November 2026 a GitHub Mac (macOS 26, Apple Silicon) built the app and the `.dmg`, started the app and passed the automated tests. The real Keychain, the menu bar icon and the real ChatGPT and Claude apps were tried there too. Nobody has used it on a Mac yet: a message replaced inside an app, with a signed-in account, is still to be seen.
+The Mac build is out as a **preview** since 20 November 2026 (now version 0.1.9, Apple silicon only): the `.dmg` is on the [releases page](https://github.com/francescogruner/omissis/releases). It is not signed with Apple, so macOS refuses to open it the first time: see «Installing the preview» below. On 20 November 2026 a GitHub Mac (macOS 26, Apple Silicon) built the app and the `.dmg`, started the app and passed the automated tests. The real Keychain, the menu bar icon and the real ChatGPT and Claude apps were tried there too. Nobody has used it on a Mac yet: a message replaced inside an app, with a signed-in account, is still to be seen.
 
 ## Installing the preview
 
 These are the usual steps for an app without an Apple signature. They have not been tried on a real Mac with this build.
 
-1. Download `Omissis-0.1.8-mac-arm64.dmg`, open it and drag Omissis to Applications.
+1. Download `Omissis-0.1.9-mac-arm64.dmg`, open it and drag Omissis to Applications.
 2. Open Omissis. macOS says it cannot verify the app: close the message.
 3. Open System Settings → Privacy & Security, scroll down to «Security» and press «Open Anyway» next to Omissis. macOS asks for your password or Touch ID.
 4. If macOS says the app «is damaged», it is the same refusal in another form: in Terminal run `xattr -dr com.apple.quarantine /Applications/Omissis.app`, then open it again.
@@ -26,7 +26,7 @@ The app is not frozen, the same as the Windows installer. `Omissis.app` contains
 `Contents/MacOS/Omissis` is a small launcher for `panel.py`. The model weights are downloaded at first start.
 
 ```
-python3 packaging/mac/build_mac.py --version 0.1.8 --smoke-test   # on a Mac: dist/Omissis.app and dist/Omissis-0.1.8-mac-arm64.dmg
+python3 packaging/mac/build_mac.py --version 0.1.9 --smoke-test   # on a Mac: dist/Omissis.app and dist/Omissis-0.1.9-mac-arm64.dmg
 bash packaging/mac/ci_tests.sh                                     # automated tests with the app's own Python
 ```
 
@@ -87,7 +87,7 @@ The Claude app refuses the debug port, on the Mac and on Windows. Started with i
 
 Omissis says so in the panel and does not close the app. What still works with Claude: claude.ai in the browser with the extension, and Claude Code with the plugin.
 
-The other road is the proxy, and the panel takes it with one button (*Connections → Apps → Protect Claude*). The app uses the system proxy and the certificates the system trusts, as it does on company networks: the button installs the Omissis certificate (macOS asks for your password) and gives the system a PAC file that sends only the traffic to claude.ai to the Omissis proxy; an administrator of the Mac needs no further password for the network setting. The app reads the network settings only when it starts, so it must be opened after Omissis: the panel tells when it was not, and reopens it. Tried on a GitHub Mac and on a GitHub Windows machine on 20 November 2026 (6.28899.2) with the panel doing the work: the traffic to claude.ai goes through Omissis and the sign-in window loads. No account was used, so no message was seen being replaced. `packaging/ci/proxy_app_trial.py` repeats the trial (workflow «Prova del proxy con l'app di Claude»).
+The other road is the proxy, and the panel takes it with one button (*Connections → Apps → Protect Claude*). The app uses the system proxy and the certificates the system trusts, as it does on company networks: the button installs the Omissis certificate (macOS asks for your password) and gives the system a PAC file that sends only the traffic to claude.ai to the Omissis proxy; an administrator of the Mac needs no further password for the network setting. The app reads the network settings only when it starts, so it must be opened after Omissis: the panel tells when it was not, and reopens it. Through that road the proxy puts the extension's own code into the app's page: on Enter the text is replaced in the writing box, in chat and in the Code tab, and the real values come back on screen. On a GitHub Mac (20 November 2026, 6.28899.2) the panel did the work, the traffic to claude.ai went through Omissis and the sign-in window loaded; no account was used there, so on a Mac no message has been seen being replaced. On Windows it has, with a real sign-in, on 23 November 2026 (6.28899.6). `packaging/ci/proxy_app_trial.py` repeats the trial (workflow «Prova del proxy con l'app di Claude»).
 
 `packaging/mac/desktop_apps_test.sh` repeats this trial on a GitHub Mac (workflow input `only` = `desktop`): it installs the two apps there, without signing in to any account.
 
@@ -105,11 +105,11 @@ Safari needs its own build of the extension, inside a Mac app. `packaging/mac/bu
 
 ## Italiano
 
-La versione per Mac è pubblicata come **versione di prova** dal 20 novembre 2026 (ora 0.1.8, solo per i Mac con processore Apple): il `.dmg` è nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases). Non è firmata con Apple, quindi la prima volta macOS non la apre: vedi «Come si installa la versione di prova» qui sotto. Il 20 novembre 2026 un Mac di GitHub (macOS 26, Apple Silicon) ha costruito l'app e il `.dmg`, ha avviato l'app e ha passato le prove automatiche. Lì sono stati provati anche il Portachiavi vero, l'icona nella barra dei menu e le app vere di ChatGPT e di Claude. Nessuno l'ha ancora usata su un Mac: un messaggio sostituito dentro un'app, con un account, resta da vedere.
+La versione per Mac è pubblicata come **versione di prova** dal 20 novembre 2026 (ora 0.1.9, solo per i Mac con processore Apple): il `.dmg` è nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases). Non è firmata con Apple, quindi la prima volta macOS non la apre: vedi «Come si installa la versione di prova» qui sotto. Il 20 novembre 2026 un Mac di GitHub (macOS 26, Apple Silicon) ha costruito l'app e il `.dmg`, ha avviato l'app e ha passato le prove automatiche. Lì sono stati provati anche il Portachiavi vero, l'icona nella barra dei menu e le app vere di ChatGPT e di Claude. Nessuno l'ha ancora usata su un Mac: un messaggio sostituito dentro un'app, con un account, resta da vedere.
 
 **Come si installa la versione di prova.** Sono i passi soliti per un'app senza la firma Apple. Con questa versione non sono stati provati su un Mac vero.
 
-1. Scarica `Omissis-0.1.8-mac-arm64.dmg`, aprilo e trascina Omissis in Applicazioni.
+1. Scarica `Omissis-0.1.9-mac-arm64.dmg`, aprilo e trascina Omissis in Applicazioni.
 2. Apri Omissis. macOS dice che non può verificarla: chiudi il messaggio.
 3. Apri Impostazioni di Sistema → Privacy e sicurezza, scorri fino a «Sicurezza» e premi «Apri comunque» accanto a Omissis. macOS chiede la password o il Touch ID.
 4. Se macOS dice che l'app «è danneggiata», è lo stesso rifiuto in un'altra forma: nel Terminale lancia `xattr -dr com.apple.quarantine /Applications/Omissis.app`, poi riaprila.
@@ -138,7 +138,7 @@ Il modello si scarica al primo avvio. I comandi sono quelli qui sopra, e il work
 - **Claude per Mac:**
   - l'app rifiuta la porta di debug, sul Mac come su Windows: avviata così esce subito (provato il 20 novembre 2026, versioni 5.11492.5 e 6.28899.2). La accetta solo con un permesso firmato da Anthropic;
   - Omissis lo dice nel pannello e non chiude l'app. Con Claude restano claude.ai nel browser, con l'estensione, e Claude Code, con il plugin;
-  - l'altra strada è il proxy, e il pannello la prende con un pulsante (*Collegamenti → App → Proteggi Claude*). L'app usa il proxy e i certificati del sistema, come nelle reti aziendali: il pulsante mette il certificato di Omissis (macOS chiede la password) e dà al sistema un file PAC che manda al proxy solo il traffico verso claude.ai; chi amministra il Mac non deve dare altre password per la rete. L'app legge le impostazioni di rete solo quando parte, quindi va aperta dopo Omissis: il pannello dice quando non è così, e la riapre. Provato il 20 novembre 2026 su un Mac e su un Windows di GitHub (6.28899.2), con il pannello a fare tutto: il traffico verso claude.ai passa da Omissis e la finestra d'ingresso si carica. Senza account: un messaggio sostituito non si è visto. `packaging/ci/proxy_app_trial.py` rifà la prova (flusso «Prova del proxy con l'app di Claude»);
+  - l'altra strada è il proxy, e il pannello la prende con un pulsante (*Collegamenti → App → Proteggi Claude*). L'app usa il proxy e i certificati del sistema, come nelle reti aziendali: il pulsante mette il certificato di Omissis (macOS chiede la password) e dà al sistema un file PAC che manda al proxy solo il traffico verso claude.ai; chi amministra il Mac non deve dare altre password per la rete. L'app legge le impostazioni di rete solo quando parte, quindi va aperta dopo Omissis: il pannello dice quando non è così, e la riapre. Da quella strada il proxy porta nella pagina dell'app lo stesso codice dell'estensione: all'Invio il testo viene sostituito nella casella, in chat e nella scheda Code, e a schermo tornano i valori veri. Su un Mac di GitHub (20 novembre 2026, 6.28899.2) il pannello ha fatto tutto, il traffico verso claude.ai è passato da Omissis e la finestra d'ingresso si è caricata; lì senza account, quindi sul Mac un messaggio sostituito non si è ancora visto. Su Windows sì, con un accesso vero, il 23 novembre 2026 (6.28899.6). `packaging/ci/proxy_app_trial.py` rifà la prova (flusso «Prova del proxy con l'app di Claude»);
   - `packaging/mac/desktop_apps_test.sh` rifà questa prova su un Mac di GitHub, senza entrare in nessun account.
 - **Safari:**
   - vuole una sua versione dell'estensione, dentro un'app per Mac. `packaging/mac/build_safari.sh` la converte e la compila, con la firma valida solo per quel Mac;

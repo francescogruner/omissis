@@ -178,5 +178,11 @@
  },
  "extension_notice": {
   "message": "Message not sent: the extension cannot protect it."
+ },
+ "gone_notice": {
+  "message": "Omissis is off and no longer protects this window. To send anyway, do it again: it will leave unprotected."
+ },
+ "page_reload_notice": {
+  "message": "Omissis has restarted: reload the window before writing (Ctrl+R, Cmd+R on a Mac)."
  }
 }

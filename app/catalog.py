@@ -35,6 +35,29 @@ KINDS = {"chat": "Assistente in chat", "api": "API per sviluppatori", "code": "A
         "research": "Ricerca", "office": "AI dentro le suite da ufficio", "agents": "Agenti e automazione"}
 
 
+# Che cosa sa delle pagine di un servizio il codice della casella (extension/content.js), oltre al dominio:
+#   outside   zone dove i FILE ALLEGATI restano come sono, perche' li' un agente lavora sui file del computer e li prende
+#             dal loro percorso: {"path": espressione sul percorso, "box": selettore delle caselle di quella zona}.
+#             Il testo scritto nella casella viene sostituito anche li', come in chat
+#   fields    campi di testo dell'app che non sono la casella dei messaggi (la bozza di un'email): li' i valori veri
+#             vanno rimessi nel campo, cosi' «Copia» e «Invia» usano quelli
+PAGES = {
+    # claude.ai, sito e app desktop (letto nel codice pubblico del sito il 23/11/2026): la scheda Code sta sui percorsi
+    # /epitaxy e /code e la sua casella e' .epitaxy-prompt; la bozza di un messaggio tiene oggetto e corpo in campi
+    # marcati data-copy-as-text
+    "claude": {"outside": {"path": r"^/(?:epitaxy|code|claude-code-desktop)(?:/|$)", "box": ".epitaxy-prompt, .epitaxy-side-chat"},
+               "fields": "textarea[data-copy-as-text], input[data-copy-as-text]"},
+    # il servizio finto delle prove (mock_service.py, /claude-app): le stesse regole
+    "test": {"outside": {"path": r"^/claude-app/code(?:/|$)", "box": ".epitaxy-prompt, .epitaxy-side-chat"},
+             "fields": "textarea[data-copy-as-text], input[data-copy-as-text]"},
+}
+
+
+def page(service_id):
+    """Le regole di pagina di un servizio, da unire alla sua voce quando la si manda al codice della casella."""
+    return dict(PAGES.get(service_id, {}))
+
+
 def _s(id, name, vendor, kind, domains, adapter=None, app=None, box=False, hook=False):
     return dict(id=id, name=name, vendor=vendor, kind=kind, domains=domains.split(), adapter=adapter, app=app, radar=False, box=box, hook=hook)
 

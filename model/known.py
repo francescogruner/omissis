@@ -11,7 +11,7 @@ from pathlib import Path
 
 _TEXT = """
 microsoft; google; apple; amazon; aws; azure; meta; facebook; instagram; linkedin; youtube; twitter; tiktok; whatsapp; telegram;
-openai; anthropic; chatgpt; claude; gemini; copilot; mistral; perplexity;
+openai; anthropic; chatgpt; claude; gemini; copilot; mistral; perplexity; kimi; grok; deepseek; codex;
 office; office 365; microsoft 365; m365; o365; outlook; teams; onedrive; sharepoint; excel; word; powerpoint; visio;
 planner; exchange; exchange online; entra; entra id; azure ad; active directory; intune; defender; purview; autopilot; power bi;
 power automate; dynamics; dynamics 365; business central; windows; windows 10; windows 11; windows server; sql server; hyper-v;
@@ -72,6 +72,9 @@ parlamento europeo; consiglio europeo; corte di giustizia; corte di cassazione; 
 senato; camera dei deputati; governo; ministero della salute; ministero dell'interno; ministero dell'economia; protezione civile;
 """
 WELL_KNOWN = {x.strip() for x in _TEXT.replace("\n", " ").split(";") if x.strip()}
+# Gli assistenti a cui si scrive: il loro nome da solo («Claude, riassumi», «il desktop di Claude») e' il programma, non
+# una persona, anche quando la rete lo prende per un nome proprio. «Claude Dupont» resta una persona.
+ASSISTANTS = frozenset("claude chatgpt gemini copilot mistral perplexity kimi grok deepseek codex".split())
 # Indirizzi tecnici che non dicono nulla di nessuno: l'indirizzo della macchina stessa, i DNS pubblici, le maschere di rete,
 # i siti di produttori, enti e documentazione. Un indirizzo privato (192.168..., il sito di un cliente) non e' tra questi.
 PUBLIC_IPS = {"127.0.0.1", "::1", "0.0.0.0", "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112", "208.67.222.222",

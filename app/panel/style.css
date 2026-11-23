@@ -235,6 +235,12 @@ dialog { box-shadow: 0 20px 70px rgba(0, 0, 0, .45); }
 dialog:focus, dialog:focus-visible { outline: none; }
 dialog#welcome { width: 620px; max-width: min(620px, calc(100vw - 32px)); }
 dialog#welcome textarea { min-height: 96px; }
+dialog#report { width: 660px; max-width: min(660px, calc(100vw - 32px)); }
+dialog#report[open] { display: flex; flex-direction: column; max-height: calc(100vh - 32px); }
+dialog#report > .inside { overflow-y: auto; min-height: 0; }
+dialog#report > .footer { flex: none; flex-wrap: wrap; align-items: center; }
+dialog#report textarea { min-height: 56px; }
+dialog#report pre { max-height: 230px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
 dialog#welcome h2 { font-size: 20px; letter-spacing: -0.02em; }
 dialog#welcome .outcome { min-height: 0; }
 #welcomeBack { margin-right: auto; }

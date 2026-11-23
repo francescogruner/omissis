@@ -39,6 +39,29 @@
     return {domains, restore: !suspended && !!(status && status.restore), host_site: (!suspended && globalThis.MSP_HOST_SITE) || ''};
   }
 
+  // Le regole di pagina del servizio (le manda il programma, servizio per servizio: catalog.py).
+  //  outside  zone dove i FILE ALLEGATI restano come sono: li' un agente lavora sui file del computer e li prende dal loro
+  //           percorso, una copia anonimizzata non gli servirebbe (in claude.ai la scheda Code: provato dal vivo il
+  //           23/11/2026, la copia arrivava senza percorso). Il testo scritto nella casella viene sostituito anche li'.
+  //           {path: espressione sul percorso, box: selettore delle caselle di quella zona}
+  //  fields   campi di testo dell'app che non sono la casella dei messaggi (in claude.ai la bozza di un'email)
+  function rules() {
+    for (const s of (status && status.services) || []) if (s.domains.some(d => HOST_SITE === d || HOST_SITE.endsWith('.' + d))) return s;
+    return null;
+  }
+  function outside(el) {
+    const o = (rules() || {}).outside;
+    if (!o) return false;
+    try {
+      if (o.box && el && el.closest && el.closest(o.box)) return true;
+      return !!o.path && new RegExp(o.path).test(location.pathname);
+    } catch (e) { return false; }   // una regola scritta male non vale
+  }
+  function isField(el) {
+    const f = (rules() || {}).fields;
+    try { return !!f && !!el && !!el.matches && el.matches(f); } catch (e) { return false; }
+  }
+
   async function load() {
     let d = {};
     try { d = await chrome.storage.local.get(['status', 'suspended', 'notices']); } catch (e) { /* estensione ricaricata */ }
@@ -89,7 +112,8 @@
     } catch (e) { return key; }
   };
   const REASONS = {engine: T('engine_notice'), 'not_paired': T('notice_not_connected'), file: T('file_notice'),
-    reload: T('reload_notice'), extension: T('extension_notice')};
+    // dentro una pagina servita dal proxy non c'e' un'estensione da aggiornare: li' va ricaricata la finestra
+    reload: globalThis.MSP_PAGE_WORLD ? T('page_reload_notice') : T('reload_notice'), extension: T('extension_notice'), gone: T('gone_notice')};
   const PHRASES = {one: T('one_notice'), many: T('many_notice', '\u0001'), press: T('notice_press_enter'), box: T('box_notice'),
     attachment_work: T('attachment_work'), attachment_done: T('attachment_done', '\u0001', '\u0002'), attachment_text: T('attachment_text'),
     attachment_blocked: T('attachment_blocked', '\u0001')};
@@ -135,7 +159,7 @@
   for (const kind of ['input', 'change']) {
     window.addEventListener(kind, ev => {
       const el = ev.target;
-      if (our_own(ev) || !(el instanceof HTMLInputElement) || el.type !== 'file') return;
+      if (our_own(ev) || !(el instanceof HTMLInputElement) || el.type !== 'file' || outside(el)) return;
       if (inWork.has(el)) { ev.stopImmediatePropagation(); return; }   // il secondo dei due eventi, o una scelta mentre lavoriamo
       if (!el.files || !el.files.length || !activeAttachments()) return;
       ev.stopImmediatePropagation();
@@ -153,7 +177,7 @@
   // trascinamento e incolla: l'evento vero viene fermato e rifatto uguale, con le copie al posto dei file
   function redo(ev, build) {
     const dt = ev.dataTransfer || ev.clipboardData;
-    if (our_own(ev) || !dt || !dt.files || !dt.files.length || !activeAttachments()) return;
+    if (our_own(ev) || !dt || !dt.files || !dt.files.length || !activeAttachments() || outside(ev.target)) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
     const target = ev.target, texts = {};
@@ -242,8 +266,30 @@
   const RX_OPENS = /\[(?:[A-Z][A-Z_]{0,22}\d{0,7})?$/, RX_WHOLE = /^\[[A-Z][A-Z_]{1,22}_\d{1,7}\]/, RX_PART = /^\[(?:[A-Z][A-Z_]{0,23}\d{0,7})?$/;
   const blockOf = t => (t.parentElement && t.parentElement.closest('p, li, td, th, h1, h2, h3, h4, h5, h6, pre, blockquote, div')) || t.parentElement;
 
+  // La pagina puo' rifare da capo solo il pezzo che chiudeva un segnaposto spezzato, quando il valore e' gia' stato scritto
+  // nel pezzo prima: accanto al valore ricompare la coda («Nevatek S.r.l.ORG_1]», visto il 23/11/2026 nella scheda Code
+  // dell'app di Claude). Il pezzo nuovo puo' essere lungo, e l'inizio del segnaposto non c'e' piu': si riconosce dalla
+  // coda in testa al pezzo e dal valore in fondo a quello prima, e la coda si toglie.
+  const RX_TAIL = /^[A-Z_]{0,23}\d{0,7}\]/;
+  function orphan(t) {
+    const m = RX_TAIL.exec(t.data);
+    if (!m || m[0].length < 2 || untouchable(t)) return false;
+    const block = blockOf(t);
+    if (!block) return false;
+    const w = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    w.currentNode = t;
+    let before = w.previousNode();
+    for (let i = 0; before && !before.data && i < 3; i++) before = w.previousNode();
+    if (!before || !before.data) return false;
+    for (const [s, v] of well_known) {
+      if (v.value && s.endsWith(m[0]) && before.data.endsWith(v.value)) { t.data = t.data.slice(m[0].length); return true; }
+    }
+    return false;
+  }
+
   function aChunk(t) {
     if (t.data.includes('[')) { queue.add(t); return; }
+    if (t.data.includes(']') && orphan(t)) return;
     if (t.data.length > 40 || !/[\]_\d]/.test(t.data)) return;
     const block = blockOf(t);   // puo' essere la chiusura di un segnaposto spezzato: si riesamina il pezzo che lo apre
     if (!block) return;
@@ -364,6 +410,78 @@
       waiting.clear();
     }
   }
+
+  // ---------------------------------------------------------------- valori veri nei campi dell'app e negli appunti
+  // La bozza di un'email (oggetto e corpo) sta in campi di testo che l'app tiene nella sua memoria: da li' prendono «Copia»
+  // e «Invia tramite...». Il valore vero va quindi rimesso NEL CAMPO, dicendolo all'app come se lo avesse scritto chi usa
+  // il computer. Solo nei campi che il programma indica per quel servizio (fields), mai nella casella dei messaggi; e solo
+  // quando il campo ha smesso di cambiare (la risposta arriva a pezzi) e si puo' modificare.
+  const steady = new WeakMap();
+  /** Il testo con i valori veri al posto dei segnaposto conosciuti; quelli da chiedere finiscono in «missing». */
+  function real(text, missing) {
+    const stamp = Date.now();
+    return text.replace(RX, s => {
+      const v = well_known.get(s);
+      if (v && v.value !== null) return v.value;
+      if ((!v || stamp - v.when > 30000) && !asking.has(s)) missing.add(s);
+      return s;
+    });
+  }
+  function sweepFields() {
+    const f = (rules() || {}).fields;
+    if (!f || !observer) return;
+    let found;
+    try { found = document.querySelectorAll(f); } catch (e) { return; }
+    const missing = new Set(), stamp = Date.now();
+    for (const el of found) {
+      const v = el.value;
+      if (typeof v !== 'string' || !v.includes('[') || !RX_ONE.test(v)) continue;
+      const s = steady.get(el);
+      if (!s || s.value !== v) { steady.set(el, {value: v, since: stamp}); continue; }
+      if (stamp - s.since < 1200 || el.readOnly || el.inert || el.disabled) continue;
+      const fresh = real(v, missing);
+      if (fresh === v) continue;
+      const kind = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(kind, 'value').set.call(el, fresh);
+      el.dispatchEvent(new Event('input', {bubbles: true}));
+      steady.delete(el);
+    }
+    if (missing.size) fetchValues(missing);
+  }
+  if (topmost) setInterval(sweepFields, 700);
+
+  // «Copia»: i pulsanti delle app copiano dalla loro memoria, dove i segnaposto ci sono ancora. Dove questo codice gira nel
+  // mondo della pagina (MSP_PAGE_WORLD: lo mette il proxy, inpage.py) cio' che va negli appunti passa di qui e riprende i
+  // valori veri. Nell'estensione il mondo e' un altro, e questo non ha effetto.
+  async function realCopy(text) {
+    if (typeof text !== 'string' || !observer || !text.includes('[')) return text;
+    const missing = new Set();
+    real(text, missing);
+    if (missing.size) await Promise.race([fetchValues(missing), new Promise(ok => setTimeout(ok, 1500))]);
+    return real(text, new Set());
+  }
+  try {
+    const cb = globalThis.MSP_PAGE_WORLD && navigator.clipboard;
+    if (cb && cb.writeText) {
+      const writeText = cb.writeText, write = cb.write;
+      cb.writeText = async function (text) { let fresh = text; try { fresh = await realCopy(text); } catch (e) { /* si copia com'era */ } return writeText.call(this, fresh); };
+      if (write && typeof ClipboardItem === 'function') cb.write = async function (items) {
+        let fresh = items;
+        try {
+          fresh = [];
+          for (const item of items) {
+            const parts = {};
+            for (const type of item.types) {
+              const blob = await item.getType(type);
+              parts[type] = /^text\//.test(type) ? new Blob([await realCopy(await blob.text())], {type}) : blob;
+            }
+            fresh.push(new ClipboardItem(parts));
+          }
+        } catch (e) { fresh = items; }
+        return write.call(this, fresh);
+      };
+    }
+  } catch (e) { /* appunti non disponibili: resta la copia com'era */ }
 
   // ---------------------------------------------------------------- barriera sulla casella di scrittura
   // Alcune app desktop non mandano il messaggio come richiesta della finestra: lo consegnano al proprio processo
@@ -496,11 +614,11 @@
   }
 
   if (BOX) {
-    window.addEventListener('focusin', ev => { const el = boxOf(ev.target); if (el) latestBox = el; }, true);
+    window.addEventListener('focusin', ev => { const el = boxOf(ev.target); if (el && !isField(el)) latestBox = el; }, true);
     window.addEventListener('keydown', ev => {
       if (ev.key !== 'Enter' || ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey || ev.isComposing || !ev.isTrusted || !activeBox()) return;
       const el = boxOf(ev.target);
-      if (!el) return;
+      if (!el || isField(el)) return;   // un campo dell'app, non la casella dei messaggi: li' Invio va a capo
       const text = read(el);
       if (!flat(text) || alreadyApproved(el, text)) return;
       ev.preventDefault();
@@ -515,7 +633,7 @@
       // la casella giusta: l'ultima in cui si e' scritto, altrimenti la piu' vicina al pulsante che contiene del testo
       let el = latestBox && latestBox.isConnected && flat(read(latestBox)) ? latestBox : null;
       for (let n = b.parentElement, i = 0; n && i < 8 && !el; n = n.parentElement, i++) {
-        el = [...n.querySelectorAll('textarea, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]')].find(x => flat(read(x))) || null;
+        el = [...n.querySelectorAll('textarea, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]')].find(x => flat(read(x)) && !isField(x)) || null;
       }
       if (!el) return;
       const text = read(el);
