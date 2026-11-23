@@ -170,8 +170,10 @@ I pesi si scaricano da Hugging Face con `model/download_model.py`; non stanno in
 >
 > Le istruzioni che l'agente segue sono in [INSTALL-FOR-AGENTS.md](INSTALL-FOR-AGENTS.md), in inglese.
 
-**Requisiti:** Windows 10 (versione 2004 o successiva) o Windows 11 a 64 bit su processore Intel o AMD, 4 core,
-8 GB di memoria (16 GB per `omissis-base`), 1 GB di disco. Non serve una scheda video. Il programma parte con
+**Requisiti:** un computer a 64 bit con 4 core, 8 GB di memoria (16 GB per `omissis-base`) e 1 GB di disco.
+Windows 10 (versione 2004 o successiva) o Windows 11, su processore Intel o AMD; in versione di prova anche Mac con
+processore Apple e Linux x86 (Ubuntu 22.04, Debian 12, Fedora 36 o più recenti). Non serve una scheda video. Il
+programma parte con
 `omissis-light`: 124 MB da scaricare al primo avvio, qualità misurata quasi uguale a `omissis-small`, più veloce e
 con meno memoria. Gli altri due modelli si scelgono nelle impostazioni (i dettagli nella
 [guida](app/README.it.md)).

@@ -1012,7 +1012,7 @@ Nella sezione Attività (o in `data\activity.jsonl`):
 
 | | Minimo | Consigliato |
 |---|---|---|
-| Sistema | Windows 10 (versione 2004 o successiva) o Windows 11, a 64 bit su processore Intel o AMD | uguale |
+| Sistema | Windows 10 (versione 2004 o successiva) o Windows 11, a 64 bit su processore Intel o AMD. In versione di prova: Mac con processore Apple, Linux a 64 bit su processore Intel o AMD | uguale |
 | Processore | 4 core | 6 core o più, di generazione recente |
 | Memoria | 8 GB, con il modello piccolo | 16 GB, necessari per il modello grande |
 | Disco | 1 GB con il modello piccolo | 2 GB con il modello grande |

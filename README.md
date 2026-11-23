@@ -171,8 +171,10 @@ repository.
 >
 > The instructions the agent follows are in [INSTALL-FOR-AGENTS.md](INSTALL-FOR-AGENTS.md).
 
-**Requirements:** 64-bit Windows 10 (version 2004 or later) or Windows 11 on an Intel or AMD processor, 4 cores,
-8 GB of memory (16 GB for `omissis-base`), 1 GB of disk. No graphics card needed. The program starts with
+**Requirements:** a 64-bit computer with 4 cores, 8 GB of memory (16 GB for `omissis-base`) and 1 GB of disk.
+Windows 10 (version 2004 or later) or Windows 11, on an Intel or AMD processor; as preview builds also Macs with
+Apple silicon and x86 Linux (Ubuntu 22.04, Debian 12, Fedora 36 or newer). No graphics card needed. The program
+starts with
 `omissis-light`: 124 MB to download on first start, almost the same measured quality as `omissis-small`, faster and
 with less memory. The other two models can be chosen in the settings.
 
