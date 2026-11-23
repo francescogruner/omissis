@@ -308,6 +308,10 @@ def report(name, since):
     kinds = {kind(e) for e in done} - {None}
     refused = []
     for e in failed:
+        # «connection closed early»: chi chiama ha chiuso prima ancora che il proxy gli mostrasse il certificato. Non lo ha
+        # visto, quindi non puo' averlo rifiutato (mitmproxy stesso non lo segna tra le strette di mano fallite)
+        if "connection closed early" in e["error"]:
+            continue
         dropped = "disconnected during the handshake" in e["error"]
         same = kind(e) in kinds
         # su Windows chi non si fida chiude senza dirlo, come chi abbandona: fa fede il tipo. Solo Chromium, che ha una
