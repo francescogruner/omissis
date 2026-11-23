@@ -1136,7 +1136,8 @@ servizio locale, mascheratura con il motore del pacchetto, passaggio da 0.1.0 a 
 riapertura automatica e dati intatti, disinstallazione pulita. **Non ancora provato**: un PC appena
 installato (senza altre librerie di sistema), lo scaricamento dalla pagina vera del modello, un
 aggiornamento dalla pagina vera delle versioni.
-Senza firma del codice, Windows mostra l'avviso di SmartScreen al primo avvio dell'installer.
+Senza firma del codice, Windows mostra l'avviso di SmartScreen al primo avvio dell'installer: è la
+finestra blu «PC protetto da Windows», e si prosegue con «Ulteriori informazioni» e poi «Esegui comunque».
 
 **Sul Mac** non c'è un installer. L'app (`Omissis.app`) porta con sé interprete e librerie, i dati
 stanno in `~/Library/Application Support/Omissis`, e ciò che su Windows fa l'installer lo fa il

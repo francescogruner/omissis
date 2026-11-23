@@ -180,7 +180,18 @@ con meno memoria. Gli altri due modelli si scelgono nelle impostazioni (i dettag
 [versioni](https://github.com/francescogruner/omissis/releases/latest) si scarica `Omissis-<versione>-setup.exe`.
 Non serve Python e non servono diritti di amministratore. Al primo avvio il programma scarica il modello (una volta
 sola) e da lì in poi lavora senza rete; gli aggiornamenti arrivano da soli e vengono accettati solo se firmati
-dall'autore. L'installer non ha ancora una firma del codice: Windows mostra l'avviso di SmartScreen.
+dall'autore. L'installer non ha ancora una firma del codice: Windows mostra l'avviso di SmartScreen, la finestra
+blu «PC protetto da Windows». Si prosegue con «Ulteriori informazioni» e poi «Esegui comunque».
+
+**⌨️ Con un comando** (lo stesso installer, senza la finestra blu): nel Terminale di Windows
+
+```powershell
+irm https://omissis.eu/install.ps1 | iex
+```
+
+Lo script ([packaging/windows/install.ps1](packaging/windows/install.ps1)) scarica l'installer dalla pagina delle
+versioni, controlla che dimensione e impronta SHA-256 siano quelle pubblicate e lo avvia. L'avviso di SmartScreen
+scatta sui file che il browser segna come scaricati da Internet: per questa strada il segno non c'è.
 
 **🛠️ Dai sorgenti** (per chi vuole leggere o modificare il codice): serve Python 3.12; programma e modello usano
 due ambienti separati.

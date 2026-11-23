@@ -180,7 +180,17 @@ with less memory. The other two models can be chosen in the settings.
 [releases page](https://github.com/francescogruner/omissis/releases/latest). No Python and no administrator rights
 needed. On first start the program downloads the model (once), then works offline; updates arrive on their own and
 are accepted only if signed by the author. The installer is not code-signed yet, so Windows shows the SmartScreen
-warning.
+warning, the blue “Windows protected your PC” window: click “More info”, then “Run anyway”.
+
+**⌨️ With one command** (the same installer, without the blue window): in Windows Terminal
+
+```powershell
+irm https://omissis.eu/install.ps1 | iex
+```
+
+The script ([packaging/windows/install.ps1](packaging/windows/install.ps1)) downloads the installer from the
+releases page, checks that size and SHA-256 are the published ones and runs it. The SmartScreen warning is
+triggered by files a browser marks as downloaded from the Internet: this way the mark is not there.
 
 **🛠️ From source** (if you want to read or change the code). Requires Python 3.12; the app and the model use two
 separate environments.

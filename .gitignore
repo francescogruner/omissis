@@ -22,3 +22,6 @@ model/data/
 
 # costruzione dell'app per Mac (packaging/mac/build_mac.py)
 dist/
+
+# costruzione dell'installer per Windows (packaging/windows/build_windows.py)
+build/

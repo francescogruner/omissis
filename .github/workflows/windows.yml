@@ -1,0 +1,45 @@
+name: Installer per Windows
+
+# Costruisce l'installer di Omissis per Windows su un Windows di GitHub, dal codice di questo repository, e lo prova su
+# quella macchina pulita (packaging/windows/ci_windows.ps1): lo installa con il comando di installazione, controlla che
+# il programma installato carichi librerie e codice, lo disinstalla. L'installer resta tra i risultati della
+# costruzione: non viene pubblicato. Parte solo a mano. Il foglio degli aggiornamenti e la sua firma li scrive chi
+# pubblica, sul suo computer, dove sta la chiave delle firme.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versione (solo numeri e punti, per esempio 0.1.8)
+        required: true
+        default: 0.1.8
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inno Setup e Pillow
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+          python -m pip install --quiet --disable-pip-version-check pillow
+      - name: Costruzione e prove
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./packaging/windows/ci_windows.ps1 -Version $env:VERSION
+      - name: Installer
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: omissis-windows-setup
+          path: dist/Omissis-*-setup.exe
+          if-no-files-found: warn
+          retention-days: 14
