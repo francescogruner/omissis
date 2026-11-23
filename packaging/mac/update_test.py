@@ -154,6 +154,15 @@ def result(data):
         return ""
 
 
+def settled(data, app, seconds=45):
+    """Aspetta che chi ha fatto lo scambio abbia finito: prima toglie la versione di prima (centinaia di megabyte: su una
+    macchina carica ci vuole qualche secondo), poi scrive l'esito. Senza quest'attesa la prova guardava troppo presto."""
+    end = time.time() + seconds
+    while time.time() < end and (not result(data) or leftovers(app)):
+        time.sleep(0.5)
+    time.sleep(0.5)
+
+
 # ------------------------------------------------------------------ versioni finte e pacchetti
 
 def copy_app(origin, destination):
@@ -258,7 +267,7 @@ def part_update(ctx):
     r = call("/api/updates", {"action": "install"})
     s = wait_panel(150, version=v1, gone_first=True)
     took = time.time() - began
-    time.sleep(3)   # chi ha fatto lo scambio scrive l'esito appena vede partita la versione nuova
+    settled(data, app)   # chi ha fatto lo scambio scrive l'esito dopo aver visto partire la versione nuova
     mark(f"«Installa ora»: l'app si chiude, viene sostituita e si riapre da sola con la versione {v1}", bool(s) and result(data) == f"ok {v1}" and not r.get("refused"),
           f"{took:.0f} s · esito «{result(data)}» · {r.get('refused', '')}")
     mark("della versione di prima non resta nulla, e i dati di chi usa il Mac sono gli stessi", not leftovers(app) and call("/api/settings").get("theme") == "dark", str(leftovers(app)))
@@ -310,7 +319,7 @@ def part_auto(ctx):
     began = time.time()
     start(app, env_for(data), WORK / "panel.log")
     s = wait_panel(150, version=v3)
-    time.sleep(3)
+    settled(data, app)
     mark(f"al successivo avvio la versione {v3} viene installata da sola, e il programma si riapre", bool(s) and result(data) == f"ok {v3}" and not leftovers(app),
           f"{time.time() - began:.0f} s · esito «{result(data)}»")
 
