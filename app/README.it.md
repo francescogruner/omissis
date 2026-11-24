@@ -849,7 +849,9 @@ rimuove a prova finita. Poi si chiude l'app e la si riavvia facendola passare da
 & "C:\Program Files\WindowsApps\Claude_5.1231.2.0_x64__pzs8sxrjxfjjc\app\Claude.exe" --proxy-server=http://127.0.0.1:8080
 ```
 
-(il percorso cambia a ogni aggiornamento dell'app). Finché il certificato è installato, chi
+(il percorso cambia a ogni aggiornamento dell'app; la porta è quella del proxy di Omissis, scritta in
+Collegamenti → Proxy: di serie la 8080, ma se all'avvio un altro programma la sta usando Omissis ne
+prende da solo una libera e lo dice nella pagina iniziale). Finché il certificato è installato, chi
 possiede la chiave privata in `data\ca` può leggere il traffico HTTPS di questo utente: la cartella
 non va copiata né condivisa.
 

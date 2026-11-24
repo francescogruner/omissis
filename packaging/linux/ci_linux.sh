@@ -7,7 +7,7 @@
 # Con la cartella dei pesi il modello non viene scaricato (540 MB) e la prova di Linux accende anche la protezione.
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-VERSION="${1:?versione (per esempio 0.1.10)}"
+VERSION="${1:?versione (per esempio 0.1.11)}"
 MODEL="${2:-}"
 cd "$ROOT"
 failed=0

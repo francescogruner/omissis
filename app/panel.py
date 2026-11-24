@@ -99,6 +99,74 @@ def opened_port(port):
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def free_port(port):
+    """La porta e' libera su questo PC: nessuno risponde e la si puo' prendere. Chi risponde va guardato per primo: su
+    Windows un programma che ascolta su tutte le interfacce lascia prendere la stessa porta su 127.0.0.1, e il proxy
+    partirebbe portandogli via il traffico."""
+    if opened_port(port):
+        return False
+    with socket.socket() as s:
+        if os.name != "nt":   # come fa il proxy: una porta appena lasciata si riprende subito
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def spare_ports():
+    """Le porte di riserva del proxy, per quando quella scelta e' occupata: venti porte poco usate, cento sopra quelle di
+    Omissis (con le porte di serie, da 8865 a 8884)."""
+    return range(ENGINE_PORT + 100, ENGINE_PORT + 120)
+
+
+class Output:
+    """Le ultime righe di errore scritte da un processo, tenute solo in memoria finche' il programma e' acceso: servono a
+    capire perche' si e' chiuso. Non vanno su disco e non escono mai cosi' come sono: vedi closed_for."""
+
+    def __init__(self, stream):
+        self.lines = collections.deque(maxlen=40)
+        threading.Thread(target=self._read, args=(stream,), daemon=True).start()
+
+    def _read(self, stream):
+        try:
+            for raw in stream:
+                self.lines.append(raw.decode("utf-8", "replace").strip())
+        except (OSError, ValueError):   # il processo e' stato chiuso
+            pass
+
+
+_ERROR_KIND = re.compile(r"(?:[A-Za-z_]\w*\.)*(_?[A-Z]\w{0,40}?(?:Error|Exception))(?=:|$)")
+_ERROR_CODE = re.compile(r"\[(errno|winerror) (-?\d{1,6})\]", re.I)
+
+
+def closed_for(process):
+    """Perche' un processo si e' chiuso, per quanto si puo' dire senza riportare cio' che ha scritto: (codice di uscita,
+    [tipi di errore di Python a inizio riga e codici di sistema come «[Errno 10048]»]). Mai il testo dei messaggi."""
+    code = process.poll() if process is not None else None
+    if code is not None:
+        time.sleep(0.2)   # il tempo di leggere le sue ultime righe
+    if isinstance(code, int) and code > 0xFFFF:   # su Windows i guasti gravi hanno codici che si leggono in esadecimale
+        code = f"0x{code:08X}"
+    kinds = []
+    for line in list(getattr(getattr(process, "output", None), "lines", ())):
+        found = _ERROR_KIND.match(line)
+        codes = [f"[{'WinError' if k.lower() == 'winerror' else 'Errno'} {n}]" for k, n in _ERROR_CODE.findall(line)]
+        for kind in ([found.group(1)] if found else []) + codes:
+            if kind not in kinds:
+                kinds.append(kind)
+    return code, kinds[-4:]
+
+
+class Failure(RuntimeError):
+    """Un avvio non riuscito: il testo per chi usa il programma e, a parte, il motivo in breve per la segnalazione."""
+
+    def __init__(self, text, cause=""):
+        super().__init__(text)
+        self.cause = cause
+
+
 def engine(path, data=None, timeout=60):
     token = (DATA / "token.txt").read_text(encoding="utf-8").strip()
     req = urllib.request.Request(f"http://127.0.0.1:{ENGINE_PORT}{path}", headers={"X-Token": token, "Content-Type": "application/json"},
@@ -149,17 +217,72 @@ class Supervisor:
         self.engine = self.proxy = self.gateway = None
         self.gateway_error = ""
         self.test, self.phase, self.error = test, "stop", ""
+        self.cause = ""           # perche' la protezione e' in errore, in breve e senza testi: finisce nella segnalazione
+        self.port_moved = None    # {"from", "to"}: la porta scelta per il proxy era occupata e ne e' stata presa un'altra
+        self.proxy_port = 0       # la porta su cui il proxy e' partito l'ultima volta
+        self.recovered = 0.0      # quando la protezione e' ripartita da sola l'ultima volta (vedi status)
         self.lock = threading.Lock()
         self.launched_with = None
 
     def _alive(self, p):
         return p is not None and p.poll() is None
 
+    def _start(self, command, env):
+        """Avvia uno dei due processi tenendo in memoria le sue ultime righe di errore (vedi Output). Cio' che scrive di
+        solito continua a non andare da nessuna parte: cosi' non dipende mai da chi lo ha avviato."""
+        p = subprocess.Popen(command, env=env, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=NO_WINDOW)
+        p.output = Output(p.stderr)
+        return p
+
+    @staticmethod
+    def _port_lost(port):
+        """Il proxy si e' chiuso e la sua porta non e' libera: l'ha presa un altro programma, o il sistema non la da'.
+        Si aspetta un attimo, perche' chiudendosi il proxy puo' tenerla ancora per qualche istante."""
+        for _ in range(10):
+            if free_port(port):
+                return False
+            time.sleep(0.2)
+        return True
+
+    def _stop_proxy(self):
+        """Ferma il proxy e aspetta che la sua porta sia libera: il programma lanciato puo' averne un altro sotto, che la
+        lascia un attimo dopo. Senza aspettare, un riavvio troverebbe occupata la propria porta e ne cercherebbe un'altra."""
+        was_alive = self._alive(self.proxy)
+        self._stop(self.proxy)
+        if was_alive and self.proxy_port:
+            for _ in range(25):
+                if not opened_port(self.proxy_port):
+                    break
+                time.sleep(0.2)
+
+    @staticmethod
+    def _details(which, process):
+        """Per un processo che si e' chiuso: (la frase da aggiungere al messaggio, il motivo in breve per la segnalazione)."""
+        code, kinds = closed_for(process)
+        return (i18n.t("program.closed.details", code=code, kinds="".join(" · " + k for k in kinds)),
+                " ".join([which, "exit", str(code), *kinds]))
+
+    @staticmethod
+    def _proxy_port(wanted, skip):
+        """La porta su cui far partire il proxy: quella scelta se e' libera, altrimenti la prima libera tra quelle di
+        riserva (e, se sono tutte prese, una qualunque che il sistema da' per libera). Una porta stabilita da chi
+        amministra il PC non si cambia: se e' occupata lo si dice."""
+        if wanted not in skip and free_port(wanted):
+            return wanted
+        if "port" in settings.locked()["keys"]:
+            raise Failure(i18n.t("program.proxy_port_locked", port=wanted), f"proxy port {wanted} busy, imposed")
+        for port in spare_ports():
+            if port != wanted and port not in skip and free_port(port):
+                return port
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
     def launch(self):
         with self.lock:
             if self.phase in ("startup", "model"):
                 return
-            self.phase, self.error = "startup", ""
+            self.phase, self.error, self.cause = "startup", "", ""
         threading.Thread(target=self._launch, daemon=True).start()
 
     def _launch(self):
@@ -186,33 +309,48 @@ class Supervisor:
                 command = [str(PY_MODEL), str(HERE / "engine.py"), "--model", model, "--port", str(ENGINE_PORT)]
                 if cfg["device"] in ("cpu", "cuda"):
                     command += ["--device", cfg["device"]]
-                self.engine = subprocess.Popen(command, env=env, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                               creationflags=NO_WINDOW)
+                self.engine = self._start(command, env)
                 for _ in range(180):
                     if not self._alive(self.engine):
-                        raise RuntimeError(i18n.t("program.engine_closed"))
+                        details, cause = self._details("engine", self.engine)
+                        raise Failure(i18n.t("program.engine_closed") + " " + details, cause)
                     try:
                         engine("/status", timeout=2)
                         break
                     except Exception:   # noqa: BLE001
                         time.sleep(1)
                 else:
-                    raise RuntimeError(i18n.t("program.engine_silent"))
-            self._stop(self.proxy)
-            command = [*paths.mitmdump(), "-q", "-s", str(HERE / "addon.py"), "--listen-host", "127.0.0.1",
-                       "-p", str(cfg["port"]), "--set", f"confdir={DATA / 'ca'}"]
-            for h in catalog.expressions_host(settings.guarded(cfg)):
-                command += ["--allow-hosts", h]
-            if self.test and os.environ.get("OMISSIS_TEST_ADDON"):   # solo nelle prove: un addon in piu', che annota che cosa passa
-                command += ["-s", os.environ["OMISSIS_TEST_ADDON"]]
-            self.proxy = subprocess.Popen(command, env=env, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                          creationflags=NO_WINDOW)
-            for _ in range(40):
-                if opened_port(cfg["port"]):
+                    raise Failure(i18n.t("program.engine_silent"), "engine silent")
+            self._stop_proxy()
+            # Il proxy parte sulla porta scelta. Se un altro programma la sta gia' usando ne prende da solo una libera: prima
+            # di lanciarlo, e di nuovo se nel frattempo qualcuno gliel'ha portata via
+            wanted, skip = cfg["port"], []
+            for attempt in range(3):
+                port = self._proxy_port(wanted, skip)
+                command = [*paths.mitmdump(), "-q", "-s", str(HERE / "addon.py"), "--listen-host", "127.0.0.1",
+                           "-p", str(port), "--set", f"confdir={DATA / 'ca'}"]
+                for h in catalog.expressions_host(settings.guarded(cfg)):
+                    command += ["--allow-hosts", h]
+                if self.test and os.environ.get("OMISSIS_TEST_ADDON"):   # solo nelle prove: un addon in piu', che annota che cosa passa
+                    command += ["-s", os.environ["OMISSIS_TEST_ADDON"]]
+                self.proxy = self._start(command, env)
+                for _ in range(40):
+                    if opened_port(port) or not self._alive(self.proxy):
+                        break
+                    time.sleep(0.5)
+                time.sleep(0.3)   # la porta puo' rispondere per conto di un altro programma arrivato un attimo prima: conta che il proxy sia vivo
+                if self._alive(self.proxy):
+                    self.proxy_port = port
                     break
-                if not self._alive(self.proxy):
-                    raise RuntimeError(i18n.t("program.proxy_not_starting", port=cfg["port"]))
-                time.sleep(0.5)
+                if attempt == 2 or not self._port_lost(port):   # non e' la porta: inutile cambiarla
+                    details, cause = self._details("proxy", self.proxy)
+                    raise Failure(i18n.t("program.proxy_closed") + " " + details, cause)
+                skip.append(port)
+            if port != wanted:   # da ora la porta scelta e' questa: la usano anche il file PAC e le finestre protette
+                cfg = settings.write({**settings.read(), "port": port})
+                self.port_moved = {"from": wanted, "to": port}
+                if NOTIFY is not None and not self.test:
+                    NOTIFY(i18n.t("start.port_moved", **self.port_moved))
             self.launched_with = (self._engine_choices(cfg), cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
             if self.gateway is None:   # per gli strumenti da terminale; se la porta e' occupata il resto funziona lo stesso
                 try:
@@ -225,6 +363,8 @@ class Supervisor:
             self.phase = "stop"
         except Exception as ex:   # noqa: BLE001
             self._stop(self.proxy)
+            code = f"[WinError {ex.winerror}]" if getattr(ex, "winerror", None) else f"[Errno {ex.errno}]" if getattr(ex, "errno", None) else ""
+            self.cause = getattr(ex, "cause", "") or " ".join(x for x in ("launch", type(ex).__name__, code) if x)
             self.phase, self.error = "error", str(ex)
 
     @staticmethod
@@ -247,7 +387,7 @@ class Supervisor:
         if self.gateway is not None:
             self.gateway.stop()
             self.gateway = None
-        self._stop(self.proxy)
+        self._stop_proxy()
         self._stop(self.engine)
         self.proxy = self.engine = self.launched_with = None
         self.phase = "stop"
@@ -261,7 +401,14 @@ class Supervisor:
 
     def status(self):
         if self.phase == "active" and not (self._alive(self.engine) and self._alive(self.proxy)):
-            self.phase, self.error = "error", i18n.t("program.process_closed")
+            which, process = ("engine", self.engine) if not self._alive(self.engine) else ("proxy", self.proxy)
+            details, self.cause = self._details(which, process)
+            self.phase, self.error = "error", i18n.t(f"program.closed.{which}") + " " + details
+            # Il proxy non e' riuscito a prendere la porta: un altro programma e' arrivato un attimo prima di lui. La
+            # protezione riparte da sola, e l'avvio sceglie un'altra porta. Al piu' una volta ogni cinque minuti
+            if which == "proxy" and self.proxy_port and time.time() - self.recovered > 300 and self._port_lost(self.proxy_port):
+                self.recovered = time.time()
+                self.launch()
         info = {}
         if self._alive(self.engine) and self.phase == "active":
             try:
@@ -275,6 +422,7 @@ class Supervisor:
                 "light": light_status(),   # il modello leggero da proporre a chi usa omissis-small, e a che punto e' il passaggio
                 "model": Path(info["model"]).name if info.get("model") else None, "device": info.get("device"),
                 "threshold": info.get("threshold"), "entries": info.get("entries"), "port": settings.read()["port"],
+                "port_moved": self.port_moved,   # la porta del proxy era occupata e ne e' stata presa un'altra: la pagina iniziale lo dice
                 "groups_off": settings.reduced(),   # gruppi accesi di serie e spenti a mano: la pagina iniziale lo dice
                 "always_on": settings.read()["always_on"]}   # la protezione non si puo' fermare: la pagina tiene fermo il pulsante
 
@@ -1138,7 +1286,9 @@ class Handler(BaseHTTPRequestHandler):
                                      "verified_ones": [{**v, "name": names.get(v.get("service"), v.get("service"))} for v in verified_ones.get("entries", [])],
                                      "updated": verified_ones.get("updated", ""), "report": True})
             elif u.path == "/api/report":   # la segnalazione di un problema: il testo che si vede, e che parte solo se lo si invia
-                self._respond(200, report.build(q.get("what", ""), SUP.phase, SUP.status().get("model") or ""))
+                now = SUP.status()
+                phase = now["phase"] + (f" ({SUP.cause})" if now["phase"] == "error" and SUP.cause else "")
+                self._respond(200, report.build(q.get("what", ""), phase, now.get("model") or ""))
             elif u.path == "/api/languages":
                 self._respond(200, {"choice": i18n.choice(), "active": i18n.active(), "available": i18n.available()})
             elif u.path == "/api/status":
@@ -1247,6 +1397,8 @@ class Handler(BaseHTTPRequestHandler):
                     changes.update({k: list(v) for k, v in settings.PROFILES[data["profile"]].items()})
                 guard(*changes, changes=changes)
                 new_ones = {k: v for k, v in settings.write({**settings.read(), **changes}).items() if k not in ("console_key", "engine_key")}
+                if "port" in changes:
+                    SUP.port_moved = None
                 if "shortcuts" in data and SHORTCUTS is not None:
                     SHORTCUTS.configure(clipboard.choices(new_ones))
                 if "categories" in changes:   # il motore rilegge quali categorie in piu' sostituire

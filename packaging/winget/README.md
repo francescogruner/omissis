@@ -12,8 +12,8 @@ manifest of Omissis.
   texts are in English and Italian.
 
   ```powershell
-  python packaging\winget\make_manifest.py --version 0.1.10
-  winget validate --manifest build\winget\manifests\f\FrancescoGruner\Omissis\0.1.10
+  python packaging\winget\make_manifest.py --version 0.1.11
+  winget validate --manifest build\winget\manifests\f\FrancescoGruner\Omissis\0.1.11
   ```
 
 - [`ci_winget.ps1`](ci_winget.ps1) tests it on a clean Windows (the "Scheda per winget" workflow, started by hand):

@@ -234,6 +234,7 @@ DRAW.start = el => {
     </div></div></section>
     <div id="reduced"></div>
     <div id="remoteDown"></div>
+    <div id="portMoved"></div>
     <div id="update"></div>
     <div id="asks"></div>
     <div class="badges">${["text", "documents", "guide"].map(v => `<a class="badge" href="#/${v}">${icon(v)}<b>${esc(t(`start.badge.${v}`))}</b><span>${esc(t(`start.badge.${v}.below`))}</span></a>`).join("")}</div>
@@ -291,6 +292,12 @@ REFRESH.start = s => {
   if ($("#reduced").dataset.off !== off) {
     $("#reduced").dataset.off = off;
     $("#reduced").innerHTML = off ? `<div class="note warning"><span class="space">${esc(t("groups.reduced", {listing: off}))}</span><a class="button" href="#/settings/recognition">${esc(t("groups.reduced.change"))}</a></div>` : "";
+  }
+  // la porta scelta per il proxy era occupata e Omissis ne ha presa un'altra: va detto, perché chi l'aveva scritta a mano in un programma deve cambiarla
+  const moved = s.port_moved ? `${s.port_moved.from}>${s.port_moved.to}` : "";
+  if ($("#portMoved").dataset.moved !== moved) {
+    $("#portMoved").dataset.moved = moved;
+    $("#portMoved").innerHTML = moved ? `<div class="note"><span class="space">${esc(t("start.port_moved", s.port_moved))}</span></div>` : "";
   }
   // chi usa il modello di un server della rete deve sapere subito se quello non risponde: i suoi messaggi vengono fermati
   const down = s.remote && s.remote.ok === false ? s.remote.host || "" : null;

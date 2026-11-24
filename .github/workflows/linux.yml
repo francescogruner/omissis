@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Versione (solo numeri e punti, per esempio 0.1.10)
+        description: Versione (solo numeri e punti, per esempio 0.1.11)
         required: true
-        default: 0.1.10
+        default: 0.1.11
 
 permissions:
   contents: read
