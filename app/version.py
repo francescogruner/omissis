@@ -8,4 +8,7 @@
 # 0.1.11: se la porta del proxy è occupata da un altro programma, Omissis ne prende da solo una libera, la salva e lo
 # dice; quando un processo si chiude, il pannello dice quale e con che codice (panel.free_port, Supervisor._proxy_port,
 # closed_for).
-VERSION = "0.1.11"
+# 0.1.12: la protezione si tiene in piedi da sola. Il pannello sorveglia motore e proxy anche a pagina chiusa e fa
+# ripartire quello che cade (Supervisor.check); i due processi si chiudono con il pannello (sistema.tie) e quelli rimasti
+# da un avvio precedente vengono chiusi; i messaggi dicono quale programma usa una porta (sistema.port_owner).
+VERSION = "0.1.12"

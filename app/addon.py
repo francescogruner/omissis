@@ -33,9 +33,11 @@ import paths
 import activity
 import restore as R
 import inpage
+import sistema
 import wire
 from activity import shape, written
 
+sistema.follow_parent()   # avviato dal pannello, il proxy si chiude con lui: non resta mai acceso da solo a tenere la porta
 HERE = Path(__file__).resolve().parent
 ENGINE = os.environ.get("OMISSIS_ENGINE_URL", "http://127.0.0.1:8765")
 TEST = os.environ.get("OMISSIS_TEST") == "1"

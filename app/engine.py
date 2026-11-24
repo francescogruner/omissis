@@ -545,6 +545,7 @@ if __name__ == "__main__":
     ap.add_argument("--port", dest="port", type=int, default=8765)
     ap.add_argument("--device", default=None)
     a = ap.parse_args()
+    sistema.follow_parent()   # avviato dal pannello, si chiude con lui: non resta mai acceso da solo a tenere la porta
     sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
     DATA.mkdir(parents=True, exist_ok=True)
     f_token, f_extension = DATA / "token.txt", DATA / "token_extension.txt"

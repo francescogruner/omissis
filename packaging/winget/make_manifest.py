@@ -5,8 +5,8 @@ La scheda e' fatta di quattro file YAML nella forma che chiede l'archivio pubbli
 schema 1.28): la versione, l'installer, i testi in inglese (la lingua di base dell'archivio) e quelli in italiano.
 Finiscono in <out>/manifests/f/FrancescoGruner/Omissis/<versione>/, cioe' gia' nel posto che hanno nell'archivio.
 
-   python packaging/winget/make_manifest.py --version 0.1.11
-          [--installer dist/Omissis-0.1.11-setup.exe | --sha256 <impronta>] [--date 2026-11-23] [--out build/winget]
+   python packaging/winget/make_manifest.py --version 0.1.12
+          [--installer dist/Omissis-0.1.12-setup.exe | --sha256 <impronta>] [--date 2026-11-23] [--out build/winget]
 
 Senza --installer e senza --sha256 l'impronta e la data si leggono dalla versione pubblicata su GitHub (se GitHub non
 dice l'impronta, il file viene scaricato e misurato qui). L'identificativo che Windows da' al programma installato
@@ -207,7 +207,7 @@ def main():
     parser.add_argument("--out", default=str(ROOT / "build" / "winget"))
     a = parser.parse_args()
     if not re.fullmatch(r"\d+(\.\d+){1,3}", a.version):
-        sys.exit("la versione e' fatta di soli numeri e punti, per esempio 0.1.11")
+        sys.exit("la versione e' fatta di soli numeri e punti, per esempio 0.1.12")
     name = f"Omissis-{a.version}-setup.exe"
     sha256, date = a.sha256, a.date
     if a.installer:

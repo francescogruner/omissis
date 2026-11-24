@@ -12,6 +12,7 @@ pillow>=11
 lxml>=6
 pypdf>=7
 websocket-client>=1.9
+psutil>=6   # the processes this copy started, and which program holds a port
 zstandard>=0.22
 winrt-runtime
 winrt-Windows.Foundation

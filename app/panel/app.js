@@ -297,7 +297,8 @@ REFRESH.start = s => {
   const moved = s.port_moved ? `${s.port_moved.from}>${s.port_moved.to}` : "";
   if ($("#portMoved").dataset.moved !== moved) {
     $("#portMoved").dataset.moved = moved;
-    $("#portMoved").innerHTML = moved ? `<div class="note"><span class="space">${esc(t("start.port_moved", s.port_moved))}</span></div>` : "";
+    const who = moved && s.port_moved.by ? t("program.someone", {name: s.port_moved.by}) : t("program.another");
+    $("#portMoved").innerHTML = moved ? `<div class="note"><span class="space">${esc(t("start.port_moved", {...s.port_moved, who}))}</span></div>` : "";
   }
   // chi usa il modello di un server della rete deve sapere subito se quello non risponde: i suoi messaggi vengono fermati
   const down = s.remote && s.remote.ok === false ? s.remote.host || "" : null;

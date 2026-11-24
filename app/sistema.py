@@ -12,6 +12,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import threading
 import webbrowser
 from pathlib import Path
 
@@ -137,6 +138,147 @@ def app_window(address, size=(520, 720)):
                          stderr=subprocess.DEVNULL, **({} if WINDOWS else {"start_new_session": True}))
     else:
         webbrowser.open(address)
+
+
+# ------------------------------------------------------------------ i due processi del programma (motore e proxy)
+
+_following = []
+
+
+def tie():
+    """Per il pannello, prima di avviare uno dei suoi due processi (motore, proxy): un tubo che lo lega al pannello.
+    Torna (il capo che il pannello tiene aperto finche' vive e su cui non scrive mai, il capo da chiudere appena il
+    processo e' partito, gli argomenti in piu' per Popen, il valore di OMISSIS_PARENT per il processo). Il tubo e' a
+    parte, non l'ingresso standard: su Windows un processo fermo a leggere il proprio ingresso standard blocca i
+    programmi che a sua volta avvia."""
+    read, write = os.pipe()
+    if WINDOWS:
+        import msvcrt
+        handle = msvcrt.get_osfhandle(read)
+        os.set_handle_inheritable(handle, True)
+        return write, read, {"startupinfo": subprocess.STARTUPINFO(lpAttributeList={"handle_list": [handle]})}, str(handle)
+    return write, read, {"pass_fds": (read,)}, str(read)
+
+
+def follow_parent():
+    """Per i due processi che il pannello tiene accesi (motore e proxy): quando il pannello non c'e' piu', comunque sia
+    finito, si chiudono da soli invece di restare accesi a tenere le porte. Il pannello passa a ciascuno un capo di un
+    tubo (vedi tie) e sull'altro non scrive mai: la lettura finisce solo quando quel capo si chiude, cioe' quando il
+    pannello e' sparito. Vale solo se e' il pannello a chiederlo (OMISSIS_PARENT): lanciati a mano restano accesi."""
+    value = os.environ.pop("OMISSIS_PARENT", "")   # tolto: i programmi avviati da qui non devono ereditarlo
+    if not value.isdigit() or _following:
+        return False
+    try:
+        if WINDOWS:
+            import ctypes
+            import msvcrt
+            kind = ctypes.WinDLL("kernel32").GetFileType
+            kind.argtypes = [ctypes.c_void_p]
+            if kind(int(value)) != 3:   # FILE_TYPE_PIPE: qualunque altra cosa non e' il nostro tubo
+                return False
+            channel = msvcrt.open_osfhandle(int(value), os.O_RDONLY)
+        else:
+            import stat
+            channel = int(value)
+            if not stat.S_ISFIFO(os.fstat(channel).st_mode):
+                return False
+    except (OSError, ValueError):
+        return False
+
+    def wait():
+        try:
+            while os.read(channel, 1):
+                pass
+        except OSError:   # un tubo che non si riesce a leggere non dice nulla: si resta accesi
+            return
+        os._exit(0)
+
+    _following.append(threading.Thread(target=wait, daemon=True))
+    _following[0].start()
+    return True
+
+
+def _arguments(line):
+    """Una riga di comando di Windows divisa nei suoi argomenti, come la divide il sistema."""
+    import ctypes
+    from ctypes import wintypes
+    split, release = ctypes.WinDLL("shell32").CommandLineToArgvW, ctypes.WinDLL("kernel32").LocalFree
+    split.restype, split.argtypes = ctypes.POINTER(wintypes.LPWSTR), [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int)]
+    release.argtypes = [ctypes.c_void_p]
+    n = ctypes.c_int(0)
+    parts = split(line, ctypes.byref(n))
+    if not parts:
+        return []
+    try:
+        return [parts[i] for i in range(n.value)]
+    finally:
+        release(parts)
+
+
+def command_lines(fragment):
+    """[(numero, argomenti)] dei processi, escluso questo, la cui riga di comando contiene il testo (su Windows senza
+    badare a maiuscole e minuscole); gli argomenti sono quelli con cui il processo e' stato avviato, il programma per
+    primo. Serve a ritrovare i processi che questa copia aveva avviato. Dove non si riesce a guardare, un elenco vuoto."""
+    fragment, found = str(fragment), []
+    if not fragment.strip():
+        return []
+    try:
+        import psutil
+    except ImportError:   # una copia dai sorgenti senza psutil: su Windows lo si chiede a PowerShell
+        psutil = None
+    try:
+        if psutil is not None:
+            wanted = fragment.lower() if WINDOWS else fragment
+            for p in psutil.process_iter(["pid", "cmdline"]):
+                try:
+                    arguments = list(p.info["cmdline"] or [])
+                except (psutil.Error, KeyError):
+                    continue
+                text = " ".join(arguments)
+                if wanted in (text.lower() if WINDOWS else text):
+                    found.append((p.info["pid"], arguments))
+        elif WINDOWS:
+            script = ("[Console]::OutputEncoding = [Text.Encoding]::UTF8; Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and "
+                      "$_.CommandLine.IndexOf($env:OMISSIS_FIND, [StringComparison]::OrdinalIgnoreCase) -ge 0 } | "
+                      "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }")
+            out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, timeout=30,
+                                 stdin=subprocess.DEVNULL, creationflags=NO_WINDOW, env={**os.environ, "OMISSIS_FIND": fragment}).stdout
+            for line in out.decode("utf-8-sig", "replace").splitlines():
+                pid, _, text = line.partition("\t")
+                if pid.strip().isdigit():
+                    found.append((int(pid), _arguments(text)))
+    except Exception:   # noqa: BLE001  (non si riesce a guardare)
+        return []
+    return [(pid, arguments) for pid, arguments in found if pid != os.getpid()]
+
+
+def port_owner(port):
+    """Il nome del programma che ascolta su quella porta di questo computer; "" quando non si riesce a saperlo (un
+    processo di un altro utente, oppure manca psutil)."""
+    try:
+        import psutil
+    except ImportError:
+        return ""
+
+    def listening(connections):
+        return any(c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == port for c in connections)
+    try:
+        try:
+            for c in psutil.net_connections(kind="tcp"):
+                if c.pid and listening([c]):
+                    return psutil.Process(c.pid).name() or ""
+            return ""
+        except psutil.AccessDenied:   # macOS: l'elenco di tutto il sistema e' degli amministratori; si guardano i propri processi
+            pass
+        for p in psutil.process_iter(["name"]):
+            try:
+                if listening(p.net_connections(kind="tcp")):
+                    return p.info["name"] or ""
+            except psutil.Error:
+                continue
+    except Exception:   # noqa: BLE001
+        pass
+    return ""
 
 
 # ------------------------------------------------------------------ processi (fuori da Windows)

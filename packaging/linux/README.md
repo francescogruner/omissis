@@ -2,7 +2,7 @@
 
 **English** · [Italiano](#italiano)
 
-The Linux build is a **preview** (now version 0.1.11), on the [releases page](https://github.com/francescogruner/omissis/releases/latest) since 21 November 2026. It was built and tested automatically on Ubuntu 22.04 (a GitHub machine) and in Ubuntu 24.04 (inside Windows, with WSL). **Nobody has used it on a real Linux desktop yet**: what depends on the desktop (the icon, the entry in the applications menu, the start at sign-in, the keyring prompt) has been checked file by file, not by eye.
+The Linux build is a **preview** (now version 0.1.12), on the [releases page](https://github.com/francescogruner/omissis/releases/latest) since 21 November 2026. It was built and tested automatically on Ubuntu 22.04 (a GitHub machine) and in Ubuntu 24.04 (inside Windows, with WSL). **Nobody has used it on a real Linux desktop yet**: what depends on the desktop (the icon, the entry in the applications menu, the start at sign-in, the keyring prompt) has been checked file by file, not by eye.
 
 ## Installing
 
@@ -16,7 +16,7 @@ The command downloads the installer from the releases page and runs it. If you p
 
 ```
 sh install.sh                                     # downloads the latest version from the releases page
-sh install.sh Omissis-0.1.11-linux-x86_64.tar.gz   # installs an archive you already have, also without a network
+sh install.sh Omissis-0.1.12-linux-x86_64.tar.gz   # installs an archive you already have, also without a network
 ```
 
 What it does:
@@ -63,8 +63,8 @@ It needs a 64-bit distribution with glibc, at least as recent as the one the pac
 The package is not frozen. The archive contains one folder, `Omissis.app`, made like the Mac app and built by the same code (`packaging/mac/build_mac.py`): a complete Python (python-build-standalone), the libraries in `packaging/mac/requirements-mac.txt` and the code in `app/` and `model/`. The folder keeps the Mac name on purpose: installing, starting at sign-in and updating use on Linux the code already tested on the Mac (`app/macapp.py`). The model weights are downloaded at first start.
 
 ```
-python3 packaging/linux/build_linux.py --version 0.1.11 --smoke-test   # dist/Omissis.app and dist/Omissis-0.1.11-linux-x86_64.tar.gz
-bash packaging/linux/ci_linux.sh 0.1.11                                 # build and all the tests, as a normal user
+python3 packaging/linux/build_linux.py --version 0.1.12 --smoke-test   # dist/Omissis.app and dist/Omissis-0.1.12-linux-x86_64.tar.gz
+bash packaging/linux/ci_linux.sh 0.1.12                                 # build and all the tests, as a normal user
 ```
 
 The workflow `.github/workflows/linux.yml` does the same on a GitHub Ubuntu and keeps the archive as a build artifact. It starts only by hand and publishes nothing.
@@ -89,7 +89,7 @@ Not verified: any real Linux desktop (GNOME, KDE and the others), the icon, the 
 
 # Italiano
 
-La versione per Linux è una **versione di prova** (ora la 0.1.11), nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases/latest) dal 21 novembre 2026. È stata costruita e provata in automatico su Ubuntu 22.04 (una macchina di GitHub) e in Ubuntu 24.04 (dentro Windows, con WSL). **Nessuno l'ha ancora usato su un desktop Linux vero**: ciò che dipende dal desktop (l'icona, la voce nel menu delle applicazioni, l'avvio all'accesso, la richiesta del portachiavi) è stato controllato file per file, non a occhio.
+La versione per Linux è una **versione di prova** (ora la 0.1.12), nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases/latest) dal 21 novembre 2026. È stata costruita e provata in automatico su Ubuntu 22.04 (una macchina di GitHub) e in Ubuntu 24.04 (dentro Windows, con WSL). **Nessuno l'ha ancora usato su un desktop Linux vero**: ciò che dipende dal desktop (l'icona, la voce nel menu delle applicazioni, l'avvio all'accesso, la richiesta del portachiavi) è stato controllato file per file, non a occhio.
 
 ## Installazione
 
@@ -103,7 +103,7 @@ Il comando scarica l'installatore dalla pagina delle versioni e lo esegue. Se pr
 
 ```
 sh install.sh                                     # scarica l'ultima versione dalla pagina delle versioni
-sh install.sh Omissis-0.1.11-linux-x86_64.tar.gz   # installa un archivio che hai già, anche senza rete
+sh install.sh Omissis-0.1.12-linux-x86_64.tar.gz   # installa un archivio che hai già, anche senza rete
 ```
 
 Che cosa fa:
@@ -150,8 +150,8 @@ Serve una distribuzione a 64 bit con glibc, recente almeno quanto quella su cui 
 Il pacchetto non è «congelato». L'archivio contiene una cartella sola, `Omissis.app`, fatta come l'app del Mac e costruita dallo stesso codice (`packaging/mac/build_mac.py`): un Python completo (python-build-standalone), le librerie di `packaging/mac/requirements-mac.txt` e il codice di `app/` e `model/`. La cartella tiene il nome del Mac di proposito: installazione, avvio all'accesso e aggiornamenti usano su Linux il codice già provato sul Mac (`app/macapp.py`). I pesi del modello si scaricano al primo avvio.
 
 ```
-python3 packaging/linux/build_linux.py --version 0.1.11 --smoke-test   # dist/Omissis.app e dist/Omissis-0.1.11-linux-x86_64.tar.gz
-bash packaging/linux/ci_linux.sh 0.1.11                                 # costruzione e tutte le prove, da un utente normale
+python3 packaging/linux/build_linux.py --version 0.1.12 --smoke-test   # dist/Omissis.app e dist/Omissis-0.1.12-linux-x86_64.tar.gz
+bash packaging/linux/ci_linux.sh 0.1.12                                 # costruzione e tutte le prove, da un utente normale
 ```
 
 Il flusso `.github/workflows/linux.yml` fa lo stesso su un Ubuntu di GitHub e tiene l'archivio tra i risultati della costruzione. Parte solo a mano e non pubblica nulla.

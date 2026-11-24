@@ -64,6 +64,8 @@ PANEL_PORT, ENGINE_PORT = paths.PANEL_PORT, paths.ENGINE_PORT
 NO_WINDOW = sistema.NO_WINDOW   # niente finestra nera per i programmi avviati (solo Windows)
 CODE = secrets.token_urlsafe(24)
 PAGE = HERE / "panel"   # i file della pagina: index.html, style.css, app.js, icon.svg, locales\<codice>.json
+ENGINE_SCRIPT = HERE / "engine.py"   # il programma del motore (le prove ne mettono uno finto, che non carica un modello)
+RESTARTS, WINDOW = 3, 600   # un processo caduto a protezione accesa: quante volte si riparte da soli, e in quanti secondi
 STATIC = {"/style.css": "text/css; charset=utf-8", "/app.js": "text/javascript; charset=utf-8", "/icon.svg": "image/svg+xml",
           "/welcome.mp4": "video/mp4", "/welcome.jpg": "image/jpeg"}   # il video del primo avvio e la sua copertina
 RX_LANGUAGE = re.compile(r"/locales/[a-z]{2,3}(-[A-Za-z]{2,4})?\.json")
@@ -119,6 +121,39 @@ def spare_ports():
     """Le porte di riserva del proxy, per quando quella scelta e' occupata: venti porte poco usate, cento sopra quelle di
     Omissis (con le porte di serie, da 8865 a 8884)."""
     return range(ENGINE_PORT + 100, ENGINE_PORT + 120)
+
+
+def leftovers(kind):
+    """I processi di questa copia rimasti accesi da un avvio precedente, quando il pannello si e' chiuso senza poterli
+    fermare: il motore sulla nostra porta ("engine"), o il proxy che usa la nostra cartella dei dati ("proxy"). Si
+    riconoscono dagli argomenti con cui sono stati avviati, uguali a quelli che usa questa copia: il programma del motore
+    con la nostra porta, il proxy con il nostro addon e la nostra cartella. Quelli di un'altra copia non c'entrano, e
+    nemmeno un programma che questi percorsi li nomina soltanto (una finestra del terminale, un editor)."""
+    def same(a, b):
+        return os.path.normcase(os.path.normpath(str(a))) == os.path.normcase(os.path.normpath(str(b)))
+
+    def ours(a):
+        if kind == "engine":
+            return len(a) > 1 and same(a[1], ENGINE_SCRIPT) and any(x == "--port" and y == str(ENGINE_PORT) for x, y in zip(a, a[1:]))
+        return ("mitmdump" in " ".join(a[:3]).lower() and any(x == "-s" and same(y, HERE / "addon.py") for x, y in zip(a, a[1:]))
+                and any(x.startswith("confdir=") and same(x[8:], DATA / "ca") for x in a))
+    return [pid for pid, arguments in sistema.command_lines(ENGINE_SCRIPT if kind == "engine" else HERE / "addon.py") if ours(arguments)]
+
+
+def _by(name):
+    """Il nome di un programma dentro il motivo in breve di un errore (finisce nella segnalazione): lettere, cifre e pochi segni."""
+    return " by " + re.sub(r"[^\w.+-]", "_", name)[:40] if name else ""
+
+
+def close_leftovers(kind):
+    """Chiude i processi rimasti da un avvio precedente e dice quanti erano."""
+    pids = leftovers(kind)
+    for pid in pids:
+        try:
+            connector._kill(pid)
+        except Exception:   # noqa: BLE001  (chi chiama guarda se la porta si e' liberata)
+            pass
+    return len(pids)
 
 
 class Output:
@@ -220,19 +255,70 @@ class Supervisor:
         self.cause = ""           # perche' la protezione e' in errore, in breve e senza testi: finisce nella segnalazione
         self.port_moved = None    # {"from", "to"}: la porta scelta per il proxy era occupata e ne e' stata presa un'altra
         self.proxy_port = 0       # la porta su cui il proxy e' partito l'ultima volta
-        self.recovered = 0.0      # quando la protezione e' ripartita da sola l'ultima volta (vedi status)
-        self.lock = threading.Lock()
+        self.falls = collections.deque(maxlen=RESTARTS)   # quando la protezione e' ripartita da sola (vedi check)
+        self.events = collections.deque(maxlen=20)        # che cosa le e' successo, in breve e senza testi: per la segnalazione
+        self.lock, self.watching = threading.Lock(), threading.Lock()
         self.launched_with = None
 
     def _alive(self, p):
         return p is not None and p.poll() is None
 
+    def note(self, what):
+        """Annota un fatto della protezione: in memoria, in breve, senza testi. Lo si legge nella segnalazione."""
+        self.events.append((time.strftime("%H:%M:%S"), str(what)[:120]))
+
+    def summary(self):
+        """I fatti annotati, in una riga."""
+        return " · ".join(f"{stamp} {what}" for stamp, what in list(self.events))
+
+    @staticmethod
+    def _who(port):
+        """Chi sta usando una porta: (come dirlo nella lingua attiva, il nome del programma o "" se non si sa)."""
+        name = sistema.port_owner(port)[:60]
+        return (i18n.t("program.someone", name=name) if name else i18n.t("program.another")), name
+
     def _start(self, command, env):
         """Avvia uno dei due processi tenendo in memoria le sue ultime righe di errore (vedi Output). Cio' che scrive di
-        solito continua a non andare da nessuna parte: cosi' non dipende mai da chi lo ha avviato."""
-        p = subprocess.Popen(command, env=env, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=NO_WINDOW)
+        solito continua a non andare da nessuna parte: cosi' non dipende mai da chi lo ha avviato. In piu' riceve un capo
+        di un tubo su cui non si scrive mai (sistema.tie): quando questo programma sparisce, comunque sia finito, il tubo
+        si chiude e il processo si chiude da solo (sistema.follow_parent) invece di restare acceso a tenere la porta."""
+        keep, give, more, value = sistema.tie()
+        try:
+            p = subprocess.Popen(command, env={**env, "OMISSIS_PARENT": value}, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                 creationflags=NO_WINDOW, **more)
+        except BaseException:
+            os.close(keep)
+            raise
+        finally:
+            os.close(give)
+        p.tie = keep
         p.output = Output(p.stderr)
         return p
+
+    @staticmethod
+    def _wait_free(port, seconds):
+        """Aspetta, al piu' per quei secondi, che la porta sia libera."""
+        for _ in range(int(seconds * 5)):
+            if free_port(port):
+                return True
+            time.sleep(0.2)
+        return free_port(port)
+
+    def _engine_port(self, just_stopped):
+        """Prima di avviare il motore la sua porta dev'essere libera: se risponde gia' qualcuno, il motore nuovo non
+        riesce a prenderla e si chiude poco dopo, mentre l'altro risponde al posto suo. Di solito e' un motore di questa
+        copia rimasto acceso da un avvio precedente: viene chiuso. La porta del motore e' fissa (la conosce l'estensione
+        del browser): se la tiene un altro programma lo si dice. True se sono stati chiusi processi rimasti."""
+        if self._wait_free(ENGINE_PORT, 3 if just_stopped else 0):
+            return False
+        closed = close_leftovers("engine")
+        if closed:
+            self.note(f"leftover engine closed x{closed}")
+        if self._wait_free(ENGINE_PORT, 8 if closed else 2):   # anche senza trovarne: uno che si stava gia' chiudendo da solo
+            return bool(closed)
+        who, name = self._who(ENGINE_PORT)
+        raise Failure(i18n.t("program.engine_port_busy", port=ENGINE_PORT, who=who),
+                      "engine port busy" + _by(name) + (", leftover not closed" if closed else ""))
 
     @staticmethod
     def _port_lost(port):
@@ -270,7 +356,8 @@ class Supervisor:
         if wanted not in skip and free_port(wanted):
             return wanted
         if "port" in settings.locked()["keys"]:
-            raise Failure(i18n.t("program.proxy_port_locked", port=wanted), f"proxy port {wanted} busy, imposed")
+            who, name = Supervisor._who(wanted)
+            raise Failure(i18n.t("program.proxy_port_locked", port=wanted, who=who), f"proxy port {wanted} busy, imposed" + _by(name))
         for port in spare_ports():
             if port != wanted and port not in skip and free_port(port):
                 return port
@@ -278,14 +365,18 @@ class Supervisor:
             s.bind(("127.0.0.1", 0))
             return s.getsockname()[1]
 
-    def launch(self):
+    def launch(self, automatic=False):
+        """Avvia la protezione. automatic=True: e' la sorveglianza che la fa ripartire dopo un processo caduto (vedi check).
+        Chi la avvia a mano ricomincia da capo: il conto delle ripartenze vale solo per quelle fatte da sole."""
         with self.lock:
             if self.phase in ("startup", "model"):
                 return
+            if not automatic:
+                self.falls.clear()
             self.phase, self.error, self.cause = "startup", "", ""
-        threading.Thread(target=self._launch, daemon=True).start()
+        threading.Thread(target=self._launch, args=(automatic,), daemon=True).start()
 
-    def _launch(self):
+    def _launch(self, automatic=False):
         cfg = settings.read()
         try:
             DATA.mkdir(parents=True, exist_ok=True)
@@ -293,7 +384,9 @@ class Supervisor:
                    "OMISSIS_ENGINE_URL": f"http://127.0.0.1:{ENGINE_PORT}"}
             if self.test:
                 env["OMISSIS_TEST"] = "1"
+            leftover = False
             if not self._alive(self.engine) or self.launched_with is None or self.launched_with[0] != self._engine_choices(cfg):
+                just_stopped = self._alive(self.engine)
                 self._stop(self.engine)
                 if cfg["serve"]:   # presta il modello (anche per un'impostazione imposta da chi amministra): certificato e chiave devono esserci
                     try:
@@ -305,8 +398,9 @@ class Supervisor:
                     self.phase = "model"
                     weights.download(cfg["model"])
                     self.phase = "startup"
+                leftover = self._engine_port(just_stopped)
                 model = str(paths.model(cfg["model"]))
-                command = [str(PY_MODEL), str(HERE / "engine.py"), "--model", model, "--port", str(ENGINE_PORT)]
+                command = [str(PY_MODEL), str(ENGINE_SCRIPT), "--model", model, "--port", str(ENGINE_PORT)]
                 if cfg["device"] in ("cpu", "cuda"):
                     command += ["--device", cfg["device"]]
                 self.engine = self._start(command, env)
@@ -321,36 +415,49 @@ class Supervisor:
                         time.sleep(1)
                 else:
                     raise Failure(i18n.t("program.engine_silent"), "engine silent")
-            self._stop_proxy()
-            # Il proxy parte sulla porta scelta. Se un altro programma la sta gia' usando ne prende da solo una libera: prima
-            # di lanciarlo, e di nuovo se nel frattempo qualcuno gliel'ha portata via
-            wanted, skip = cfg["port"], []
-            for attempt in range(3):
-                port = self._proxy_port(wanted, skip)
-                command = [*paths.mitmdump(), "-q", "-s", str(HERE / "addon.py"), "--listen-host", "127.0.0.1",
-                           "-p", str(port), "--set", f"confdir={DATA / 'ca'}"]
-                for h in catalog.expressions_host(settings.guarded(cfg)):
-                    command += ["--allow-hosts", h]
-                if self.test and os.environ.get("OMISSIS_TEST_ADDON"):   # solo nelle prove: un addon in piu', che annota che cosa passa
-                    command += ["-s", os.environ["OMISSIS_TEST_ADDON"]]
-                self.proxy = self._start(command, env)
-                for _ in range(40):
-                    if opened_port(port) or not self._alive(self.proxy):
+            # Dopo un processo caduto riparte solo cio' che manca: se e' caduto il motore e il proxy e' vivo, con la stessa
+            # porta e gli stessi servizi, resta dov'e' (intanto le richieste le ferma: non le lascia passare in chiaro)
+            same = self.launched_with is not None and self.launched_with[1:] == (cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
+            if not (automatic and same and self._alive(self.proxy)):
+                self._stop_proxy()
+                # Il proxy parte sulla porta scelta. Se un altro programma la sta gia' usando ne prende da solo una libera: prima
+                # di lanciarlo, e di nuovo se nel frattempo qualcuno gliel'ha portata via
+                wanted, skip = cfg["port"], []
+                # Un proxy di questa copia rimasto da un avvio precedente (resta insieme al motore) tiene la porta: lo si
+                # chiude, invece di prenderlo per un altro programma e cambiare porta
+                if leftover or not free_port(wanted):
+                    closed = close_leftovers("proxy")
+                    if closed:
+                        self.note(f"leftover proxy closed x{closed}")
+                        self._wait_free(wanted, 5)
+                for attempt in range(3):
+                    port = self._proxy_port(wanted, skip)
+                    command = [*paths.mitmdump(), "-q", "-s", str(HERE / "addon.py"), "--listen-host", "127.0.0.1",
+                               "-p", str(port), "--set", f"confdir={DATA / 'ca'}"]
+                    for h in catalog.expressions_host(settings.guarded(cfg)):
+                        command += ["--allow-hosts", h]
+                    if self.test and os.environ.get("OMISSIS_TEST_ADDON"):   # solo nelle prove: un addon in piu', che annota che cosa passa
+                        command += ["-s", os.environ["OMISSIS_TEST_ADDON"]]
+                    self.proxy = self._start(command, env)
+                    for _ in range(40):
+                        if opened_port(port) or not self._alive(self.proxy):
+                            break
+                        time.sleep(0.5)
+                    time.sleep(0.3)   # la porta puo' rispondere per conto di un altro programma arrivato un attimo prima: conta che il proxy sia vivo
+                    if self._alive(self.proxy):
+                        self.proxy_port = port
                         break
-                    time.sleep(0.5)
-                time.sleep(0.3)   # la porta puo' rispondere per conto di un altro programma arrivato un attimo prima: conta che il proxy sia vivo
-                if self._alive(self.proxy):
-                    self.proxy_port = port
-                    break
-                if attempt == 2 or not self._port_lost(port):   # non e' la porta: inutile cambiarla
-                    details, cause = self._details("proxy", self.proxy)
-                    raise Failure(i18n.t("program.proxy_closed") + " " + details, cause)
-                skip.append(port)
-            if port != wanted:   # da ora la porta scelta e' questa: la usano anche il file PAC e le finestre protette
-                cfg = settings.write({**settings.read(), "port": port})
-                self.port_moved = {"from": wanted, "to": port}
-                if NOTIFY is not None and not self.test:
-                    NOTIFY(i18n.t("start.port_moved", **self.port_moved))
+                    if attempt == 2 or not self._port_lost(port):   # non e' la porta: inutile cambiarla
+                        details, cause = self._details("proxy", self.proxy)
+                        raise Failure(i18n.t("program.proxy_closed") + " " + details, cause)
+                    skip.append(port)
+                if port != wanted:   # da ora la porta scelta e' questa: la usano anche il file PAC e le finestre protette
+                    who, name = self._who(wanted)
+                    cfg = settings.write({**settings.read(), "port": port})
+                    self.port_moved = {"from": wanted, "to": port, "by": name}
+                    self.note(f"proxy port {wanted}>{port}" + _by(name))
+                    if NOTIFY is not None and not self.test:
+                        NOTIFY(i18n.t("start.port_moved", who=who, **{"from": wanted, "to": port}))
             self.launched_with = (self._engine_choices(cfg), cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
             if self.gateway is None:   # per gli strumenti da terminale; se la porta e' occupata il resto funziona lo stesso
                 try:
@@ -358,6 +465,7 @@ class Supervisor:
                 except OSError:
                     self.gateway_error = i18n.t("program.gateway_port", port=paths.GATEWAY_PORT)
             self.phase = "active"
+            self.note("active")
             threading.Thread(target=pac_apply, daemon=True).start()   # le app protette dal proxy del sistema
         except weights.Cancelled:
             self.phase = "stop"
@@ -365,7 +473,10 @@ class Supervisor:
             self._stop(self.proxy)
             code = f"[WinError {ex.winerror}]" if getattr(ex, "winerror", None) else f"[Errno {ex.errno}]" if getattr(ex, "errno", None) else ""
             self.cause = getattr(ex, "cause", "") or " ".join(x for x in ("launch", type(ex).__name__, code) if x)
+            self.note(self.cause)
             self.phase, self.error = "error", str(ex)
+            if NOTIFY is not None and not self.test:   # a pannello chiuso non lo si verrebbe a sapere
+                NOTIFY(i18n.t("program.error_notice", error=self.error))
 
     @staticmethod
     def _engine_choices(cfg):
@@ -380,9 +491,17 @@ class Supervisor:
                 p.wait(8)
             except subprocess.TimeoutExpired:
                 p.kill()
+        if getattr(p, "tie", None) is not None:   # il processo e' fermo: il capo del tubo che lo legava non serve piu'
+            try:
+                os.close(p.tie)
+            except OSError:
+                pass
+            p.tie = None
 
     def stop(self):
-        if self.phase == "model":
+        with self.watching:   # da qui la sorveglianza non deve prendere per caduti i processi che fermiamo noi
+            was, self.phase = self.phase, "stop"
+        if was == "model":
             weights.cancel()
         if self.gateway is not None:
             self.gateway.stop()
@@ -399,16 +518,44 @@ class Supervisor:
         cfg = settings.read()
         return self.launched_with != (self._engine_choices(cfg), cfg["port"], tuple(s["id"] for s in settings.guarded(cfg)))
 
-    def status(self):
-        if self.phase == "active" and not (self._alive(self.engine) and self._alive(self.proxy)):
+    def check(self):
+        """A protezione accesa, guarda se il motore e il proxy sono vivi. Lo fa la sorveglianza ogni due secondi (watch), che
+        il pannello sia aperto o no, e ogni richiesta dello stato. Se uno dei due e' caduto la protezione riparte da sola:
+        l'avvio rimette in piedi quello che manca, e se il proxy aveva perso la porta ne sceglie un'altra. Al piu'
+        RESTARTS volte in WINDOW secondi: oltre, resta ferma, dice perche' e manda un avviso, invece di ripetersi."""
+        if self.phase != "active" or not self.watching.acquire(blocking=False):
+            return
+        try:
+            if self.phase != "active" or (self._alive(self.engine) and self._alive(self.proxy)):
+                return
             which, process = ("engine", self.engine) if not self._alive(self.engine) else ("proxy", self.proxy)
-            details, self.cause = self._details(which, process)
-            self.phase, self.error = "error", i18n.t(f"program.closed.{which}") + " " + details
-            # Il proxy non e' riuscito a prendere la porta: un altro programma e' arrivato un attimo prima di lui. La
-            # protezione riparte da sola, e l'avvio sceglie un'altra porta. Al piu' una volta ogni cinque minuti
-            if which == "proxy" and self.proxy_port and time.time() - self.recovered > 300 and self._port_lost(self.proxy_port):
-                self.recovered = time.time()
-                self.launch()
+            details, cause = self._details(which, process)
+            self.note(cause)
+            text, now = i18n.t(f"program.closed.{which}") + " " + details, time.time()
+            recent = [t for t in self.falls if now - t < WINDOW]
+            if len(recent) < RESTARTS:
+                self.falls.append(now)
+                self.note(f"restart {len(recent) + 1}/{RESTARTS}")
+                self.launch(automatic=True)   # da «attiva» a «in avvio», senza passare per l'errore
+                return
+            self.note("gave up")
+            self.phase, self.error, self.cause = "error", text + " " + i18n.t("program.closed.again", n=len(recent)), cause
+            if NOTIFY is not None and not self.test:
+                NOTIFY(i18n.t("program.stopped_notice"))
+        finally:
+            self.watching.release()
+
+    def watch(self, every=2):
+        """La sorveglianza in sottofondo: vedi check."""
+        while True:
+            time.sleep(every)
+            try:
+                self.check()
+            except Exception:   # noqa: BLE001  (un giro andato male non deve fermare i successivi)
+                pass
+
+    def status(self):
+        self.check()
         info = {}
         if self._alive(self.engine) and self.phase == "active":
             try:
@@ -1288,7 +1435,7 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/report":   # la segnalazione di un problema: il testo che si vede, e che parte solo se lo si invia
                 now = SUP.status()
                 phase = now["phase"] + (f" ({SUP.cause})" if now["phase"] == "error" and SUP.cause else "")
-                self._respond(200, report.build(q.get("what", ""), phase, now.get("model") or ""))
+                self._respond(200, report.build(q.get("what", ""), phase, now.get("model") or "", SUP.summary()))
             elif u.path == "/api/languages":
                 self._respond(200, {"choice": i18n.choice(), "active": i18n.active(), "available": i18n.available()})
             elif u.path == "/api/status":
@@ -1993,6 +2140,7 @@ def main():
     first_login_item(a.test)
     threading.Thread(target=updates.loop, daemon=True).start()
     threading.Thread(target=keep_on, args=(3 if a.test else 30,), daemon=True).start()   # non fa nulla finche' always_on e' spento
+    threading.Thread(target=SUP.watch, daemon=True).start()   # un processo caduto si vede subito, anche a pannello chiuso
     if not a.test:   # nelle prove niente lavoro in sottofondo: i risultati devono dipendere solo da cio' che la prova fa
         threading.Thread(target=watch, daemon=True).start()
         threading.Thread(target=watch_apps, daemon=True).start()

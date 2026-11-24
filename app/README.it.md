@@ -43,6 +43,26 @@ aggiunge le sezioni per chi lo gestisce. Tutte le sezioni:
 
 `start.py` è la variante da terminale, senza pagina: mostra una riga per richiesta.
 
+### Se la protezione non parte, o si ferma
+
+La protezione è fatta di due processi, il motore e il proxy. Il pannello li avvia e li tiene
+d'occhio ogni due secondi, anche quando la sua pagina è chiusa.
+
+- **La porta del proxy la sta usando un altro programma.** Omissis ne prende da solo una libera, la
+  salva e lo dice nella pagina iniziale, con il nome del programma che la teneva. Una porta
+  stabilita da chi amministra il PC non viene cambiata: l'errore la nomina.
+- **La porta del motore (8765) la sta usando un altro programma.** Questa è fissa, perché la
+  conosce l'estensione del browser: l'errore dice quale programma la sta usando e che cosa fare.
+- **Il motore o il proxy cade.** Riparte da solo quello che è caduto, fino a tre volte in dieci
+  minuti. Oltre, la protezione resta ferma, dice quale processo si è chiuso e con quale codice, e
+  arriva un avviso del sistema. Finché è ferma, ciò che passa da Omissis non esce in chiaro: il
+  proxy e l'estensione fermano i messaggi.
+- **Il pannello si chiude di colpo.** Motore e proxy si chiudono con lui. Se all'avvio ne trova
+  di rimasti da una volta precedente, li chiude e riparte sulla stessa porta.
+
+«Segnala il problema» (*Collegamenti → Compatibilità*) riporta anche questi fatti, in breve:
+codici, porte e nomi dei programmi, mai testi.
+
 ## Il pannello
 
 La pagina sta nella cartella `panel`: `index.html` (lo scheletro), `style.css`, `app.js` e le
@@ -1191,7 +1211,9 @@ Usa un browser di prova che sta in `.playwright` (740 MB, si può cancellare; si
 `set PLAYWRIGHT_BROWSERS_PATH=app\.playwright` e
 `.venv\Scripts\python.exe -m playwright install chromium`). `e2e_sites.py` apre le pagine vere
 dei servizi senza accedere e senza scrivere, per vedere se si caricano con l'estensione attiva.
-`e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
+`e2e_port.py` (37 controlli, senza rete né browser, con un motore finto) prova l'avvio quando una
+porta non è libera, la ripartenza dopo un processo caduto e i processi rimasti da un avvio
+precedente. `e2e_vault.py` (21 controlli) prova l'archivio cifrato, la ricerca, le eliminazioni e i numeri
 mai riusati; `e2e_inventory.py` (14 controlli) l'inventario degli strumenti AI con analisi
 inventate. Nessuno dei due ha bisogno di qualcosa acceso. Lo stesso vale per `e2e_central.py`
 (47 controlli): che cosa si sostituisce di serie e i profili dei dati, le regole mandate dalla console (accettate solo per scelta, solo quelle ammesse, mai sopra

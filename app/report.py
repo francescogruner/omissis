@@ -119,8 +119,10 @@ def news(mark):
     return out, end
 
 
-def build(what="", phase="", model=""):
-    """La segnalazione: {"title", "text", "issues", "problems"}. `what` e' il nome del programma da cui la si apre."""
+def build(what="", phase="", model="", events=""):
+    """La segnalazione: {"title", "text", "issues", "problems"}. `what` e' il nome del programma da cui la si apre;
+    `events` che cosa e' successo alla protezione da quando il programma e' acceso (avvii, processi caduti, porte), in
+    breve: codici e nomi di programmi, mai testi."""
     names = {s["id"]: s["name"] for s in catalog.SERVICES}
     name = lambda service: names.get(service, service or "?")   # noqa: E731
     groups, found = activity.compatibility(), problems()
@@ -132,6 +134,8 @@ def build(what="", phase="", model=""):
     model = Path(str(model or settings.read().get("model") or "")).name or "?"
     out = [i18n.t("report.text.omissis", version=VERSION, channel=updates.channel(), system=system(), language=i18n.active(), model=model,
                   phase=phase or "?"), ""]
+    if events:
+        out.insert(1, i18n.t("report.text.events", events=events))
     out.append(i18n.t("report.text.programs"))
     for g in groups:
         out.append(" | ".join([name(g["service"]), g["via"], g["client"] or "?", g["status"], "+".join(g["methods"]) or "-",
