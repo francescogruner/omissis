@@ -1,0 +1,45 @@
+name: Scheda per winget
+
+# Scrive la scheda di Omissis per winget, il gestore di pacchetti di Windows, da una versione gia' pubblicata, e la
+# prova su un Windows di GitHub (packaging/winget/ci_winget.ps1): controllo della scheda, installazione con winget dalla
+# scheda, verifica del programma installato, rimozione; poi l'aggiornamento da una versione precedente. La scheda resta
+# tra i risultati: all'archivio di Microsoft la manda chi pubblica, a mano. Parte solo a mano.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versione pubblicata (solo numeri e punti, per esempio 0.1.10)
+        required: true
+        default: 0.1.10
+      previous:
+        description: Versione precedente da cui provare l'aggiornamento (vuoto per saltare la prova)
+        required: false
+        default: 0.1.9
+
+permissions:
+  contents: read
+
+jobs:
+  winget:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scheda e prove
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+          PREVIOUS: ${{ inputs.previous }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./packaging/winget/ci_winget.ps1 -Version $env:VERSION -Previous $env:PREVIOUS
+      - name: Scheda
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: omissis-winget-manifest
+          path: build/winget/manifests
+          if-no-files-found: warn
+          retention-days: 14
