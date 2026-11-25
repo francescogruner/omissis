@@ -67,6 +67,20 @@ def run(command, timeout=600, check=True):
     return r
 
 
+def disk_image(folder, out, form, attempts=5, pause=6):
+    """Un'immagine disco con il contenuto della cartella. Ogni tanto macOS sta ancora guardando i file appena scritti e
+    risponde «Resource busy» (visto su un Mac di GitHub il 25/11/2026): non e' un guasto di cio' che si prova, si riprova."""
+    for attempt in range(1, attempts + 1):
+        r = run(["hdiutil", "create", "-volname", "Omissis", "-srcfolder", folder, "-ov", "-format", form, out], timeout=900, check=False)
+        if r.returncode == 0:
+            return
+        said = (r.stdout + r.stderr).strip()
+        if "busy" not in said.lower() or attempt == attempts:
+            raise RuntimeError(f"hdiutil: {said[-300:]}")
+        print(f"--- hdiutil occupato, riprovo ({attempt})", flush=True)
+        time.sleep(pause * attempt)
+
+
 # ------------------------------------------------------------------ il pannello della copia di prova
 
 def page_code():
@@ -203,7 +217,7 @@ def package(version, broken=False):
     if MAC:
         out = WORK / "served" / "versioni" / f"Omissis-{version}-{TARGET}.dmg"
         out.unlink(missing_ok=True)
-        run(["hdiutil", "create", "-volname", "Omissis", "-srcfolder", folder, "-ov", "-format", "UDRO", out], timeout=900)   # senza compressione: piu' veloce
+        disk_image(folder, out, "UDRO")   # senza compressione: piu' veloce
     else:
         out = WORK / "served" / "versioni" / f"Omissis-{version}-{TARGET}.tar.gz"
         with tarfile.open(out, "w:gz", compresslevel=1) as t:

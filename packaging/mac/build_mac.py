@@ -164,8 +164,18 @@ def dmg(app, version, arch):
     (folder / "Applications").symlink_to("/Applications")
     out = OUT / f"Omissis-{version}-mac-{arch}.dmg"
     out.unlink(missing_ok=True)
-    run(["hdiutil", "create", "-volname", "Omissis", "-srcfolder", folder, "-ov", "-format", "UDZO", out])
-    return out
+    command = [str(c) for c in ("hdiutil", "create", "-volname", "Omissis", "-srcfolder", folder, "-ov", "-format", "UDZO", out)]
+    # ogni tanto macOS sta ancora guardando i file appena scritti e risponde «Resource busy»: si aspetta e si riprova
+    for attempt in range(1, 6):
+        print("  $", " ".join(command), flush=True)
+        r = subprocess.run(command, capture_output=True, text=True)
+        said = (r.stdout + r.stderr).strip()
+        print(said, flush=True)
+        if r.returncode == 0:
+            return out
+        if "busy" not in said.lower() or attempt == 5:
+            raise SystemExit(f"hdiutil: {said[-300:]}")
+        time.sleep(6 * attempt)
 
 
 def smoke_test(app):
