@@ -328,8 +328,16 @@ def report(name, since):
     good = [e for e in answers if e["status"] < 400]
     check(bool(good), f"{name}: claude.ai risponde attraverso il proxy", f"risposte buone {len(good)} su {len(answers)}")
     check(any(e.get("omissis") for e in answers), f"{name}: Omissis riconosce quelle richieste come servizio da proteggere")
-    others = sorted(h for h in by if not of_claude(h))
+    # «omissis.invalid»: la domanda «ci sei?» che il pannello fa al proxy ogni quindici secondi. Non e' traffico del
+    # computer: risponde il proxy stesso, sempre con 404, senza aprire nessun collegamento (il nome non esiste in rete)
+    own = by.get("omissis.invalid", {})
+    others = sorted(h for h in by if not of_claude(h) and h != "omissis.invalid")
     check(not others, f"{name}: dal proxy passa solo claude.ai, il resto del computer esce come prima", ", ".join(others)[:200])
+    if own:
+        asked, answered = own.get("request", 0), own.get("stato 404", 0)
+        strange = sorted(k for k in own if k not in ("request", "response", "stato 404"))
+        check(asked == answered and not strange, f"{name}: alla domanda del pannello risponde il proxy stesso, e non esce nulla in rete",
+              f"domande {asked}, risposte del proxy {answered}" + (f", di troppo: {', '.join(strange)}" if strange else ""))
 
 
 def contacts():
