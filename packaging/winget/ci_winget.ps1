@@ -6,7 +6,7 @@
 # fine Omissis sia stato riaperto. Ogni comando di winget ha un tempo massimo: se resta fermo, la prova dice che cosa
 # c'e' in esecuzione e quali finestre aspettano. Non invia nulla a Microsoft.
 #
-#   pwsh packaging\winget\ci_winget.ps1 -Version 0.1.12 [-Previous 0.1.11]
+#   pwsh packaging\winget\ci_winget.ps1 -Version 0.1.13 [-Previous 0.1.12]
 param([Parameter(Mandatory = $true)] [string]$Version, [string]$Previous = '')
 
 $ErrorActionPreference = 'Stop'

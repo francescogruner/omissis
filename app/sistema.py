@@ -252,33 +252,69 @@ def command_lines(fragment):
     return [(pid, arguments) for pid, arguments in found if pid != os.getpid()]
 
 
-def port_owner(port):
-    """Il nome del programma che ascolta su quella porta di questo computer; "" quando non si riesce a saperlo (un
-    processo di un altro utente, oppure manca psutil)."""
+def port_process(port):
+    """Il processo che ascolta su quella porta di questo computer: {"pid", "name", "arguments", "folder"} (gli argomenti
+    con cui e' partito e la cartella in cui lavora, quando si possono leggere); None quando non si riesce a saperlo
+    (nessuno ascolta, un processo di un altro utente, oppure manca psutil)."""
     try:
         import psutil
     except ImportError:
-        return ""
+        return None
 
     def listening(connections):
         return any(c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == port for c in connections)
+
+    def about(p):
+        out = {"pid": p.pid, "name": "", "arguments": [], "folder": ""}
+        for key, read in (("name", p.name), ("arguments", p.cmdline), ("folder", p.cwd)):
+            try:
+                out[key] = read() or out[key]
+            except (psutil.Error, OSError):
+                pass
+        return out
     try:
         try:
             for c in psutil.net_connections(kind="tcp"):
                 if c.pid and listening([c]):
-                    return psutil.Process(c.pid).name() or ""
-            return ""
+                    return about(psutil.Process(c.pid))
+            return None
         except psutil.AccessDenied:   # macOS: l'elenco di tutto il sistema e' degli amministratori; si guardano i propri processi
             pass
-        for p in psutil.process_iter(["name"]):
+        for p in psutil.process_iter():
             try:
                 if listening(p.net_connections(kind="tcp")):
-                    return p.info["name"] or ""
+                    return about(p)
             except psutil.Error:
                 continue
     except Exception:   # noqa: BLE001
         pass
-    return ""
+    return None
+
+
+def port_owner(port):
+    """Il nome del programma che ascolta su quella porta; "" quando non si riesce a saperlo."""
+    return (port_process(port) or {}).get("name", "")
+
+
+def alert(message, title="Omissis"):
+    """Un avviso in una finestra del sistema, per quando il pannello non puo' aprirsi e non c'e' altro modo di dirlo.
+    Resta li' finche' non lo si chiude. True se e' stato mostrato."""
+    try:
+        if WINDOWS:
+            import ctypes
+            ctypes.WinDLL("user32").MessageBoxW(None, str(message), str(title), 0x30 | 0x10000 | 0x40000)   # avviso, in primo piano, sopra le altre finestre
+            return True
+        if MAC:
+            subprocess.run(["osascript", "-e", f'display dialog {_quoted(message)} with title {_quoted(title)} buttons {{"OK"}} default button 1 with icon caution'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
+            return True
+        for command in (["zenity", "--warning", f"--title={title}", f"--text={message}", "--width=420"], ["kdialog", "--title", str(title), "--sorry", str(message)]):
+            if shutil.which(command[0]):
+                subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
+                return True
+        return notify(message, title)
+    except Exception:   # noqa: BLE001
+        return False
 
 
 # ------------------------------------------------------------------ processi (fuori da Windows)

@@ -25,6 +25,7 @@ import base64
 import collections
 import hashlib
 import hmac
+import itertools
 import json
 import os
 import re
@@ -313,9 +314,32 @@ class Engine:
             from inference import Detector
             self.det = Detector(model, device=device)
         self.vault = Vault(DATA / "vault.sqlite")
+        # Quando e' finito l'ultimo giro del modello (None: questo motore non li conta). Un testo lungo sono tanti giri
+        # brevi: finche' ne finisce uno ogni tanto il lavoro avanza, per quanto duri. Lo legge /alive
+        self.masking, self.numbers = {}, itertools.count()   # le richieste di mascherare in corso: numero -> quando e' cominciata
+        self.progress = None
+        session = getattr(self.det, "session", None)
+        if session is not None and callable(getattr(session, "run", None)):
+            run, self.progress = session.run, time.monotonic()
+
+            def counted(*a, **k):
+                try:
+                    return run(*a, **k)
+                finally:
+                    self.progress = time.monotonic()
+            try:
+                session.run = counted
+            except AttributeError:   # una sessione che non si lascia avvolgere: niente conto dei giri
+                self.progress = None
         self.lock = threading.Lock()                # un'inferenza per volta
         self.cache = collections.OrderedDict()           # testo gia' visto -> span (le cronologie si ripetono)
         self.profile()
+
+    def _beat(self):
+        """Il lavoro avanza anche fuori dal modello (i passaggi che seguono su un testo lungo): lo si segna, cosi' chi
+        guarda /alive non lo prende per fermo. Non restituisce nulla: si puo' mettere dentro una condizione."""
+        if self.progress is not None:
+            self.progress = time.monotonic()
 
     def profile(self):
         """Le categorie che il modello conosce ma che di serie restano in chiaro (date, professioni, dati particolari...):
@@ -368,7 +392,25 @@ class Engine:
                 out.append([s, e, l])
         return out
 
-    def mask(self, texts, exclude=(), never=(), also=None, keep=True):
+    def at_work(self):
+        """Per /alive: quante richieste di mascherare sono in corso, da quanto la piu' vecchia, e da quanti secondi il lavoro
+        non avanza («idle»; None se non c'e' lavoro o non si puo' dire). Contano solo queste: leggere un documento lungo, o
+        una richiesta che sta ancora arrivando, possono durare quanto serve senza che il motore sia fermo."""
+        now, begun = time.monotonic(), list(self.masking.values())
+        first = min(begun) if begun else now
+        return {"busy": len(begun), "oldest": round(now - first, 1),
+                "idle": round(now - max(self.progress, first), 1) if begun and self.progress is not None else None}
+
+    def mask(self, *a, **k):
+        """Maschera i testi (vedi _mask), e intanto tiene il conto di cio' che e' in corso (vedi at_work)."""
+        number = next(self.numbers)
+        self.masking[number] = time.monotonic()
+        try:
+            return self._mask(*a, **k)
+        finally:
+            self.masking.pop(number, None)
+
+    def _mask(self, texts, exclude=(), never=(), also=None, keep=True):
         """keep=False: una prova con dati d'esempio. I segnaposto valgono solo per questa risposta e nell'archivio non entra nulla.
         escludi: etichette da NON sostituire in questa chiamata (es. quelle tecniche nel contesto di un agente).
         mai: termini da non sostituire in questa chiamata (es. i nomi degli strumenti dichiarati da un agente).
@@ -401,7 +443,7 @@ class Engine:
             rx = re.compile("|".join(re.escape(v) for v in sorted(well_known, key=len, reverse=True)))
             for i, t in enumerate(texts):
                 extra = [[m.start(), m.end(), well_known[m.group()]] for m in rx.finditer(t)
-                         if not any(s < m.end() and m.start() < e for s, e, _ in by_text[i])]
+                         if self._beat() or not any(s < m.end() and m.start() < e for s, e, _ in by_text[i])]
                 if extra:
                     by_text[i] = free(self._merge(by_text[i] + extra), i)
         if also:   # scelti a mano: vincono su cio' che ha trovato il modello negli stessi punti
@@ -409,7 +451,7 @@ class Engine:
             rx = re.compile("|".join(re.escape(v) for v in sorted(also, key=len, reverse=True)), re.I)
             for i, t in enumerate(texts):
                 forced = [[m.start(), m.end(), by_term.get(m.group().casefold(), "ELENCO")] for m in rx.finditer(t)
-                           if not any(m.start() < e and s < m.end() for s, e in busy[i])]
+                           if self._beat() or not any(m.start() < e and s < m.end() for s, e in busy[i])]
                 if forced:
                     by_text[i] = sorted(forced + [sp for sp in by_text[i] if not any(sp[0] < f[1] and f[0] < sp[1] for f in forced)])
         mapping, counts, exited, positions = {}, collections.Counter(), [], []
@@ -427,6 +469,7 @@ class Engine:
             for t, sp in zip(texts, by_text):
                 chunks, pos, where = [], 0, []
                 for s, e, l in sp:
+                    self._beat()
                     seg = placeholder(l, t[s:e])
                     mapping.setdefault(seg, t[s:e])
                     counts[l] += 1
@@ -495,6 +538,8 @@ def serve(engine, port, token, extension_token, bridge):
                                      "threshold": engine.det.threshold, "entries": engine.vault.entries(),
                                      "vault_encrypted": engine.vault.seal.is_active,
                                      "remote": dict(engine.det.state) if engine.remote else None, "shared": remote.shared()})
+            elif self.path == "/alive" and self._authorized():   # «ci sei?»: lo chiede il pannello. Non aspetta nessuno, risponde anche a modello occupato
+                self._respond(200, {"pid": os.getpid(), **engine.at_work()})
 
         def do_POST(self):
             if not self._authorized():

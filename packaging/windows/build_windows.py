@@ -2,7 +2,7 @@
 """Costruisce l'installer di Omissis per Windows: Omissis-<versione>-setup.exe. Va lanciato su Windows (o sul Windows
 di GitHub Actions), dalla radice del repository, con Python 3.12 e Pillow.
 
-  python packaging\\windows\\build_windows.py --version 0.1.12 [--out dist] [--reuse-python] [--smoke-test]
+  python packaging\\windows\\build_windows.py --version 0.1.13 [--out dist] [--reuse-python] [--smoke-test]
 
 Cosa fa, in ordine:
   1. prepara in build\\windows\\Omissis il programma completo: il Python ufficiale in versione "embeddable" (scaricato

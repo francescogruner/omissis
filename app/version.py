@@ -11,4 +11,6 @@
 # 0.1.12: la protezione si tiene in piedi da sola. Il pannello sorveglia motore e proxy anche a pagina chiusa e fa
 # ripartire quello che cade (Supervisor.check); i due processi si chiudono con il pannello (sistema.tie) e quelli rimasti
 # da un avvio precedente vengono chiusi; i messaggi dicono quale programma usa una porta (sistema.port_owner).
-VERSION = "0.1.12"
+# 0.1.13: un motore o un proxy acceso che non risponde piu' viene riconosciuto e riparte (Supervisor.probe, Engine.at_work);
+# prima di dirsi gia' acceso Omissis guarda chi risponde sulla porta del pannello (panel.running, greet).
+VERSION = "0.1.13"

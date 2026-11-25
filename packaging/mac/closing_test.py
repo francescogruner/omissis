@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Con la copia di prova accesa (vedi ci_tests.sh): il pannello viene chiuso di colpo, come in un guasto, e si guarda che
-il motore e il proxy si chiudano da soli invece di restare accesi a tenere le porte. Vale per Mac e Linux; va lanciata
-per ultima, perche' dopo la copia di prova non c'e' piu'.
+"""Con la copia di prova accesa (vedi ci_tests.sh), sui processi veri: il motore e poi il proxy vengono sospesi (vivi, ma
+non rispondono piu') e si guarda che il pannello se ne accorga e li rimetta in piedi; poi il pannello viene chiuso di
+colpo, come in un guasto, e si guarda che il motore e il proxy si chiudano da soli invece di restare accesi a tenere le
+porte. Vale per Mac e Linux; va lanciata per ultima, perche' dopo la copia di prova non c'e' piu'. Dura circa tre minuti.
 
    Uso: python3 packaging/mac/closing_test.py      (legge OMISSIS_PORT e OMISSIS_DATA, come le altre prove)
 """
@@ -41,6 +42,27 @@ def listeners(port):
     return found
 
 
+def recovers(name, port, other, seconds=160):
+    """Sospende chi ascolta sulla porta: entro il tempo dato ci deve essere un processo nuovo, e sull'altra porta quello di prima."""
+    before, beside = listeners(port), {p.pid for p in listeners(other)}
+    for p in before:
+        p.suspend()
+    begun, fresh = time.time(), []
+    while time.time() - begun < seconds and not fresh:
+        time.sleep(1)
+        fresh = [p for p in listeners(port) if p.pid not in {x.pid for x in before}]
+    took = time.time() - begun
+    for p in before:   # se nessuno l'avesse chiuso, non resti li' sospeso
+        try:
+            p.kill()
+        except psutil.Error:
+            pass
+    time.sleep(3)
+    mark(f"{name} vivo ma sospeso: il pannello lo chiude e ne avvia uno nuovo, l'altro processo resta quello di prima",
+         bool(before) and bool(fresh) and answers(port) and {p.pid for p in listeners(other)} == beside,
+         f"dopo {took:.0f} s · prima {[p.pid for p in before]} · ora {[p.pid for p in fresh]}")
+
+
 def main():
     try:
         proxy = int(json.loads((Path(os.environ["OMISSIS_DATA"]) / "settings.json").read_text(encoding="utf-8")).get("port") or 8080)
@@ -53,6 +75,8 @@ def main():
     others = {p.pid for p in listeners(BASE) + listeners(proxy)}
     mark("il pannello e' un processo a parte da motore e proxy", len(panel) == 1 and panel[0].pid not in others and len(others) >= 2,
          ([p.pid for p in panel], sorted(others)))
+    recovers("motore", BASE, proxy)
+    recovers("proxy", proxy, BASE)
     for p in panel:
         try:
             p.kill()   # di colpo: nessuna occasione di fermare gli altri due

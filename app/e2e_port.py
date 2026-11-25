@@ -13,7 +13,12 @@ e' successo; dal motivo della chiusura escano solo tipi di errore e codici, mai 
 Poi i processi rimasti accesi: se il pannello si chiude di colpo, motore e proxy si chiudono da soli; quelli rimasti da
 un avvio precedente (di una versione che non lo faceva) vengono riconosciuti e chiusi all'avvio, senza cambiare porta e
 senza toccare quelli di un'altra copia; se la porta del motore e' di un altro programma l'errore la nomina. Qui il
-motore e' un programma finto che risponde come quello vero, senza caricare un modello.
+motore e' il servizio vero del motore con un modello finto, che non si carica.
+Poi i processi vivi che non rispondono piu': alla domanda «ci sei?» il motore e il proxy rispondono senza aspettare
+nessuno; un motore al lavoro su un testo lungo che avanza non viene toccato; uno con una richiesta che non avanza, uno
+sospeso e un proxy sospeso vengono chiusi e la protezione riparte. E la porta del pannello: se e' di un altro programma
+Omissis non parte e dice quale; se c'e' gia' un Omissis acceso apre il suo; se e' il suo pannello rimasto bloccato lo
+chiude e parte.
 Non ha bisogno della copia di prova accesa: gira uguale su Windows, Mac e Linux.
 
    Uso: python e2e_port.py
@@ -142,38 +147,41 @@ def supervisor(port, engine=True):
     return sup
 
 
-# Un motore finto: risponde a /status come quello vero (con il codice di data/token.txt), prende la porta solo dopo un
-# po', come quello vero che prima carica il modello, e avviato dal pannello si chiude con lui (sistema.follow_parent)
+# Un motore finto: il servizio vero del motore (engine.serve: le domande del pannello, il conto di cio' che e' in
+# lavorazione) con dietro un modello finto. Prende la porta solo dopo un po', come quello vero che prima carica il
+# modello, e avviato dal pannello si chiude con lui (sistema.follow_parent)
 FAKE_ENGINE = '''# -*- coding: utf-8 -*-
-import json, os, sys, time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import itertools, os, sys, threading, time, types
 sys.path.insert(0, {here!r})
 import sistema
 sistema.follow_parent()
+import engine
 port = int(sys.argv[sys.argv.index("--port") + 1])
 token = open(os.path.join(os.environ["OMISSIS_DATA"], "token.txt"), encoding="utf-8").read().strip()
 time.sleep(1.5)
 
 
-class Handler(BaseHTTPRequestHandler):
-    def log_message(self, *a):
-        pass
+class Fake(engine.Engine):
+    """Il motore vero senza modello. Un testo che contiene FERMO non finisce mai e non avanza; uno che contiene LUNGO dura
+    sei secondi e avanza ogni mezzo secondo, come un documento lungo."""
+    remote = None
+    det = types.SimpleNamespace(mod=types.SimpleNamespace(name_or_path="finto"), device="cpu", threshold=0.9, state={{}})
+    vault = types.SimpleNamespace(entries=lambda: 0, seal=types.SimpleNamespace(is_active=False))
 
-    def do_GET(self):
-        ok = self.path == "/status" and self.headers.get("X-Token") == token
-        body = json.dumps({{"model": "finto", "pid": os.getpid()}} if ok else {{"error": "no"}}).encode("utf-8")
-        self.send_response(200 if ok else 403)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+    def __init__(self):
+        self.progress, self.masking, self.numbers = time.monotonic(), {{}}, itertools.count()
+
+    def _mask(self, texts, *a, **k):
+        if any("FERMO" in t for t in texts):
+            threading.Event().wait()
+        if any("LUNGO" in t for t in texts):
+            for _ in range(12):
+                time.sleep(0.5)
+                self.progress = time.monotonic()
+        return {{"texts": list(texts), "positions": [[] for _ in texts], "mapping": {{}}, "counts": {{}}, "ms": 0}}
 
 
-class Service(ThreadingHTTPServer):
-    allow_reuse_address = sys.platform != "win32"
-
-
-Service(("127.0.0.1", port), Handler).serve_forever()
+engine.serve(Fake(), port, token, "estensione", None)
 '''
 # Un pannello di prova in un processo a parte: accende la protezione (motore finto, proxy vero) e resta li'
 STAND_IN = '''# -*- coding: utf-8 -*-
@@ -192,6 +200,37 @@ time.sleep(600)
 
 
 STARTED = []   # i processi avviati dalla prova: alla fine non ne deve restare nessuno, comunque sia andata
+
+
+def alive():
+    """La risposta del motore alla domanda «ci sei?»."""
+    return panel.engine("/alive", timeout=5)
+
+
+def work(word):
+    """Chiede al motore di mascherare un testo (da un altro thread: puo' non finire mai)."""
+    def ask():
+        try:
+            panel.engine("/mask", {"texts": [f"prova {word}"]}, timeout=600)
+        except Exception:   # noqa: BLE001  (il motore viene chiuso mentre lavora: e' la prova)
+            pass
+    threading.Thread(target=ask, daemon=True).start()
+
+
+def freeze(port):
+    """Sospende il processo che ascolta sulla porta: resta vivo, ma non risponde piu'. Torna il suo numero."""
+    import psutil
+    pid = sistema.port_process(port)["pid"]
+    psutil.Process(pid).suspend()
+    return pid
+
+
+def real_panel():
+    """Il pannello vero in un processo a parte, senza avviare la protezione: (processo, che cosa ha scritto finora)."""
+    p = subprocess.Popen([sys.executable, str(HERE / "panel.py"), "--test", "--no-tray", "--no-browser", "--no-start"], env={**os.environ, "PYTHONUTF8": "1"},
+                         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=panel.NO_WINDOW)
+    STARTED.append(p)
+    return p
 
 
 def quiet(command, **more):
@@ -443,12 +482,12 @@ def main():
 
         # --- motore e proxy rimasti da un avvio precedente (una versione che non li chiudeva): l'avvio li chiude e parte
         old_engine, old_proxy = left_engine(BASE), left_proxy(PORT)
-        old = panel.engine("/status", timeout=5).get("pid")
+        old = alive()["pid"]
         sup = supervisor(PORT, engine=False)
         sup._launch()
         now = sup.status()
         mark("motore e proxy rimasti da un avvio precedente: la protezione parte lo stesso", sup.phase == "active" and now["phase"] == "active", (sup.phase, sup.error, sup.cause))
-        new = panel.engine("/status", timeout=5).get("pid") if sup.phase == "active" else None
+        new = alive()["pid"] if sup.phase == "active" else None
         mark("motore e proxy rimasti: risponde il motore nuovo, e i due processi di prima sono stati chiusi", bool(old) and bool(new) and new != old and gone(old_engine, old_proxy),
              (old, new, old_engine.poll(), old_proxy.poll()))
         mark("motore e proxy rimasti: il proxy resta sulla porta scelta, senza avvisi di porta cambiata", settings.read()["port"] == PORT and sup.port_moved is None
@@ -467,6 +506,100 @@ def main():
          and not sup._alive(sup.proxy) and reaches(other, BASE), (sup.phase, sup.error, sup.cause))
     sup.stop()
     other.close()
+
+    # --- un processo vivo che non risponde piu'. Tempi stretti, solo per la prova: due silenzi di un secondo, due secondi senza avanzare
+    panel.PROBE_TIMEOUT, panel.SILENT, panel.STALL = 1, 2, 2
+    sup = supervisor(PORT, engine=False)
+    sup._launch()
+    a, same_proxy = alive(), sup.proxy
+    mark("domanda «ci sei?»: il motore risponde con il suo numero e nulla in lavorazione", sup.phase == "active" and a["pid"] > 0 and a["busy"] == 0 and a["idle"] is None, a)
+    sup.probe()
+    mark("domanda «ci sei?» con tutto a posto: rispondono motore e proxy, nessuno viene toccato", sup.silent == {"engine": 0, "proxy": 0} and sup.stuck == 0
+         and sup.status()["phase"] == "active" and not sup.falls, (sup.silent, sup.stuck, sup.error))
+    work("LUNGO")
+    time.sleep(1)
+    seen = []
+    for _ in range(4):
+        sup.probe()
+        seen.append((alive()["busy"], alive()["idle"], sup.stuck))
+        time.sleep(1)
+    mark("motore al lavoro su un testo lungo che avanza: non viene preso per bloccato", all(busy == 1 and idle is not None and idle < 2 and stuck == 0 for busy, idle, stuck in seen)
+         and sup._alive(sup.engine) and not sup.falls, seen)
+    aspetta = [time.sleep(0.5) for _ in range(20) if alive()["busy"]]   # il lavoro lungo finisce
+    half = socket.create_connection(("127.0.0.1", BASE))   # una richiesta che non finisce di arrivare: non e' un lavoro fermo
+    half.sendall(b"POST /mask HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Token: x\r\nContent-Length: 500\r\n\r\n{")
+    time.sleep(2.5)
+    sup.probe()
+    sup.probe()
+    mark("richiesta che non finisce di arrivare: il motore non viene preso per bloccato", sup.stuck == 0 and sup._alive(sup.engine) and alive()["busy"] == 0, (sup.stuck, alive()))
+    half.close()
+    first = alive()["pid"]
+    work("FERMO")
+    time.sleep(3.5)
+    sup.probe()
+    once = (sup.stuck, sup._alive(sup.engine), alive()["busy"], alive()["idle"])
+    sup.probe()
+    mark("motore con una richiesta che non avanza: visto una volta resta, alla conferma viene chiuso", once[0] == 1 and once[1] and once[2] == 1 and once[3] > 2
+         and gone(sup.engine, seconds=5) and any(what.startswith("engine stuck") for _, what in sup.events), (once, list(sup.events)[-3:]))
+    closed()
+    mark("motore che non avanzava: la protezione riparte da sola con un motore nuovo, il proxy resta quello", back(sup) and alive()["pid"] != first and alive()["busy"] == 0
+         and sup.proxy is same_proxy and len(sup.falls) == 1, (sup.phase, sup.error, len(sup.falls)))
+    if not HAS_PSUTIL:
+        print("SALTATO: i processi sospesi (qui manca psutil, che serve a sospenderli)")
+    else:
+        first = freeze(BASE)
+        sup.probe()
+        once = (dict(sup.silent), sup._alive(sup.engine))
+        sup.probe()
+        mark("motore vivo ma sospeso: dopo due silenzi viene chiuso; intanto il proxy non viene giudicato", once == ({"engine": 1, "proxy": 0}, True) and gone(sup.engine, seconds=5)
+             and any(what == "engine silent" for _, what in sup.events), (once, list(sup.events)[-3:]))
+        closed()
+        mark("motore sospeso: la protezione riparte da sola con un motore nuovo", back(sup) and alive()["pid"] != first and len(sup.falls) == 2, (sup.phase, sup.error, len(sup.falls)))
+        frozen = sup.proxy
+        freeze(PORT)
+        sup.probe()
+        sup.probe()
+        mark("proxy vivo ma sospeso: dopo due silenzi viene chiuso", gone(frozen, seconds=5) and any(what == "proxy silent" for _, what in sup.events), list(sup.events)[-3:])
+        closed()
+        mark("proxy sospeso: la protezione riparte da sola con un proxy nuovo sulla stessa porta", back(sup) and sup.proxy is not frozen and panel.opened_port(PORT)
+             and settings.read()["port"] == PORT and len(sup.falls) == 3, (sup.phase, sup.error, len(sup.falls)))
+        freeze(PORT)   # una volta di troppo
+        sup.probe()
+        sup.probe()
+        now = closed()
+        mark("bloccato una volta di troppo: la protezione resta ferma e dice che non rispondeva piu'", now["phase"] == "error" and now["error"].startswith(i18n.t("program.blocked.proxy"))
+             and i18n.t("program.closed.again", n=panel.RESTARTS) in now["error"] and sup.cause == "proxy silent", (now["error"], sup.cause))
+    sup.stop()
+    freed(BASE, PORT)
+
+    # --- la porta del pannello: prima di dirsi «gia' acceso», Omissis guarda chi risponde davvero
+    panel.SUP = None
+    other = other_program("127.0.0.1", BASE + 1)
+    p = real_panel()
+    said = p.communicate(timeout=60)[0].decode("utf-8", "replace")
+    mark("porta del pannello di un altro programma: Omissis non parte, e dice quale porta e quale programma", p.returncode == 3 and str(BASE + 1) in said
+         and (not HAS_PSUTIL or "python" in said.lower()) and reaches(other, BASE + 1), (p.returncode, said.strip()[-200:]))
+    other.close()
+    freed(BASE + 1)
+    first = real_panel()
+    up = any(panel.running() == "omissis" or time.sleep(0.5) for _ in range(60))
+    p = real_panel()
+    said = p.communicate(timeout=60)[0].decode("utf-8", "replace")
+    mark("pannello gia' acceso: la seconda copia lo riconosce, lo dice ed esce senza toccarlo", up and p.returncode == 0 and str(BASE + 1) in said and first.poll() is None
+         and panel.running() == "omissis", (up, p.returncode, said.strip()[-200:]))
+    if not HAS_PSUTIL:
+        print("SALTATO: il pannello sospeso (qui manca psutil)")
+    else:
+        old = freeze(BASE + 1)
+        p = real_panel()
+        taken = any((panel.opened_port(BASE + 1) and (sistema.port_process(BASE + 1) or {}).get("pid") not in (None, old) and panel.running() == "omissis") or time.sleep(0.5)
+                    for _ in range(80))
+        mark("pannello di questa copia rimasto bloccato: la copia nuova lo chiude e parte al suo posto", taken and p.poll() is None and gone(first, seconds=5),
+             (taken, p.poll(), first.poll()))
+    for started in STARTED:
+        if started.poll() is None:
+            started.kill()
+    freed(BASE + 1)
 
     # --- il pannello si chiude di colpo: motore e proxy si chiudono da soli, e le porte tornano libere
     panel.SUP = None

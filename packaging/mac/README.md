@@ -2,13 +2,13 @@
 
 **English** · [Italiano](#italiano)
 
-The Mac build is out as a **preview** since 20 November 2026 (now version 0.1.12, Apple silicon only): the `.dmg` is on the [releases page](https://github.com/francescogruner/omissis/releases). It is not signed with Apple, so macOS refuses to open it the first time: see «Installing the preview» below. On 20 November 2026 a GitHub Mac (macOS 26, Apple Silicon) built the app and the `.dmg`, started the app and passed the automated tests. The real Keychain, the menu bar icon and the real ChatGPT and Claude apps were tried there too. Nobody has used it on a Mac yet: a message replaced inside an app, with a signed-in account, is still to be seen.
+The Mac build is out as a **preview** since 20 November 2026 (now version 0.1.13, Apple silicon only): the `.dmg` is on the [releases page](https://github.com/francescogruner/omissis/releases). It is not signed with Apple, so macOS refuses to open it the first time: see «Installing the preview» below. On 20 November 2026 a GitHub Mac (macOS 26, Apple Silicon) built the app and the `.dmg`, started the app and passed the automated tests. The real Keychain, the menu bar icon and the real ChatGPT and Claude apps were tried there too. Nobody has used it on a Mac yet: a message replaced inside an app, with a signed-in account, is still to be seen.
 
 ## Installing the preview
 
 These are the usual steps for an app without an Apple signature. They have not been tried on a real Mac with this build.
 
-1. Download `Omissis-0.1.12-mac-arm64.dmg`, open it and drag Omissis to Applications.
+1. Download `Omissis-0.1.13-mac-arm64.dmg`, open it and drag Omissis to Applications.
 2. Open Omissis. macOS says it cannot verify the app: close the message.
 3. Open System Settings → Privacy & Security, scroll down to «Security» and press «Open Anyway» next to Omissis. macOS asks for your password or Touch ID.
 4. If macOS says the app «is damaged», it is the same refusal in another form: in Terminal run `xattr -dr com.apple.quarantine /Applications/Omissis.app`, then open it again.
@@ -26,7 +26,7 @@ The app is not frozen, the same as the Windows installer. `Omissis.app` contains
 `Contents/MacOS/Omissis` is a small launcher for `panel.py`. The model weights are downloaded at first start.
 
 ```
-python3 packaging/mac/build_mac.py --version 0.1.12 --smoke-test   # on a Mac: dist/Omissis.app and dist/Omissis-0.1.12-mac-arm64.dmg
+python3 packaging/mac/build_mac.py --version 0.1.13 --smoke-test   # on a Mac: dist/Omissis.app and dist/Omissis-0.1.13-mac-arm64.dmg
 bash packaging/mac/ci_tests.sh                                     # automated tests with the app's own Python
 ```
 
@@ -105,11 +105,11 @@ Safari needs its own build of the extension, inside a Mac app. `packaging/mac/bu
 
 ## Italiano
 
-La versione per Mac è pubblicata come **versione di prova** dal 20 novembre 2026 (ora 0.1.12, solo per i Mac con processore Apple): il `.dmg` è nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases). Non è firmata con Apple, quindi la prima volta macOS non la apre: vedi «Come si installa la versione di prova» qui sotto. Il 20 novembre 2026 un Mac di GitHub (macOS 26, Apple Silicon) ha costruito l'app e il `.dmg`, ha avviato l'app e ha passato le prove automatiche. Lì sono stati provati anche il Portachiavi vero, l'icona nella barra dei menu e le app vere di ChatGPT e di Claude. Nessuno l'ha ancora usata su un Mac: un messaggio sostituito dentro un'app, con un account, resta da vedere.
+La versione per Mac è pubblicata come **versione di prova** dal 20 novembre 2026 (ora 0.1.13, solo per i Mac con processore Apple): il `.dmg` è nella [pagina delle versioni](https://github.com/francescogruner/omissis/releases). Non è firmata con Apple, quindi la prima volta macOS non la apre: vedi «Come si installa la versione di prova» qui sotto. Il 20 novembre 2026 un Mac di GitHub (macOS 26, Apple Silicon) ha costruito l'app e il `.dmg`, ha avviato l'app e ha passato le prove automatiche. Lì sono stati provati anche il Portachiavi vero, l'icona nella barra dei menu e le app vere di ChatGPT e di Claude. Nessuno l'ha ancora usata su un Mac: un messaggio sostituito dentro un'app, con un account, resta da vedere.
 
 **Come si installa la versione di prova.** Sono i passi soliti per un'app senza la firma Apple. Con questa versione non sono stati provati su un Mac vero.
 
-1. Scarica `Omissis-0.1.12-mac-arm64.dmg`, aprilo e trascina Omissis in Applicazioni.
+1. Scarica `Omissis-0.1.13-mac-arm64.dmg`, aprilo e trascina Omissis in Applicazioni.
 2. Apri Omissis. macOS dice che non può verificarla: chiudi il messaggio.
 3. Apri Impostazioni di Sistema → Privacy e sicurezza, scorri fino a «Sicurezza» e premi «Apri comunque» accanto a Omissis. macOS chiede la password o il Touch ID.
 4. Se macOS dice che l'app «è danneggiata», è lo stesso rifiuto in un'altra forma: nel Terminale lancia `xattr -dr com.apple.quarantine /Applications/Omissis.app`, poi riaprila.

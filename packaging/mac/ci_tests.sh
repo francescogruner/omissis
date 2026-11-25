@@ -93,10 +93,10 @@ done
 echo "=================== scorciatoie da tastiera"
 if ! timeout 120 "$PY" "$ROOT/packaging/mac/keys_test.py"; then failed=1; echo "### NON PASSATA: keys_test.py"; fi
 echo "--- registro del pannello"; tail -30 "$WORK/panel.log"
-# Per ultima, perche' dopo la copia di prova non c'e' piu': il pannello chiuso di colpo, come in un guasto. Il motore e
+# Per ultima, perche' dopo la copia di prova non c'e' piu': processi sospesi e pannello chiuso di colpo, come in un guasto. Il motore e
 # il proxy devono chiudersi da soli, senza restare accesi a tenere le porte
 echo "=================== pannello chiuso di colpo"
-if ! timeout 120 "$PY" "$ROOT/packaging/mac/closing_test.py"; then failed=1; echo "### NON PASSATA: closing_test.py"; fi
+if ! timeout 600 "$PY" "$ROOT/packaging/mac/closing_test.py"; then failed=1; echo "### NON PASSATA: closing_test.py"; fi
 # la copia di prova si spegne qui, con il suo motore e il suo proxy: chi viene dopo deve trovare le porte libere
 kill "$PANEL" "$MOCK" 2> /dev/null
 sleep 2

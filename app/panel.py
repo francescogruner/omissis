@@ -24,6 +24,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
@@ -66,6 +67,14 @@ CODE = secrets.token_urlsafe(24)
 PAGE = HERE / "panel"   # i file della pagina: index.html, style.css, app.js, icon.svg, locales\<codice>.json
 ENGINE_SCRIPT = HERE / "engine.py"   # il programma del motore (le prove ne mettono uno finto, che non carica un modello)
 RESTARTS, WINDOW = 3, 600   # un processo caduto a protezione accesa: quante volte si riparte da soli, e in quanti secondi
+# Un processo puo' essere vivo e non rispondere piu'. A protezione accesa si chiede a motore e proxy se ci sono: ogni PROBE
+# secondi, aspettando la risposta PROBE_TIMEOUT secondi; dopo SILENT silenzi di fila li si da' per bloccati (oltre un minuto)
+PROBE, PROBE_TIMEOUT, SILENT = 15, 5, 4
+# Il motore risponde, ha richieste in lavorazione, e da STALL secondi non finisce nemmeno un giro del modello. Conta se il
+# lavoro avanza, non quanto dura: un documento lungo sono tanti giri brevi, e su un PC lento puo' durare quanto serve
+STALL = 600
+ALIVE = "http://omissis.invalid/__omissis__/here"   # a questo indirizzo il nostro proxy risponde da solo, senza uscire in rete
+DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))   # per parlare con questo computer senza passare da un proxy
 STATIC = {"/style.css": "text/css; charset=utf-8", "/app.js": "text/javascript; charset=utf-8", "/icon.svg": "image/svg+xml",
           "/welcome.mp4": "video/mp4", "/welcome.jpg": "image/jpeg"}   # il video del primo avvio e la sua copertina
 RX_LANGUAGE = re.compile(r"/locales/[a-z]{2,3}(-[A-Za-z]{2,4})?\.json")
@@ -258,6 +267,10 @@ class Supervisor:
         self.falls = collections.deque(maxlen=RESTARTS)   # quando la protezione e' ripartita da sola (vedi check)
         self.events = collections.deque(maxlen=20)        # che cosa le e' successo, in breve e senza testi: per la segnalazione
         self.lock, self.watching = threading.Lock(), threading.Lock()
+        self.silent = {"engine": 0, "proxy": 0}   # quante volte di fila non hanno risposto (vedi probe)
+        self.stuck = 0                            # quante volte di fila il motore ha mostrato una richiesta ferma da troppo
+        self.probed = 0.0                         # l'ultima volta che glielo si e' chiesto
+        self.unblocked = None                     # (processo, motivo) dell'ultimo chiuso perche' non rispondeva: lo legge check
         self.launched_with = None
 
     def _alive(self, p):
@@ -464,6 +477,7 @@ class Supervisor:
                     self.gateway, self.gateway_error = gateway.Gateway().launch(), ""
                 except OSError:
                     self.gateway_error = i18n.t("program.gateway_port", port=paths.GATEWAY_PORT)
+            self.silent, self.stuck, self.unblocked, self.probed = {"engine": 0, "proxy": 0}, 0, None, time.time()   # la sorveglianza riparte da zero
             self.phase = "active"
             self.note("active")
             threading.Thread(target=pac_apply, daemon=True).start()   # le app protette dal proxy del sistema
@@ -529,9 +543,13 @@ class Supervisor:
             if self.phase != "active" or (self._alive(self.engine) and self._alive(self.proxy)):
                 return
             which, process = ("engine", self.engine) if not self._alive(self.engine) else ("proxy", self.proxy)
-            details, cause = self._details(which, process)
-            self.note(cause)
-            text, now = i18n.t(f"program.closed.{which}") + " " + details, time.time()
+            if self.unblocked and self.unblocked[0] is process:   # lo abbiamo chiuso noi, perche' non rispondeva piu' (vedi probe)
+                text, cause, now = i18n.t(f"program.blocked.{which}"), self.unblocked[1], time.time()
+            else:
+                details, cause = self._details(which, process)
+                self.note(cause)
+                text, now = i18n.t(f"program.closed.{which}") + " " + details, time.time()
+            self.unblocked = None
             recent = [t for t in self.falls if now - t < WINDOW]
             if len(recent) < RESTARTS:
                 self.falls.append(now)
@@ -545,12 +563,62 @@ class Supervisor:
         finally:
             self.watching.release()
 
+    def probe(self):
+        """A protezione accesa, chiede al motore e al proxy se ci sono davvero: un processo puo' essere vivo e non
+        rispondere piu', e allora check non lo vedrebbe mai. Il motore si da' per bloccato dopo SILENT domande di fila
+        senza risposta, oppure se risponde ma con richieste in lavorazione non finisce un giro del modello da STALL secondi
+        (visto due volte di fila, cosi' un PC appena uscito dalla sospensione non inganna). Il proxy dopo SILENT silenzi di fila,
+        contati solo mentre il motore risponde: puo' essere fermo ad aspettare lui. Chi e' bloccato viene chiuso, e check lo
+        fa ripartire come un processo caduto, con lo stesso limite di ripartenze."""
+        if self.phase != "active" or not (self._alive(self.engine) and self._alive(self.proxy)):
+            return
+        process, why = self.engine, ""
+        try:
+            with DIRECT.open(urllib.request.Request(f"http://127.0.0.1:{ENGINE_PORT}/alive", headers={"X-Token": (DATA / "token.txt").read_text(encoding="utf-8").strip()}),
+                             timeout=PROBE_TIMEOUT) as r:
+                a = json.loads(r.read().decode("utf-8"))
+            self.silent["engine"] = 0
+            late = bool(a.get("busy")) and a.get("idle") is not None and a["idle"] > STALL
+            self.stuck = self.stuck + 1 if late else 0
+            if self.stuck >= 2:
+                why = f"engine stuck {int(a['idle'])}s busy {a.get('busy')}"
+        except urllib.error.HTTPError:   # risponde, ma non a questa domanda: c'e'
+            self.silent["engine"] = self.stuck = 0
+        except Exception:   # noqa: BLE001  (nessuna risposta nel tempo dato)
+            self.silent["engine"] += 1
+            if self.silent["engine"] >= SILENT:
+                why = "engine silent"
+        if not why and not self.silent["engine"]:
+            process = self.proxy
+            try:
+                with urllib.request.build_opener(urllib.request.ProxyHandler({"http": f"http://127.0.0.1:{self.proxy_port}"})).open(ALIVE, timeout=PROBE_TIMEOUT):
+                    pass
+                self.silent["proxy"] = 0
+            except urllib.error.HTTPError:   # ha risposto il proxy (a quell'indirizzo risponde lui, con «non trovato»): c'e'
+                self.silent["proxy"] = 0
+            except Exception:   # noqa: BLE001
+                self.silent["proxy"] += 1
+                if self.silent["proxy"] >= SILENT:
+                    why = "proxy silent"
+        if why and self.phase == "active" and self._alive(process):
+            which = "engine" if process is self.engine else "proxy"
+            self.note(why)
+            self.silent[which], self.stuck, self.unblocked = 0, 0, (process, why)
+            try:
+                process.kill()
+            except OSError:
+                pass
+            close_leftovers(which)   # anche il processo vero, dove quello avviato da noi ne ha un altro sotto
+
     def watch(self, every=2):
-        """La sorveglianza in sottofondo: vedi check."""
+        """La sorveglianza in sottofondo: vedi check e probe."""
         while True:
             time.sleep(every)
             try:
                 self.check()
+                if time.time() - self.probed >= PROBE:
+                    self.probed = time.time()
+                    self.probe()
             except Exception:   # noqa: BLE001  (un giro andato male non deve fermare i successivi)
                 pass
 
@@ -2080,6 +2148,66 @@ def quit_running():
     return 1
 
 
+def running():
+    """Chi risponde sulla porta del pannello: "" nessuno; "omissis" una copia gia' accesa (si apre il suo pannello);
+    "frozen" il pannello di questa copia, che pero' non risponde piu'; "other" un altro programma. Che la porta sia presa
+    lo dice free_port, non un collegamento riuscito: un programma bloccato con la coda piena non ne accetta piu'."""
+    if free_port(PANEL_PORT):
+        return ""
+    for _ in range(3):   # con calma: all'accesso al computer un pannello che sta bene puo' metterci qualche secondo
+        try:
+            with DIRECT.open(f"http://127.0.0.1:{PANEL_PORT}/", timeout=5) as r:
+                return "omissis" if b'name="omissis-code"' in r.read(20000) else "other"
+        except urllib.error.HTTPError:
+            return "other"
+        except Exception:   # noqa: BLE001  (non risponde, o non parla come una pagina: si guarda di chi e' il processo)
+            pass
+    if free_port(PANEL_PORT):   # nel frattempo si e' liberata: era una copia che si stava chiudendo
+        return ""
+    who = sistema.port_process(PANEL_PORT) or {}
+    mine = os.path.normcase(str(HERE / "panel.py"))
+    for x in who.get("arguments", []):
+        try:
+            if os.path.normcase(os.path.abspath(os.path.join(who.get("folder") or "", x))) == mine:
+                return "frozen"
+        except (OSError, ValueError):
+            pass
+    return "other"
+
+
+def greet(a):
+    """All'avvio, con la porta del pannello che risponde gia'. True se questa copia non deve partire: c'e' gia' un Omissis
+    acceso (si apre il suo pannello). Se e' il pannello di questa copia rimasto bloccato lo si chiude e si parte (False).
+    Se la porta e' di un altro programma Omissis non puo' partire: lo dice, con il nome di quel programma, ed esce."""
+    state = running()
+    if state == "frozen":
+        who = sistema.port_process(PANEL_PORT)
+        if who:
+            try:
+                connector._kill(who["pid"])
+            except Exception:   # noqa: BLE001
+                pass
+        if Supervisor._wait_free(PANEL_PORT, 10):
+            print("il pannello di prima non rispondeva più: l'ho chiuso", flush=True)
+            return False
+        state = "other"
+    if state == "omissis":
+        print(f"Omissis è già acceso: apro il pannello su http://127.0.0.1:{PANEL_PORT}/", flush=True)
+        if not a.without_browser:
+            webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
+        return True
+    if state == "other":
+        who = Supervisor._who(PANEL_PORT)[0]
+        if Supervisor._wait_free(PANEL_PORT, 3):   # un programma che si stava chiudendo: la porta e' tornata libera
+            return False
+        text = i18n.t("program.panel_port_busy", port=PANEL_PORT, who=who)
+        print(text, flush=True)
+        if not a.test:
+            sistema.alert(text)
+        sys.exit(3)
+    return False
+
+
 def main():
     global SUP
     ap = argparse.ArgumentParser()
@@ -2097,10 +2225,7 @@ def main():
             pass
         if a.quit:
             sys.exit(quit_running())
-    if opened_port(PANEL_PORT):   # gia' acceso: si apre solo il pannello
-        print(f"Omissis è già acceso: apro il pannello su http://127.0.0.1:{PANEL_PORT}/", flush=True)
-        if not a.without_browser:
-            webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
+    if greet(a):   # gia' acceso: si apre solo il pannello
         return
     if updates.mode() == "automatic":
         version = updates.install(automatic=True)   # un aggiornamento gia' scaricato e verificato si installa ora
@@ -2125,11 +2250,14 @@ def main():
 
     try:
         server = Service(("127.0.0.1", PANEL_PORT), Handler)
-    except OSError:
-        print(f"Omissis è già acceso: apro il pannello su http://127.0.0.1:{PANEL_PORT}/", flush=True)
-        if not a.without_browser:
-            webbrowser.open(f"http://127.0.0.1:{PANEL_PORT}/")
-        return
+    except OSError:   # la porta non si lascia prendere: un'altra copia arrivata un attimo prima, oppure un altro programma
+        if greet(a):
+            return
+        text = i18n.t("program.panel_port_busy", port=PANEL_PORT, who=Supervisor._who(PANEL_PORT)[0])
+        print(text, flush=True)
+        if not a.test:
+            sistema.alert(text)
+        sys.exit(3)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     if sistema.LINUX:
         # alla chiusura della sessione (o con «omissis --quit») il programma riceve SIGTERM: deve fermare motore e proxy,
