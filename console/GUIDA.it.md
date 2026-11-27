@@ -92,6 +92,8 @@ con un certificato vero.
 
 1. Nella console, **Nuova azienda**: scrivi il nome. Compaiono l'indirizzo, la **chiave di collegamento** (una
    volta sola: la console ne conserva soltanto l'impronta) e, in rete locale, l'impronta del certificato.
+   Se stai guardando la console dal server stesso (`https://127.0.0.1:8800/`), l'indirizzo che compare è quello del
+   server nella rete: controlla che sia quello con cui i PC lo raggiungono.
 2. Premi **«Scarica il file per i PC»**: è `omissis-console.json`, con quelle tre cose già scritte. Se vuoi
    bloccare anche altre scelte, aggiungile lì (i nomi sono in `policy.example.json` del kit di distribuzione):
 
@@ -292,7 +294,7 @@ eventuali `console.sqlite-wal` e `console.sqlite-shm`, riavvia.
 | La pagina non si apre da un altro PC | Il server risponde a `ping`? La rete del server è «privata» o «di dominio» per Windows (su una rete «pubblica» la porta resta chiusa)? Dal server, `https://127.0.0.1:8800/` si apre? |
 | Nel pannello del PC: «Il certificato della console non è quello atteso» | L'impronta nel PC non è quella della console (`--show-pin`), oppure manca: in rete locale serve sempre |
 | Nel pannello del PC: «Chiave non accettata» | Chiave sbagliata, o ne è stata creata una nuova |
-| Nel pannello del PC: «Console non raggiungibile» | Indirizzo o porta sbagliati, firewall, server spento |
+| Nel pannello del PC: «Console non raggiungibile» | Indirizzo o porta sbagliati (nel PC non deve esserci `127.0.0.1`), firewall, server spento |
 | «Troppi tentativi» all'ingresso | Dopo cinque password sbagliate ci si ferma per un quarto d'ora |
 | Password dimenticata | Vedi qui sotto, «Password dimenticata» |
 | Tutti i PC di un'azienda spariscono | È stata creata una chiave nuova: quella vecchia non vale più, i PC vanno ricollegati |
@@ -342,6 +344,12 @@ programma vero, che le applica solo se ha scelto di accettarle; gli avvisi arriv
 posta finti; il registro scopre una riga cambiata o tolta. **L'ingresso con l'account Microsoft è provato solo contro un
 servizio di accesso finto**: con un'organizzazione vera su Entra ID non è ancora stato provato, e nemmeno gli avvisi
 verso Teams, Slack o un server di posta veri.
+
+Il 27 novembre 2026, sullo stesso computer e con la console 0.1.1: il programma di Omissis 0.1.13 installato con il
+comando del sito e collegato dal suo pannello scrivendo a mano indirizzo, chiave e impronta; una regola messa dalla
+console, accettata e poi rifiutata dal pannello; il secondo e il terzo PC accolti, il quarto rifiutato e poi accolto
+con una licenza. In automatico: la pagina aperta dal server dà ai PC l'indirizzo di rete, nella finestra della
+chiave e nel file.
 
 **Non ancora provato**: il riavvio del server e la copia notturna fatta dall'attività pianificata; un PC che si
 collega da un'altra macchina della rete; un aggiornamento sopra un'installazione in funzione; Caddy e il

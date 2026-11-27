@@ -92,6 +92,8 @@ certificate goes in front of it.
 
 1. In the console, **New organisation**: type the name. The address appears, with the **enrolment key** (once only:
    the console keeps just its fingerprint) and, on the local network, the certificate fingerprint.
+   If you are looking at the console from the server itself (`https://127.0.0.1:8800/`), the address shown is the
+   server's address on the network: check that it is the one the PCs reach it by.
 2. Press **"Download the file for the PCs"**: it is `omissis-console.json`, with those three things already in
    it. To lock other choices too, add them there (the names are in `policy.example.json` of the deployment kit):
 
@@ -295,7 +297,7 @@ copy the chosen file over `console.sqlite` in the data folder, remove any `conso
 | The page does not open from another PC | Does the server answer `ping`? Is the server's network "private" or "domain" for Windows (on a "public" network the port stays closed)? From the server, does `https://127.0.0.1:8800/` open? |
 | In the PC's panel: "The console certificate is not the expected one" | The fingerprint on the PC is not the console's (`--show-pin`), or it is missing: on the local network it is always needed |
 | In the PC's panel: "Key not accepted" | Wrong key, or a new one was created |
-| In the PC's panel: "Console unreachable" | Wrong address or port, firewall, server off |
+| In the PC's panel: "Console unreachable" | Wrong address or port (the PC must not have `127.0.0.1`), firewall, server off |
 | "Too many attempts" at sign-in | After five wrong passwords you wait a quarter of an hour |
 | Forgotten password | See below, "Forgotten password" |
 | All the PCs of an organisation disappear | A new key was created: the old one no longer works, the PCs must be connected again |
@@ -344,6 +346,12 @@ real program, which applies them only if it chose to accept them; alerts reach a
 server; the log catches a changed or removed row. **Sign-in with a Microsoft account is tested only against a fake
 sign-in service**: it has not yet been tried with a real organisation on Entra ID, nor have alerts towards a real
 Teams, Slack or mail server.
+
+On 27 November 2026, on the same computer and with console 0.1.1: the Omissis program 0.1.13 installed with the
+command from the site and connected from its panel by typing address, key and fingerprint by hand; a rule set from
+the console, accepted and then refused from the panel; the second and third PC accepted, the fourth refused and then
+accepted with a licence. Automatically: the page opened from the server gives the PCs the network address, in the key
+window and in the file.
 
 **Not tested yet**: a restart of the server and the nightly backup made by the scheduled task; a PC connecting
 from another machine on the network; an update over a running installation; Caddy and the real certificate.
